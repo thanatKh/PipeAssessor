@@ -1325,8 +1325,8 @@
                   <!-- Circle 1: Nominal outer boundaries / remaining metal -->
                   <circle id="svgOdCircle" cx="50" cy="220" r="180" fill="var(--svg-metal)" />
                   
-                  <!-- Circle 2: Measured boundaries / represents metal loss area in red -->
-                  <circle id="svgMeasCircle" cx="50" cy="220" r="140" fill="var(--svg-loss)" stroke="var(--svg-loss-border)" stroke-width="1.5" />
+                  <!-- Path 2: Localized Pocket representing metal loss area in red -->
+                  <path id="svgPocketLoss" d="" fill="var(--svg-loss)" stroke="var(--svg-loss-border)" stroke-width="1.5" />
                   
                   <!-- Circle 3: Nominal inner circle / interior hollow background masking -->
                   <circle id="svgNomCircle" cx="50" cy="220" r="110" fill="var(--svg-bg)" />
@@ -2151,11 +2151,13 @@ function runCalculations() {
 /* SVG Rendering */
 function drawSvgPipe(res) {
   if (!res || res.hasErrors) {
-    // Hide leader lines and reset circles
+    // Hide leader lines and reset paths
     ['svgLOd', 'svgLMeas', 'svgLReqNo', 'svgLReqTotal', 'svgLNom'].forEach(id => {
       document.getElementById(id + 'Line').setAttribute('d', '');
       document.getElementById(id + 'Text').textContent = '';
     });
+    const pocketLoss = document.getElementById('svgPocketLoss');
+    if (pocketLoss) pocketLoss.setAttribute('d', '');
     return;
   }
 
@@ -2171,35 +2173,64 @@ function drawSvgPipe(res) {
   let R_meas, R_req_noCA, R_req_total;
   
   const svgOdCircle = document.getElementById('svgOdCircle');
-  const svgMeasCircle = document.getElementById('svgMeasCircle');
+  svgOdCircle.setAttribute('fill', 'var(--svg-metal)');
+  svgOdCircle.removeAttribute('stroke');
+  
+  const svgNomCircle = document.getElementById('svgNomCircle');
+  svgNomCircle.setAttribute('fill', 'var(--svg-bg)');
   
   if (res.isInternal) {
     // Internal Wall Loss Mode
-    R_meas = Math.max(10, R_od - (tMeasDraw * scale));
+    R_meas = Math.max(10, R_nom + ((res.t_nom - tMeasDraw) * scale));
     R_req_noCA = Math.max(10, R_od - (res.t_req_noCA * scale));
     R_req_total = Math.max(10, R_od - (res.t_req_total * scale));
     
-    // Style circles: outer ring is Teal, inner ring is Red
-    svgOdCircle.setAttribute('fill', 'var(--svg-metal)');
-    svgOdCircle.removeAttribute('stroke');
-    svgMeasCircle.setAttribute('fill', 'var(--svg-loss)');
-    svgMeasCircle.setAttribute('stroke', 'var(--svg-loss-border)');
+    // Draw internal localized pocket path (cosine-squared pocket centered at 0 degrees)
+    const points = [];
+    for (let theta = 40; theta >= 0; theta -= 2) {
+      const phi = (theta / 40) * (Math.PI / 2);
+      const localDepth = (R_meas - R_nom) * Math.cos(phi) * Math.cos(phi);
+      const r = R_nom + localDepth;
+      const rad = (theta * Math.PI) / 180;
+      const x = cx + r * Math.cos(rad);
+      const y = cy - r * Math.sin(rad);
+      points.push(`${fmt(x, 1)},${fmt(y, 1)}`);
+    }
+    const x_nom_40 = cx + R_nom * Math.cos(40 * Math.PI / 180);
+    const y_nom_40 = cy - R_nom * Math.sin(40 * Math.PI / 180);
+    const dPocket = `M ${fmt(x_nom_40, 1)} ${fmt(y_nom_40, 1)} ` +
+                    `L ` + points.join(' L ') + ` ` +
+                    `L ${fmt(cx + R_nom, 1)} ${cy} ` +
+                    `A ${R_nom} ${R_nom} 0 0 1 ${fmt(x_nom_40, 1)} ${fmt(y_nom_40, 1)} Z`;
+    document.getElementById('svgPocketLoss').setAttribute('d', dPocket);
   } else {
     // External Wall Loss Mode
-    R_meas = Math.max(10, R_nom + (tMeasDraw * scale));
+    R_meas = Math.max(10, R_od - ((res.t_nom - tMeasDraw) * scale));
     R_req_noCA = Math.max(10, R_nom + (res.t_req_noCA * scale));
     R_req_total = Math.max(10, R_nom + (res.t_req_total * scale));
     
-    // Style circles: outer ring is Red (metal loss), inner ring is Teal (remaining)
-    svgOdCircle.setAttribute('fill', 'var(--svg-loss)');
-    svgOdCircle.setAttribute('stroke', 'var(--svg-loss-border)');
-    svgMeasCircle.setAttribute('fill', 'var(--svg-metal)');
-    svgMeasCircle.removeAttribute('stroke');
+    // Draw external localized pocket path (cosine-squared pocket centered at 0 degrees)
+    const points = [];
+    for (let theta = 0; theta <= 40; theta += 2) {
+      const phi = (theta / 40) * (Math.PI / 2);
+      const localDepth = (R_od - R_meas) * Math.cos(phi) * Math.cos(phi);
+      const r = R_od - localDepth;
+      const rad = (theta * Math.PI) / 180;
+      const x = cx + r * Math.cos(rad);
+      const y = cy - r * Math.sin(rad);
+      points.push(`${fmt(x, 1)},${fmt(y, 1)}`);
+    }
+    const x_od_40 = cx + R_od * Math.cos(40 * Math.PI / 180);
+    const y_od_40 = cy - R_od * Math.sin(40 * Math.PI / 180);
+    const dPocket = `M ${fmt(x_od_40, 1)} ${fmt(y_od_40, 1)} ` +
+                    `A ${R_od} ${R_od} 0 0 0 ${cx + R_od} ${cy} ` +
+                    `L ${fmt(cx + R_meas, 1)} ${cy} ` +
+                    `L ` + points.join(' L ') + ` Z`;
+    document.getElementById('svgPocketLoss').setAttribute('d', dPocket);
   }
 
   // Update SVG Circles Attributes
   document.getElementById('svgOdCircle').setAttribute('r', R_od);
-  document.getElementById('svgMeasCircle').setAttribute('r', R_meas);
   document.getElementById('svgNomCircle').setAttribute('r', R_nom);
   document.getElementById('svgReqTotalCircle').setAttribute('r', R_req_total);
   document.getElementById('svgReqNoCaCircle').setAttribute('r', R_req_noCA);
