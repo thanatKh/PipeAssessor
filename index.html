@@ -118,7 +118,8 @@
     }
 
     .wrap {
-      max-width: 1200px;
+      max-width: 1500px;
+      width: 100%;
       margin: auto;
       padding: 20px;
     }
@@ -168,7 +169,7 @@
     /* Dashboard Layout */
     .dashboard {
       display: grid;
-      grid-template-columns: 1fr 1.2fr;
+      grid-template-columns: 340px 1fr;
       gap: 20px;
       margin-top: 20px;
     }
@@ -688,6 +689,12 @@
       gap: 12px;
     }
 
+    @media (min-width: 1100px) {
+      .res-grid {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+    }
+
     @media (max-width: 500px) {
       .res-grid {
         grid-template-columns: 1fr;
@@ -994,153 +1001,6 @@
       font-weight: bold;
     }
 
-    /* Presentation Mode Custom Styles */
-    body.pres-mode {
-      --bg-color: #0b0f19;
-    }
-    
-    body.pres-mode[data-theme="light"] {
-      --bg-color: #f1f5f9;
-    }
-
-    body.pres-mode .dashboard {
-      grid-template-columns: 1fr !important;
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-
-    body.pres-mode .dashboard > .column:first-of-type {
-      display: none !important;
-    }
-
-    body.pres-mode .dashboard > .column:last-of-type {
-      display: grid !important;
-      grid-template-columns: 1fr 1.1fr !important;
-      gap: 24px !important;
-    }
-
-    @media (max-width: 1024px) {
-      body.pres-mode .dashboard > .column:last-of-type {
-        grid-template-columns: 1fr !important;
-      }
-    }
-
-    body.pres-mode .dashboard > .column:last-of-type > #statusCard {
-      grid-column: span 2 !important;
-    }
-
-    @media (max-width: 1024px) {
-      body.pres-mode .dashboard > .column:last-of-type > #statusCard {
-        grid-column: span 1 !important;
-      }
-    }
-
-    body.pres-mode .status-banner {
-      padding: 24px !important;
-      border-radius: 12px;
-    }
-
-    body.pres-mode .status-label {
-      font-size: 14px !important;
-      letter-spacing: 1px;
-    }
-
-    body.pres-mode .status-value {
-      font-size: 48px !important;
-      font-weight: 900;
-    }
-
-    body.pres-mode .status-desc {
-      font-size: 18px !important;
-      margin-top: 12px !important;
-      line-height: 1.5;
-    }
-
-    body.pres-mode .res-grid {
-      grid-template-columns: 1fr 1fr !important;
-      gap: 16px !important;
-    }
-
-    body.pres-mode .res-item {
-      padding: 16px !important;
-      background: rgba(0, 0, 0, 0.02) !important;
-      border-radius: 10px !important;
-      border: 1px solid var(--card-border) !important;
-    }
-
-    body.pres-mode .res-name {
-      font-size: 12px !important;
-      color: var(--text-muted) !important;
-      margin-bottom: 8px !important;
-    }
-
-    body.pres-mode .res-val {
-      font-size: 32px !important;
-      font-weight: 800 !important;
-    }
-
-    body.pres-mode .visual-wrapper {
-      height: 380px !important;
-      gap: 24px !important;
-    }
-    
-    body.pres-mode .svg-container {
-      height: 100% !important;
-    }
-
-    body.pres-mode #pipeSvg {
-      height: 380px !important;
-    }
-
-    body.pres-mode .vertical-gauge-container {
-      width: 160px !important;
-      padding: 16px !important;
-    }
-
-    body.pres-mode .vertical-gauge-labels {
-      font-size: 11px !important;
-    }
-
-    body.pres-mode .vertical-gauge-values {
-      font-size: 11px !important;
-      gap: 6px !important;
-    }
-
-    body.pres-mode .pressure-gauge-container {
-      padding: 20px !important;
-      margin-bottom: 30px !important;
-    }
-
-    body.pres-mode .pressure-gauge-labels {
-      font-size: 13px !important;
-      margin-bottom: 10px !important;
-    }
-
-    body.pres-mode .pressure-gauge-track {
-      height: 24px !important;
-      border-radius: 12px !important;
-    }
-
-    body.pres-mode .pressure-gauge-pointer {
-      top: -4px !important;
-      bottom: -4px !important;
-      width: 6px !important;
-    }
-
-    body.pres-mode .pressure-gauge-legend {
-      font-size: 12px !important;
-      gap: 16px !important;
-      margin-top: 12px !important;
-    }
-
-    body.pres-mode svg text {
-      font-size: 13px !important;
-    }
-
-    body.pres-mode svg line, body.pres-mode svg path {
-      stroke-width: 1.5px !important;
-    }
-
     /* Dynamic Equation Substitutions */
     .eq-sub-container {
       background: var(--svg-bg);
@@ -1215,10 +1075,6 @@
       <div class="subhead" id="hdrMeta">Tag: — • Location: — • P&ID: —</div>
     </div>
     <div class="header-actions">
-      <button class="theme-btn" id="presToggle" title="Toggle Presentation Mode" style="width: auto; padding: 0 10px; gap: 6px; font-size: 11px; font-weight: 700; font-family: inherit;">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-        <span>Presentation</span>
-      </button>
       <button class="theme-btn" id="themeToggle" title="Toggle Dark/Light Mode">
         <!-- Default Moon icon -->
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -2004,7 +1860,6 @@ const stressInput = document.getElementById('S');
 const pUnitSelect = document.getElementById('pUnit');
 const modeSeg = document.getElementById('modeSeg');
 const themeToggle = document.getElementById('themeToggle');
-const presToggle = document.getElementById('presToggle');
 const corrTypeSelect = document.getElementById('corrType');
 
 /* Setup NPS, schedules, and materials dynamically */
@@ -2066,14 +1921,6 @@ function updateSchedules() {
     .map(sch => `<option value="${sch}">${pipe.schedules[sch].label}</option>`)
     .join('');
 }
-
-/* Presentation Mode Switching */
-presToggle.addEventListener('click', () => {
-  document.body.classList.toggle('pres-mode');
-  const isPres = document.body.classList.contains('pres-mode');
-  localStorage.setItem('presMode', isPres ? 'true' : 'false');
-  recalc();
-});
 
 /* Theme Switching */
 themeToggle.addEventListener('click', () => {
@@ -2733,11 +2580,6 @@ function initApp() {
   }
   updateThemeIcon();
 
-  // Load local storage presentation mode
-  const savedPres = localStorage.getItem('presMode');
-  if (savedPres === 'true') {
-    document.body.classList.add('pres-mode');
-  }
 
   initSelections();
   resetDefaults();
