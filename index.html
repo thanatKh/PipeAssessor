@@ -994,6 +994,10 @@
               <span class="res-val" id="resTreqCa">-</span>
             </div>
             <div class="res-item">
+              <span class="res-name">API 574 Structural Min. (t<sub>struct</sub>)</span>
+              <span class="res-val" id="resTstruct">-</span>
+            </div>
+            <div class="res-item">
               <span class="res-name">Remaining Margin</span>
               <span class="res-val" id="resMargin">-</span>
             </div>
@@ -1008,6 +1012,10 @@
             <div class="res-item">
               <span class="res-name">MAWP (No CA)</span>
               <span class="res-val" id="resMawpNoCA">-</span>
+            </div>
+            <div class="res-item">
+              <span class="res-name">Corrosion Allowance (CA)</span>
+              <span class="res-val" id="resCa">-</span>
             </div>
             <div class="res-item">
               <span class="res-name">Corrosion Rate (CR)</span>
@@ -1383,6 +1391,31 @@ function fmt(val, decimals = 2) {
   return (val !== null && isFinite(val)) ? Number(val).toFixed(decimals) : '—';
 }
 
+/* API 574 Default Minimum Structural Thickness for Carbon/Low-Alloy Steel */
+function getApi574Min(nps) {
+  const map = {
+    '1/2"': 1.8,
+    '3/4"': 1.8,
+    '1"': 1.8,
+    '1-1/4"': 1.8,
+    '1-1/2"': 1.8,
+    '2"': 1.8,
+    '2-1/2"': 1.8,
+    '3"': 2.0,
+    '4"': 2.3,
+    '6"': 2.8,
+    '8"': 2.8,
+    '10"': 2.8,
+    '12"': 2.8,
+    '14"': 2.8,
+    '16"': 2.8,
+    '18"': 2.8,
+    '20"': 3.1,
+    '24"': 3.1
+  };
+  return map[nps] || 3.1;
+}
+
 /* Core Calculations */
 function runCalculations() {
   const nps = npsSelect.value;
@@ -1505,6 +1538,11 @@ function runCalculations() {
   const mawp_with = computeMAWP(Math.max(0, t_meas - ca));
   const mawp_no = computeMAWP(t_meas);
 
+  // API 574 structural minimum thickness check
+  const t_struct = getApi574Min(nps);
+  const matCode = materialSelect.value;
+  const isCsRef = (matCode === 'TP304' || matCode === 'TP316' || matCode === 'MANUAL');
+
   // Status Rules
   let status = 'OK';
   let desc = 'Pipe meets allowable pressure limits with sufficient design margin.';
@@ -1512,6 +1550,9 @@ function runCalculations() {
   if (margin < 0) {
     status = 'REPAIR';
     desc = 'CRITICAL: Remaining wall thickness is below minimum required design limit (including Corrosion Allowance). Immediately plan repair or spool replacement.';
+  } else if (t_meas < t_struct) {
+    status = 'MONITOR';
+    desc = `WARNING: Remaining wall thickness (${fmt(t_meas)} mm) is below API 574 minimum structural threshold (${fmt(t_struct)} mm). Pipeline is at risk of sag or collapse under structural loads.`;
   } else if (margin < 0.1 * t_req_total || pctRemainNom < 50) {
     status = 'MONITOR';
     desc = 'WARNING: Wall thickness is approaching design limits (remaining margin is less than 10% of required limit, or pipe has lost over 50% of its nominal thickness). Increase inspection frequency.';
@@ -1533,6 +1574,8 @@ function runCalculations() {
     D,
     t_req_noCA,
     t_req_total,
+    t_struct,
+    isCsRef,
     margin,
     pctRemainNom,
     mawp_with,
@@ -1654,7 +1697,12 @@ function updateRepairAdvisor(res) {
   }
 
   if (res.status === 'MONITOR') {
+    let structuralSupportBullet = '';
+    if (res.t_meas < res.t_struct) {
+      structuralSupportBullet = `<li><strong>Structural Support (API 574):</strong> Remaining thickness is below the structural minimum threshold. Inspect pipe spans for sagging and verify support spacing to prevent buckling or collapse.</li>`;
+    }
     listEl.innerHTML = `
+      ${structuralSupportBullet}
       <li><strong>Monitoring Plan:</strong> Trend thickness using localized UT grid arrays. Verify corrosion rate ($CR$).</li>
       <li><strong>Prevention (PCC-2 Part 5):</strong> Enhance external coating integrity or cathodic protection to mitigate local corrosion.</li>
       <li>Plan a re-assessment prior to the next scheduled maintenance outage.</li>
@@ -1692,7 +1740,7 @@ function recalc() {
     document.getElementById('statusNotes').textContent = 'Calculation halted. Please check highlighted invalid input parameters.';
     
     // Clear outputs
-    ['resTnom', 'resPct', 'resTreq', 'resTreqCa', 'resMargin', 'resPres', 'resMawpWith', 'resMawpNoCA', 'resCr', 'resLife'].forEach(id => {
+    ['resTnom', 'resPct', 'resTreq', 'resTreqCa', 'resTstruct', 'resMargin', 'resPres', 'resMawpWith', 'resMawpNoCA', 'resCa', 'resCr', 'resLife'].forEach(id => {
       document.getElementById(id).textContent = '—';
     });
     
@@ -1722,10 +1770,15 @@ function recalc() {
   document.getElementById('resPct').textContent = `${fmt(res.pctRemainNom, 1)} %`;
   document.getElementById('resTreq').textContent = `${fmt(res.t_req_noCA, 3)} mm`;
   document.getElementById('resTreqCa').textContent = `${fmt(res.t_req_total, 3)} mm`;
+  
+  const tStructText = `${fmt(res.t_struct)} mm${res.isCsRef ? ' (CS Ref)' : ''}`;
+  document.getElementById('resTstruct').textContent = tStructText;
+
   document.getElementById('resMargin').textContent = `${fmt(res.margin, 3)} mm`;
   document.getElementById('resPres').textContent = `${fmt(res.P_input, 1)} ${res.pUnit}`;
   document.getElementById('resMawpWith').textContent = `${fmt(res.mawp_with, 2)} ${res.pUnit}`;
   document.getElementById('resMawpNoCA').textContent = `${fmt(res.mawp_no, 2)} ${res.pUnit}`;
+  document.getElementById('resCa').textContent = `${fmt(res.ca)} mm`;
   document.getElementById('resCr').textContent = res.CR > 0 ? `${fmt(res.CR, 2)} mm/year` : '—';
   
   if (res.remainingLife !== null) {
