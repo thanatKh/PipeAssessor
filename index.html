@@ -1707,8 +1707,6 @@ window.addEventListener('afterprint', () => {
 
 /* Reset default setup */
 function resetDefaults() {
-  initSelections();
-  
   // Set default values
   npsSelect.value = '4"';
   updateSchedules();
@@ -1745,7 +1743,7 @@ function resetDefaults() {
 }
 
 /* Initial start */
-document.addEventListener('DOMContentLoaded', () => {
+function initApp() {
   // Load local storage theme
   const savedTheme = localStorage.getItem('theme');
   if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -1753,6 +1751,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   updateThemeIcon();
 
+  initSelections();
   resetDefaults();
   
   // Attach input event listeners for live recalculations
@@ -1761,7 +1760,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('input', recalc);
     });
-});
+}
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+  } else {
+    initApp();
+  }
+}
 </script>
 </body>
 </html>
