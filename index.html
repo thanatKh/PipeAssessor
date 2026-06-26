@@ -418,77 +418,149 @@
       background: rgba(0, 0, 0, 0.03);
     }
 
-    /* Thickness Comparison Gauge */
-    .thickness-gauge-container {
-      margin-bottom: 24px;
-      padding: 16px;
+    /* Visual Wrapper and Vertical Gauge Styles */
+    .visual-wrapper {
+      display: flex;
+      gap: 20px;
+      align-items: stretch;
+      margin-bottom: 8px;
+    }
+
+    @media (max-width: 650px) {
+      .visual-wrapper {
+        flex-direction: column;
+      }
+    }
+
+    .svg-container {
+      flex: 1;
+    }
+
+    .vertical-gauge-container {
+      width: 135px;
+      padding: 12px;
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
     }
 
-    .thickness-gauge-labels {
-      display: flex;
-      justify-content: space-between;
+    @media (max-width: 650px) {
+      .vertical-gauge-container {
+        width: 100%;
+        flex-direction: row;
+        height: 100px;
+        align-items: center;
+        justify-content: space-around;
+      }
+    }
+
+    .vertical-gauge-title {
       font-size: 11px;
       font-weight: 700;
       color: var(--text-muted);
-      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
     }
 
-    .thickness-gauge-bar-wrapper {
+    @media (max-width: 650px) {
+      .vertical-gauge-title {
+        margin-bottom: 0;
+      }
+    }
+
+    .vertical-gauge-track-wrapper {
       position: relative;
-      margin-bottom: 12px;
+      height: 150px;
+      width: 18px;
+      display: flex;
+      align-items: stretch;
     }
 
-    .thickness-gauge-track {
-      height: 18px;
-      background: var(--svg-loss); /* red/rose representing lost metal */
+    @media (max-width: 650px) {
+      .vertical-gauge-track-wrapper {
+        height: 70px;
+      }
+    }
+
+    .vertical-gauge-track {
+      width: 100%;
+      height: 100%;
+      background: var(--svg-loss);
       border-radius: 9px;
       position: relative;
-      overflow: visible; /* so indicator markers can overflow slightly */
       border: 1px solid var(--card-border);
     }
 
-    .thickness-gauge-fill {
-      height: 100%;
-      background: var(--svg-metal); /* blue/teal representing remaining metal */
-      border-radius: 8px 0 0 8px;
-      transition: width 0.3s ease;
-      width: 0%;
+    .vertical-gauge-fill {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--svg-metal);
+      border-radius: 0 0 8px 8px;
+      transition: height 0.3s ease;
+      height: 0%;
     }
 
-    .thickness-gauge-indicator {
+    .vertical-gauge-indicator {
       position: absolute;
-      top: -4px;
-      bottom: -4px;
-      width: 3px;
+      left: -4px;
+      right: -4px;
+      height: 3px;
       border-radius: 1.5px;
-      transition: left 0.3s ease;
+      transition: bottom 0.3s ease;
       z-index: 5;
     }
 
-    .thickness-gauge-indicator.req-total {
-      background: #f59e0b; /* Amber */
+    .vertical-gauge-indicator.req-total {
+      background: #f59e0b;
     }
 
-    .thickness-gauge-indicator.struct-min {
-      background: #7c3aed; /* Purple */
+    .vertical-gauge-indicator.struct-min {
+      background: #7c3aed;
     }
 
-    .thickness-gauge-legend {
+    .vertical-gauge-labels {
+      position: absolute;
+      left: 24px;
+      top: 0;
+      bottom: 0;
       display: flex;
+      flex-direction: column;
       justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 10px;
-      font-size: 11px;
-      font-weight: 600;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-muted);
+      white-space: nowrap;
     }
 
-    .legend-item {
+    .vertical-gauge-values {
+      margin-top: 10px;
+      font-size: 10px;
+      font-weight: 600;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    @media (max-width: 650px) {
+      .vertical-gauge-values {
+        margin-top: 0;
+        width: auto;
+      }
+    }
+
+    .v-val-item {
       display: flex;
       align-items: center;
       gap: 4px;
+      white-space: nowrap;
     }
 
     .legend-color {
@@ -508,6 +580,105 @@
 
     .legend-color.struct-color {
       background: #7c3aed;
+    }
+
+    /* Pressure Safety Gauge Styles */
+    .pressure-gauge-container {
+      margin-bottom: 24px;
+      padding: 16px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+    }
+
+    .pressure-gauge-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .pressure-gauge-bar-wrapper {
+      position: relative;
+      margin-bottom: 12px;
+    }
+
+    .pressure-gauge-track {
+      height: 18px;
+      background: #ef4444; /* default Overpressure red zone */
+      border-radius: 9px;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--card-border);
+      display: flex;
+    }
+
+    .pressure-zone {
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+
+    .pressure-zone.safe {
+      background: #10b981; /* Green */
+      width: 0%;
+    }
+
+    .pressure-zone.warning {
+      background: #f59e0b; /* Amber */
+      width: 0%;
+    }
+
+    .pressure-gauge-pointer {
+      position: absolute;
+      top: -3px;
+      bottom: -3px;
+      width: 4px;
+      background: #000000;
+      border-radius: 2px;
+      transition: left 0.3s ease;
+      z-index: 10;
+    }
+
+    [data-theme="dark"] .pressure-gauge-pointer {
+      background: #ffffff;
+    }
+
+    .pointer-tip {
+      position: absolute;
+      top: -6px;
+      left: -4px;
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 6px solid #000000;
+    }
+
+    [data-theme="dark"] .pointer-tip {
+      border-top-color: #ffffff;
+    }
+
+    .pressure-gauge-legend {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .legend-color.p-safe-color {
+      background: #10b981;
+    }
+
+    .legend-color.p-warn-color {
+      background: #f59e0b;
+    }
+
+    .legend-color.p-crit-color {
+      background: #ef4444;
     }
 
     /* Value Grid */
@@ -992,66 +1163,89 @@
           <h2 class="card-title">Pipe Wall Thickness Cross-Section</h2>
         </div>
         <div class="card-body">
-          <div class="svg-container">
-            <svg id="pipeSvg" width="100%" height="270" viewBox="0 0 450 270" xmlns="http://www.w3.org/2000/svg" style="background: var(--svg-bg); border-radius: 8px;">
-              <defs>
-                <radialGradient id="metalGrad" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
-                  <stop offset="0%" stop-color="#0284c7" />
-                  <stop offset="85%" stop-color="#0369a1" />
-                  <stop offset="100%" stop-color="#0f172a" stop-opacity="0.15" />
-                </radialGradient>
-                <!-- Clip path for the 90-degree top-right quadrant sector -->
-                <clipPath id="sectorClip">
-                  <polygon points="50,220 50,10 250,10 250,220" />
-                </clipPath>
-              </defs>
-
-              <!-- Concentric circles representing wall thickness, clipped to top-right quadrant -->
-              <g clip-path="url(#sectorClip)">
-                <!-- Circle 1: Nominal outer boundaries / remaining metal -->
-                <circle id="svgOdCircle" cx="50" cy="220" r="180" fill="var(--svg-metal)" />
+          <div class="visual-wrapper">
+            <div class="svg-container">
+              <svg id="pipeSvg" width="100%" height="270" viewBox="0 0 450 270" xmlns="http://www.w3.org/2000/svg" style="background: var(--svg-bg); border-radius: 8px;">
+                <defs>
+                  <radialGradient id="metalGrad" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+                    <stop offset="0%" stop-color="#0284c7" />
+                    <stop offset="85%" stop-color="#0369a1" />
+                    <stop offset="100%" stop-color="#0f172a" stop-opacity="0.15" />
+                  </radialGradient>
+                  <!-- Clip path for the 90-degree top-right quadrant sector -->
+                  <clipPath id="sectorClip">
+                    <polygon points="50,220 50,10 250,10 250,220" />
+                  </clipPath>
+                </defs>
+  
+                <!-- Concentric circles representing wall thickness, clipped to top-right quadrant -->
+                <g clip-path="url(#sectorClip)">
+                  <!-- Circle 1: Nominal outer boundaries / remaining metal -->
+                  <circle id="svgOdCircle" cx="50" cy="220" r="180" fill="var(--svg-metal)" />
+                  
+                  <!-- Circle 2: Measured boundaries / represents metal loss area in red -->
+                  <circle id="svgMeasCircle" cx="50" cy="220" r="140" fill="var(--svg-loss)" stroke="var(--svg-loss-border)" stroke-width="1.5" />
+                  
+                  <!-- Circle 3: Nominal inner circle / interior hollow background masking -->
+                  <circle id="svgNomCircle" cx="50" cy="220" r="110" fill="var(--svg-bg)" />
+                  
+                  <!-- Circle 4: Required thickness boundary with CA (dashed orange) -->
+                  <circle id="svgReqTotalCircle" cx="50" cy="220" r="130" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="3 3" />
+                  
+                  <!-- Circle 5: Required thickness boundary without CA (solid red) -->
+                  <circle id="svgReqNoCaCircle" cx="50" cy="220" r="135" fill="none" stroke="#ef4444" stroke-width="1.5" />
+                </g>
+  
+                <!-- Cutaway Section Borders (cut through actual pipe wall only, updated dynamically) -->
+                <line id="svgBorderV" x1="50" y1="110" x2="50" y2="40" stroke="var(--text-light)" stroke-width="1.5" opacity="0.8" />
+                <line id="svgBorderH" x1="140" y1="220" x2="230" y2="220" stroke="var(--text-light)" stroke-width="1.5" opacity="0.8" />
+  
+                <!-- Center Point (Vertex of cutaway) -->
+                <circle cx="50" cy="220" r="2.5" fill="var(--text-light)" />
+  
+                <!-- CAD-style Orthogonal Leader Lines & Texts -->
+                <!-- Nominal OD -->
+                <path id="svgLOdLine" d="" fill="none" stroke="var(--text-light)" stroke-width="1" opacity="0.6" />
+                <text id="svgLOdText" font-size="11" font-family="Inter, sans-serif" fill="var(--text-color)" font-weight="600"></text>
                 
-                <!-- Circle 2: Measured boundaries / represents metal loss area in red -->
-                <circle id="svgMeasCircle" cx="50" cy="220" r="140" fill="var(--svg-loss)" stroke="var(--svg-loss-border)" stroke-width="1.5" />
-                
-                <!-- Circle 3: Nominal inner circle / interior hollow background masking -->
-                <circle id="svgNomCircle" cx="50" cy="220" r="110" fill="var(--svg-bg)" />
-                
-                <!-- Circle 4: Required thickness boundary with CA (dashed orange) -->
-                <circle id="svgReqTotalCircle" cx="50" cy="220" r="130" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="3 3" />
-                
-                <!-- Circle 5: Required thickness boundary without CA (solid red) -->
-                <circle id="svgReqNoCaCircle" cx="50" cy="220" r="135" fill="none" stroke="#ef4444" stroke-width="1.5" />
-              </g>
-
-              <!-- Cutaway Section Borders (cut through actual pipe wall only, updated dynamically) -->
-              <line id="svgBorderV" x1="50" y1="110" x2="50" y2="40" stroke="var(--text-light)" stroke-width="1.5" opacity="0.8" />
-              <line id="svgBorderH" x1="140" y1="220" x2="230" y2="220" stroke="var(--text-light)" stroke-width="1.5" opacity="0.8" />
-
-              <!-- Center Point (Vertex of cutaway) -->
-              <circle cx="50" cy="220" r="2.5" fill="var(--text-light)" />
-
-              <!-- CAD-style Orthogonal Leader Lines & Texts -->
-              <!-- Nominal OD -->
-              <path id="svgLOdLine" d="" fill="none" stroke="var(--text-light)" stroke-width="1" opacity="0.6" />
-              <text id="svgLOdText" font-size="11" font-family="Inter, sans-serif" fill="var(--text-color)" font-weight="600"></text>
-              
-              <!-- Remaining wall (Measured ID) -->
-              <path id="svgLMeasLine" d="" fill="none" stroke="var(--text-light)" stroke-width="1" opacity="0.6" />
-              <text id="svgLMeasText" font-size="11" font-family="Inter, sans-serif" fill="var(--text-color)" font-weight="600"></text>
-
-              <!-- Required with CA (Amber) -->
-              <path id="svgLReqTotalLine" d="" fill="none" stroke="#d97706" stroke-width="1" opacity="0.8" />
-              <text id="svgLReqTotalText" font-size="11" font-family="Inter, sans-serif" fill="#d97706" font-weight="700"></text>
-
-              <!-- Required no CA (Red) -->
-              <path id="svgLReqNoLine" d="" fill="none" stroke="#ef4444" stroke-width="1" opacity="0.8" />
-              <text id="svgLReqNoText" font-size="11" font-family="Inter, sans-serif" fill="#ef4444" font-weight="700"></text>
-
-              <!-- Nominal Inner ID -->
-              <path id="svgLNomLine" d="" fill="none" stroke="var(--text-light)" stroke-width="1" opacity="0.6" />
-              <text id="svgLNomText" font-size="11" font-family="Inter, sans-serif" fill="var(--text-color)" font-weight="600"></text>
-            </svg>
+                <!-- Remaining wall (Measured ID) -->
+                <path id="svgLMeasLine" d="" fill="none" stroke="var(--text-light)" stroke-width="1" opacity="0.6" />
+                <text id="svgLMeasText" font-size="11" font-family="Inter, sans-serif" fill="var(--text-color)" font-weight="600"></text>
+  
+                <!-- Required with CA (Amber) -->
+                <path id="svgLReqTotalLine" d="" fill="none" stroke="#d97706" stroke-width="1" opacity="0.8" />
+                <text id="svgLReqTotalText" font-size="11" font-family="Inter, sans-serif" fill="#d97706" font-weight="700"></text>
+  
+                <!-- Required no CA (Red) -->
+                <path id="svgLReqNoLine" d="" fill="none" stroke="#ef4444" stroke-width="1" opacity="0.8" />
+                <text id="svgLReqNoText" font-size="11" font-family="Inter, sans-serif" fill="#ef4444" font-weight="700"></text>
+  
+                <!-- Nominal Inner ID -->
+                <path id="svgLNomLine" d="" fill="none" stroke="var(--text-light)" stroke-width="1" opacity="0.6" />
+                <text id="svgLNomText" font-size="11" font-family="Inter, sans-serif" fill="var(--text-color)" font-weight="600"></text>
+              </svg>
+            </div>
+            
+            <!-- Vertical Thickness Gauge -->
+            <div class="vertical-gauge-container">
+              <div class="vertical-gauge-title">Wall Gauge</div>
+              <div class="vertical-gauge-track-wrapper">
+                <div class="vertical-gauge-track">
+                  <div class="vertical-gauge-fill" id="vGaugeFill"></div>
+                  <div class="vertical-gauge-indicator req-total" id="vGaugeIndicatorReqTotal" title="Required incl. CA"></div>
+                  <div class="vertical-gauge-indicator struct-min" id="vGaugeIndicatorStruct" title="API 574 Structural Min."></div>
+                </div>
+                <div class="vertical-gauge-labels">
+                  <span class="v-label-top" id="vGaugeValTnom">—</span>
+                  <span class="v-label-bottom">0 mm</span>
+                </div>
+              </div>
+              <div class="vertical-gauge-values">
+                <div class="v-val-item"><span class="legend-color fill-color"></span> t<sub>meas</sub>: <span id="vGaugeValTmeas">—</span></div>
+                <div class="v-val-item"><span class="legend-color req-color"></span> limit: <span id="vGaugeValReqTotal">—</span></div>
+                <div class="v-val-item"><span class="legend-color struct-color"></span> Min: <span id="vGaugeValStruct">—</span></div>
+              </div>
+            </div>
           </div>
           <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center; font-size:11px; font-weight:600; margin-top:8px;">
             <span style="display:flex; align-items:center; gap:4px;"><span style="display:inline-block; width:12px; height:12px; background:var(--svg-metal); border-radius:3px;"></span> Remaining Wall</span>
@@ -1069,23 +1263,29 @@
         </div>
         <div class="card-body">
           
-          <!-- Thickness Comparison Visual Gauge -->
-          <div class="thickness-gauge-container">
-            <div class="thickness-gauge-labels">
-              <span>0 mm (Hollow ID)</span>
-              <span>Nominal Wall: <span id="gaugeTnom">—</span></span>
+          <!-- Pressure Safety Gauge -->
+          <div class="pressure-gauge-container">
+            <div class="pressure-gauge-labels">
+              <span>0 <span class="p-unit-lbl">bar</span></span>
+              <span>Design Pressure (P): <span id="gaugeValP">—</span></span>
+              <span id="gaugeValMaxP">Limit (MAWP no CA): —</span>
             </div>
-            <div class="thickness-gauge-bar-wrapper">
-              <div class="thickness-gauge-track">
-                <div class="thickness-gauge-fill" id="gaugeFill"></div>
-                <div class="thickness-gauge-indicator req-total" id="gaugeIndicatorReqTotal" title="Required Thickness (incl. CA)"></div>
-                <div class="thickness-gauge-indicator struct-min" id="gaugeIndicatorStruct" title="API 574 Structural Min."></div>
+            <div class="pressure-gauge-bar-wrapper">
+              <div class="pressure-gauge-track">
+                <!-- Color zones: Safe (Green), Warning (Yellow), Critical (Red) -->
+                <div class="pressure-zone safe" id="zoneSafe"></div>
+                <div class="pressure-zone warning" id="zoneWarning"></div>
+                
+                <!-- Pointer marker representing Design Pressure -->
+                <div class="pressure-gauge-pointer" id="pressurePointer" title="Design Pressure">
+                  <div class="pointer-tip"></div>
+                </div>
               </div>
             </div>
-            <div class="thickness-gauge-legend">
-              <span class="legend-item"><span class="legend-color fill-color"></span> Remaining: <span id="gaugeValTmeas">—</span></span>
-              <span class="legend-item"><span class="legend-color req-color"></span> Required incl. CA: <span id="gaugeValReqTotal">—</span></span>
-              <span class="legend-item"><span class="legend-color struct-color"></span> API 574 Min: <span id="gaugeValStruct">—</span></span>
+            <div class="pressure-gauge-legend">
+              <span class="legend-item"><span class="legend-color p-safe-color"></span> Safe (&lt; MAWP with CA)</span>
+              <span class="legend-item"><span class="legend-color p-warn-color"></span> Warning (CA Consumed)</span>
+              <span class="legend-item"><span class="legend-color p-crit-color"></span> Overpressure (&gt; MAWP no CA)</span>
             </div>
           </div>
 
@@ -1857,13 +2057,18 @@ function recalc() {
     document.getElementById('statusNotes').textContent = 'Calculation halted. Please check highlighted invalid input parameters.';
     
     // Clear outputs
-    ['resTnom', 'resPct', 'resTreq', 'resTreqCa', 'resTstruct', 'resMargin', 'resPres', 'resMawpWith', 'resMawpNoCA', 'resCa', 'resCr', 'resLife', 'gaugeTnom', 'gaugeValTmeas', 'gaugeValReqTotal', 'gaugeValStruct'].forEach(id => {
-      document.getElementById(id).textContent = '—';
+    ['resTnom', 'resPct', 'resTreq', 'resTreqCa', 'resTstruct', 'resMargin', 'resPres', 'resMawpWith', 'resMawpNoCA', 'resCa', 'resCr', 'resLife', 'vGaugeValTnom', 'vGaugeValTmeas', 'vGaugeValReqTotal', 'vGaugeValStruct', 'gaugeValP', 'gaugeValMaxP'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = '—';
     });
     
-    document.getElementById('gaugeFill').style.width = '0%';
-    document.getElementById('gaugeIndicatorReqTotal').style.left = '0%';
-    document.getElementById('gaugeIndicatorStruct').style.left = '0%';
+    document.getElementById('vGaugeFill').style.height = '0%';
+    document.getElementById('vGaugeIndicatorReqTotal').style.bottom = '0%';
+    document.getElementById('vGaugeIndicatorStruct').style.bottom = '0%';
+    
+    document.getElementById('zoneSafe').style.width = '0%';
+    document.getElementById('zoneWarning').style.width = '0%';
+    document.getElementById('pressurePointer').style.left = '0%';
     
     drawSvgPipe(null);
     updateRepairAdvisor(null);
@@ -1902,20 +2107,37 @@ function recalc() {
   document.getElementById('resCa').textContent = `${fmt(res.ca)} mm`;
   document.getElementById('resCr').textContent = res.CR > 0 ? `${fmt(res.CR, 2)} mm/year` : '—';
   
-  // Update visual comparison gauge values
-  document.getElementById('gaugeTnom').textContent = `${fmt(res.t_nom)} mm`;
-  document.getElementById('gaugeValTmeas').textContent = `${fmt(res.t_meas)} mm`;
-  document.getElementById('gaugeValReqTotal').textContent = `${fmt(res.t_req_total, 3)} mm`;
-  document.getElementById('gaugeValStruct').textContent = tStructText;
+  // Update vertical gauge values
+  document.getElementById('vGaugeValTnom').textContent = `${fmt(res.t_nom)} mm`;
+  document.getElementById('vGaugeValTmeas').textContent = `${fmt(res.t_meas)} mm`;
+  document.getElementById('vGaugeValReqTotal').textContent = `${fmt(res.t_req_total, 3)} mm`;
+  document.getElementById('vGaugeValStruct').textContent = tStructText;
 
-  // Update gauge bar fill and indicators (percentages relative to t_nom)
-  const fillPct = Math.min(100, Math.max(0, (res.t_meas / res.t_nom) * 100));
-  const reqTotalPct = Math.min(100, Math.max(0, (res.t_req_total / res.t_nom) * 100));
-  const structPct = Math.min(100, Math.max(0, (res.t_struct / res.t_nom) * 100));
+  // Update vertical gauge bar fill and indicators (bottom percentages relative to t_nom)
+  const vFillPct = Math.min(100, Math.max(0, (res.t_meas / res.t_nom) * 100));
+  const vReqTotalPct = Math.min(100, Math.max(0, (res.t_req_total / res.t_nom) * 100));
+  const vStructPct = Math.min(100, Math.max(0, (res.t_struct / res.t_nom) * 100));
 
-  document.getElementById('gaugeFill').style.width = fillPct.toFixed(1) + '%';
-  document.getElementById('gaugeIndicatorReqTotal').style.left = reqTotalPct.toFixed(1) + '%';
-  document.getElementById('gaugeIndicatorStruct').style.left = structPct.toFixed(1) + '%';
+  document.getElementById('vGaugeFill').style.height = vFillPct.toFixed(1) + '%';
+  document.getElementById('vGaugeIndicatorReqTotal').style.bottom = vReqTotalPct.toFixed(1) + '%';
+  document.getElementById('vGaugeIndicatorStruct').style.bottom = vStructPct.toFixed(1) + '%';
+
+  // Update pressure labels and unit suffixes
+  document.querySelectorAll('.p-unit-lbl').forEach(el => el.textContent = res.pUnit);
+  document.getElementById('gaugeValP').textContent = `${fmt(res.P_input, 1)} ${res.pUnit}`;
+  document.getElementById('gaugeValMaxP').textContent = `Limit (MAWP no CA): ${fmt(res.mawp_no, 2)} ${res.pUnit}`;
+
+  // Set pressure scale (P_max)
+  const P_max = Math.max(res.P_input * 1.25, res.mawp_no * 1.1, 1.0);
+
+  // Calculate widths for safe (green) and warning (yellow) zones and pointer position
+  const safePct = Math.min(100, Math.max(0, (res.mawp_with / P_max) * 100));
+  const warnPct = Math.min(100 - safePct, Math.max(0, ((res.mawp_no - res.mawp_with) / P_max) * 100));
+  const pointerPct = Math.min(100, Math.max(0, (res.P_input / P_max) * 100));
+
+  document.getElementById('zoneSafe').style.width = safePct.toFixed(1) + '%';
+  document.getElementById('zoneWarning').style.width = warnPct.toFixed(1) + '%';
+  document.getElementById('pressurePointer').style.left = pointerPct.toFixed(1) + '%';
 
   if (res.remainingLife !== null) {
     document.getElementById('resLife').textContent = res.remainingLife >= 0 
