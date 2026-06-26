@@ -751,6 +751,22 @@
           </div>
 
           <div class="form-row">
+            <div class="form-group">
+              <label for="corrType">Corrosion Type</label>
+              <select id="corrType">
+                <option value="internal">Internal Wall Loss</option>
+                <option value="external">External Wall Loss</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="ca">Corrosion Allowance, CA (mm)</label>
+              <input id="ca" type="number" step="0.1" value="1.5">
+              <div class="validation-alert" id="errCa">CA cannot exceed remaining measured wall thickness.</div>
+              <div class="hint">Design corrosion allowance.</div>
+            </div>
+          </div>
+
+          <div class="form-row">
             <!-- Wall Loss Input Group -->
             <div class="form-group" id="grpDepth">
               <label for="depth">Wall Loss Depth (mm)</label>
@@ -767,12 +783,7 @@
               <div class="hint">Remaining minimum thickness measured via UT.</div>
             </div>
 
-            <div class="form-group">
-              <label for="ca">Corrosion Allowance, CA (mm)</label>
-              <input id="ca" type="number" step="0.1" value="1.5">
-              <div class="validation-alert" id="errCa">CA cannot exceed remaining measured wall thickness.</div>
-              <div class="hint">Design corrosion allowance.</div>
-            </div>
+            <div class="form-group"></div>
           </div>
 
           <!-- Nominal Override Row -->
@@ -1289,6 +1300,7 @@ const stressInput = document.getElementById('S');
 const pUnitSelect = document.getElementById('pUnit');
 const modeSeg = document.getElementById('modeSeg');
 const themeToggle = document.getElementById('themeToggle');
+const corrTypeSelect = document.getElementById('corrType');
 
 /* Setup NPS, schedules, and materials dynamically */
 function initSelections() {
@@ -1325,6 +1337,8 @@ function initSelections() {
     recalc();
   });
   
+  corrTypeSelect.addEventListener('change', recalc);
+
   // Tab control for segmented
   modeSeg.addEventListener('click', (e) => {
     if (e.target.tagName !== 'BUTTON') return;
@@ -1509,6 +1523,8 @@ function runCalculations() {
     remainingLife = (t_meas - t_req_total) / CR;
   }
 
+  const isInternal = corrTypeSelect.value === 'internal';
+
   return {
     hasErrors: false,
     t_nom,
@@ -1527,7 +1543,8 @@ function runCalculations() {
     ca,
     CR,
     P_input,
-    pUnit
+    pUnit,
+    isInternal
   };
 }
 
@@ -1549,13 +1566,36 @@ function drawSvgPipe(res) {
   const scale = t_nom_px / res.t_nom;
   
   const R_nom = Math.max(10, R_od - t_nom_px);
-  
-  // Capped visualization to nominal inner wall to prevent visual inverted display
   const tMeasDraw = Math.min(res.t_nom, res.t_meas);
-  const R_meas = Math.max(10, R_od - (tMeasDraw * scale));
   
-  const R_req_noCA = Math.max(10, R_od - (res.t_req_noCA * scale));
-  const R_req_total = Math.max(10, R_od - (res.t_req_total * scale));
+  let R_meas, R_req_noCA, R_req_total;
+  
+  const svgOdCircle = document.getElementById('svgOdCircle');
+  const svgMeasCircle = document.getElementById('svgMeasCircle');
+  
+  if (res.isInternal) {
+    // Internal Wall Loss Mode
+    R_meas = Math.max(10, R_od - (tMeasDraw * scale));
+    R_req_noCA = Math.max(10, R_od - (res.t_req_noCA * scale));
+    R_req_total = Math.max(10, R_od - (res.t_req_total * scale));
+    
+    // Style circles: outer ring is Teal, inner ring is Red
+    svgOdCircle.setAttribute('fill', 'var(--svg-metal)');
+    svgOdCircle.removeAttribute('stroke');
+    svgMeasCircle.setAttribute('fill', 'var(--svg-loss)');
+    svgMeasCircle.setAttribute('stroke', 'var(--svg-loss-border)');
+  } else {
+    // External Wall Loss Mode
+    R_meas = Math.max(10, R_nom + (tMeasDraw * scale));
+    R_req_noCA = Math.max(10, R_nom + (res.t_req_noCA * scale));
+    R_req_total = Math.max(10, R_nom + (res.t_req_total * scale));
+    
+    // Style circles: outer ring is Red (metal loss), inner ring is Teal (remaining)
+    svgOdCircle.setAttribute('fill', 'var(--svg-loss)');
+    svgOdCircle.setAttribute('stroke', 'var(--svg-loss-border)');
+    svgMeasCircle.setAttribute('fill', 'var(--svg-metal)');
+    svgMeasCircle.removeAttribute('stroke');
+  }
 
   // Update SVG Circles Attributes
   document.getElementById('svgOdCircle').setAttribute('r', R_od);
@@ -1573,7 +1613,13 @@ function drawSvgPipe(res) {
   // Update SVG Labels & Leaders (orthogonal paths)
   updateLeaderLine('svgLOd', cx + R_od, 35, `Nominal OD: ${fmt(res.D)} mm`);
   updateLeaderLine('svgLNom', cx + R_nom, 225, `Nominal ID: ${fmt(res.D - 2*res.t_nom)} mm`);
-  updateLeaderLine('svgLMeas', cx + R_meas, 75, `Measured ID: ${fmt(res.D - 2*res.t_meas)} mm (t_meas: ${fmt(res.t_meas)} mm)`);
+  
+  // Custom label based on whether it represents Measured ID or Measured OD
+  const measLabel = res.isInternal 
+    ? `Measured ID: ${fmt(res.D - 2*res.t_meas)} mm (t_meas: ${fmt(res.t_meas)} mm)`
+    : `Measured OD: ${fmt(res.D - 2*(res.t_nom - res.t_meas))} mm (t_meas: ${fmt(res.t_meas)} mm)`;
+  
+  updateLeaderLine('svgLMeas', cx + R_meas, 75, measLabel);
   updateLeaderLine('svgLReqTotal', cx + R_req_total, 175, `t_req+CA: ${fmt(res.t_req_total, 3)} mm`);
   updateLeaderLine('svgLReqNo', cx + R_req_noCA, 125, `t_req (Design): ${fmt(res.t_req_noCA, 3)} mm`);
 }
@@ -1735,6 +1781,7 @@ function resetDefaults() {
   document.getElementById('ca').value = '1.5';
   document.getElementById('P').value = '7.0';
   pUnitSelect.value = 'bar';
+  corrTypeSelect.value = 'internal';
   materialSelect.value = 'A106B';
   stressInput.value = '137.9';
   stressInput.disabled = true;
@@ -1773,7 +1820,7 @@ function initApp() {
   resetDefaults();
   
   // Attach input event listeners for live recalculations
-  ['depth', 'tmeas', 'ca', 'P', 'S', 'E', 'W', 'Y', 'CR', 'overrideTnom', 'metaTag', 'metaLoc', 'metaPid', 'enteredBy', 'remarks']
+  ['depth', 'tmeas', 'ca', 'P', 'S', 'E', 'W', 'Y', 'CR', 'overrideTnom', 'metaTag', 'metaLoc', 'metaPid', 'enteredBy', 'remarks', 'corrType']
     .forEach(id => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('input', recalc);
