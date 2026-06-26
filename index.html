@@ -1292,7 +1292,7 @@ const themeToggle = document.getElementById('themeToggle');
 
 /* Setup NPS, schedules, and materials dynamically */
 function initSelections() {
-  npsSelect.innerHTML = Object.keys(PIPE_DATABASE).map(nps => `<option value="${nps}">${nps}</option>`).join('');
+  npsSelect.innerHTML = Object.keys(PIPE_DATABASE).map(nps => `<option>${nps}</option>`).join('');
   materialSelect.innerHTML = MATERIALS.map(mat => `<option value="${mat.code}">${mat.name}</option>`).join('');
   
   npsSelect.addEventListener('change', () => {
