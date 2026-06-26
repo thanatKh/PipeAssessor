@@ -1653,18 +1653,22 @@ function drawSvgPipe(res) {
   document.getElementById('svgBorderH').setAttribute('x1', cx + R_nom);
   document.getElementById('svgBorderH').setAttribute('x2', cx + R_od);
 
-  // Update SVG Labels & Leaders (orthogonal paths)
-  updateLeaderLine('svgLOd', cx + R_od, 35, `Nominal OD: ${fmt(res.D)} mm`);
-  updateLeaderLine('svgLNom', cx + R_nom, 225, `Nominal ID: ${fmt(res.D - 2*res.t_nom)} mm`);
-  
-  // Custom label based on whether it represents Measured ID or Measured OD
-  const measLabel = res.isInternal 
-    ? `Measured ID: ${fmt(res.D - 2*res.t_meas)} mm (t_meas: ${fmt(res.t_meas)} mm)`
-    : `Measured OD: ${fmt(res.D - 2*(res.t_nom - res.t_meas))} mm (t_meas: ${fmt(res.t_meas)} mm)`;
-  
-  updateLeaderLine('svgLMeas', cx + R_meas, 75, measLabel);
-  updateLeaderLine('svgLReqTotal', cx + R_req_total, 175, `t_req+CA: ${fmt(res.t_req_total, 3)} mm`);
-  updateLeaderLine('svgLReqNo', cx + R_req_noCA, 125, `t_req (Design): ${fmt(res.t_req_noCA, 3)} mm`);
+  // Update SVG Labels & Leaders dynamically sorted by radius to prevent lines crossing
+  const labels = [
+    { id: 'svgLOd', r: R_od, text: `Nominal Outer Surface` },
+    { id: 'svgLMeas', r: R_meas, text: `Remaining Wall (t_meas): ${fmt(res.t_meas)} mm` },
+    { id: 'svgLReqTotal', r: R_req_total, text: `Required incl. CA (t_req + CA): ${fmt(res.t_req_total, 3)} mm` },
+    { id: 'svgLReqNo', r: R_req_noCA, text: `Required Design (t_req): ${fmt(res.t_req_noCA, 3)} mm` },
+    { id: 'svgLNom', r: R_nom, text: `Nominal Inner Surface` }
+  ];
+
+  // Sort descending by radius: largest radius at top, smallest at bottom
+  labels.sort((a, b) => b.r - a.r);
+
+  const yLines = [35, 75, 120, 165, 210];
+  labels.forEach((item, index) => {
+    updateLeaderLine(item.id, cx + item.r, yLines[index], item.text);
+  });
 }
 
 function updateLeaderLine(id, xPoint, yLine, label) {
