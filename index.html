@@ -1336,6 +1336,9 @@
                   
                   <!-- Circle 5: Required thickness boundary without CA (solid red) -->
                   <circle id="svgReqNoCaCircle" cx="50" cy="220" r="135" fill="none" stroke="#ef4444" stroke-width="1.5" />
+
+                  <!-- Dashed nominal reference line showing original surface boundary before damage -->
+                  <path id="svgPocketNominalLine" d="" fill="none" stroke="var(--text-light)" stroke-dasharray="2 2" stroke-width="1.2" opacity="0.8" />
                 </g>
   
                 <!-- Cutaway Section Borders (cut through actual pipe wall only, updated dynamically) -->
@@ -1365,6 +1368,10 @@
                 <!-- Nominal Inner ID -->
                 <path id="svgLNomLine" d="" fill="none" stroke="var(--text-light)" stroke-width="1" opacity="0.6" />
                 <text id="svgLNomText" font-size="11" font-family="Inter, sans-serif" fill="var(--text-color)" font-weight="600"></text>
+
+                <!-- Wall Loss Depth (Red/Rose) -->
+                <path id="svgLDepthLine" d="" fill="none" stroke="#ef4444" stroke-width="1" opacity="0.8" />
+                <text id="svgLDepthText" font-size="11" font-family="Inter, sans-serif" fill="#ef4444" font-weight="700"></text>
               </svg>
             </div>
             
@@ -2152,12 +2159,14 @@ function runCalculations() {
 function drawSvgPipe(res) {
   if (!res || res.hasErrors) {
     // Hide leader lines and reset paths
-    ['svgLOd', 'svgLMeas', 'svgLReqNo', 'svgLReqTotal', 'svgLNom'].forEach(id => {
+    ['svgLOd', 'svgLMeas', 'svgLReqNo', 'svgLReqTotal', 'svgLNom', 'svgLDepth'].forEach(id => {
       document.getElementById(id + 'Line').setAttribute('d', '');
       document.getElementById(id + 'Text').textContent = '';
     });
     const pocketLoss = document.getElementById('svgPocketLoss');
     if (pocketLoss) pocketLoss.setAttribute('d', '');
+    const pocketNom = document.getElementById('svgPocketNominalLine');
+    if (pocketNom) pocketNom.setAttribute('d', '');
     return;
   }
 
@@ -2170,7 +2179,7 @@ function drawSvgPipe(res) {
   const R_nom = Math.max(10, R_od - t_nom_px);
   const tMeasDraw = Math.min(res.t_nom, res.t_meas);
   
-  let R_meas, R_req_noCA, R_req_total;
+  let R_meas, R_req_noCA, R_req_total, R_depth;
   
   const svgOdCircle = document.getElementById('svgOdCircle');
   svgOdCircle.setAttribute('fill', 'var(--svg-metal)');
@@ -2184,6 +2193,7 @@ function drawSvgPipe(res) {
     R_meas = Math.max(10, R_nom + ((res.t_nom - tMeasDraw) * scale));
     R_req_noCA = Math.max(10, R_od - (res.t_req_noCA * scale));
     R_req_total = Math.max(10, R_od - (res.t_req_total * scale));
+    R_depth = (R_nom + R_meas) / 2;
     
     // Draw internal localized pocket path (cosine-squared pocket centered at 0 degrees)
     const points = [];
@@ -2203,11 +2213,16 @@ function drawSvgPipe(res) {
                     `L ${fmt(cx + R_nom, 1)} ${cy} ` +
                     `A ${R_nom} ${R_nom} 0 0 1 ${fmt(x_nom_40, 1)} ${fmt(y_nom_40, 1)} Z`;
     document.getElementById('svgPocketLoss').setAttribute('d', dPocket);
+    
+    // Draw original inner surface reference dashed arc
+    const dNom = `M ${fmt(x_nom_40, 1)} ${fmt(y_nom_40, 1)} A ${R_nom} ${R_nom} 0 0 0 ${cx + R_nom} ${cy}`;
+    document.getElementById('svgPocketNominalLine').setAttribute('d', dNom);
   } else {
     // External Wall Loss Mode
     R_meas = Math.max(10, R_od - ((res.t_nom - tMeasDraw) * scale));
     R_req_noCA = Math.max(10, R_nom + (res.t_req_noCA * scale));
     R_req_total = Math.max(10, R_nom + (res.t_req_total * scale));
+    R_depth = (R_meas + R_od) / 2;
     
     // Draw external localized pocket path (cosine-squared pocket centered at 0 degrees)
     const points = [];
@@ -2227,6 +2242,10 @@ function drawSvgPipe(res) {
                     `L ${fmt(cx + R_meas, 1)} ${cy} ` +
                     `L ` + points.join(' L ') + ` Z`;
     document.getElementById('svgPocketLoss').setAttribute('d', dPocket);
+    
+    // Draw original outer surface reference dashed arc
+    const dNom = `M ${fmt(x_od_40, 1)} ${fmt(y_od_40, 1)} A ${R_od} ${R_od} 0 0 0 ${cx + R_od} ${cy}`;
+    document.getElementById('svgPocketNominalLine').setAttribute('d', dNom);
   }
 
   // Update SVG Circles Attributes
@@ -2247,13 +2266,14 @@ function drawSvgPipe(res) {
     { id: 'svgLMeas', r: R_meas, text: `Remaining Wall (t_meas): ${fmt(res.t_meas)} mm` },
     { id: 'svgLReqTotal', r: R_req_total, text: `Required incl. CA (t_req + CA): ${fmt(res.t_req_total, 3)} mm` },
     { id: 'svgLReqNo', r: R_req_noCA, text: `Required Design (t_req): ${fmt(res.t_req_noCA, 3)} mm` },
-    { id: 'svgLNom', r: R_nom, text: `Nominal Inner Surface` }
+    { id: 'svgLNom', r: R_nom, text: `Nominal Inner Surface` },
+    { id: 'svgLDepth', r: R_depth, text: `Wall Loss (depth): ${fmt(res.depth)} mm` }
   ];
 
   // Sort descending by radius: largest radius at top, smallest at bottom
   labels.sort((a, b) => b.r - a.r);
 
-  const yLines = [35, 75, 120, 165, 210];
+  const yLines = [25, 60, 95, 130, 165, 200];
   labels.forEach((item, index) => {
     updateLeaderLine(item.id, cx + item.r, yLines[index], item.text);
   });
