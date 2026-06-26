@@ -922,6 +922,288 @@
         filter: grayscale(100%);
       }
     }
+
+    /* Equations & Calculation References Styling */
+    .eq-section {
+      font-size: 12px;
+      color: var(--text-color);
+    }
+
+    .eq-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--primary-color);
+      margin-bottom: 8px;
+    }
+
+    .eq-box {
+      background: var(--svg-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 10px;
+      font-weight: 700;
+      color: var(--text-color);
+    }
+
+    .fraction {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 0 4px;
+      vertical-align: middle;
+      font-size: 11px;
+    }
+
+    .numerator {
+      border-bottom: 1px solid var(--text-color);
+      padding-bottom: 2px;
+      width: 100%;
+    }
+
+    .denominator {
+      padding-top: 2px;
+      width: 100%;
+    }
+
+    .eq-legend-list {
+      list-style-type: none;
+      padding-left: 0;
+      margin-top: 8px;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .eq-legend-list li {
+      margin-bottom: 4px;
+      padding-left: 12px;
+      position: relative;
+    }
+
+    .eq-legend-list li::before {
+      content: "•";
+      position: absolute;
+      left: 0;
+      color: var(--primary-color);
+      font-weight: bold;
+    }
+
+    /* Presentation Mode Custom Styles */
+    body.pres-mode {
+      --bg-color: #0b0f19;
+    }
+    
+    body.pres-mode[data-theme="light"] {
+      --bg-color: #f1f5f9;
+    }
+
+    body.pres-mode .dashboard {
+      grid-template-columns: 1fr !important;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    body.pres-mode .dashboard > .column:first-of-type {
+      display: none !important;
+    }
+
+    body.pres-mode .dashboard > .column:last-of-type {
+      display: grid !important;
+      grid-template-columns: 1fr 1.1fr !important;
+      gap: 24px !important;
+    }
+
+    @media (max-width: 1024px) {
+      body.pres-mode .dashboard > .column:last-of-type {
+        grid-template-columns: 1fr !important;
+      }
+    }
+
+    body.pres-mode .dashboard > .column:last-of-type > #statusCard {
+      grid-column: span 2 !important;
+    }
+
+    @media (max-width: 1024px) {
+      body.pres-mode .dashboard > .column:last-of-type > #statusCard {
+        grid-column: span 1 !important;
+      }
+    }
+
+    body.pres-mode .status-banner {
+      padding: 24px !important;
+      border-radius: 12px;
+    }
+
+    body.pres-mode .status-label {
+      font-size: 14px !important;
+      letter-spacing: 1px;
+    }
+
+    body.pres-mode .status-value {
+      font-size: 48px !important;
+      font-weight: 900;
+    }
+
+    body.pres-mode .status-desc {
+      font-size: 18px !important;
+      margin-top: 12px !important;
+      line-height: 1.5;
+    }
+
+    body.pres-mode .res-grid {
+      grid-template-columns: 1fr 1fr !important;
+      gap: 16px !important;
+    }
+
+    body.pres-mode .res-item {
+      padding: 16px !important;
+      background: rgba(0, 0, 0, 0.02) !important;
+      border-radius: 10px !important;
+      border: 1px solid var(--card-border) !important;
+    }
+
+    body.pres-mode .res-name {
+      font-size: 12px !important;
+      color: var(--text-muted) !important;
+      margin-bottom: 8px !important;
+    }
+
+    body.pres-mode .res-val {
+      font-size: 32px !important;
+      font-weight: 800 !important;
+    }
+
+    body.pres-mode .visual-wrapper {
+      height: 380px !important;
+      gap: 24px !important;
+    }
+    
+    body.pres-mode .svg-container {
+      height: 100% !important;
+    }
+
+    body.pres-mode #pipeSvg {
+      height: 380px !important;
+    }
+
+    body.pres-mode .vertical-gauge-container {
+      width: 160px !important;
+      padding: 16px !important;
+    }
+
+    body.pres-mode .vertical-gauge-labels {
+      font-size: 11px !important;
+    }
+
+    body.pres-mode .vertical-gauge-values {
+      font-size: 11px !important;
+      gap: 6px !important;
+    }
+
+    body.pres-mode .pressure-gauge-container {
+      padding: 20px !important;
+      margin-bottom: 30px !important;
+    }
+
+    body.pres-mode .pressure-gauge-labels {
+      font-size: 13px !important;
+      margin-bottom: 10px !important;
+    }
+
+    body.pres-mode .pressure-gauge-track {
+      height: 24px !important;
+      border-radius: 12px !important;
+    }
+
+    body.pres-mode .pressure-gauge-pointer {
+      top: -4px !important;
+      bottom: -4px !important;
+      width: 6px !important;
+    }
+
+    body.pres-mode .pressure-gauge-legend {
+      font-size: 12px !important;
+      gap: 16px !important;
+      margin-top: 12px !important;
+    }
+
+    body.pres-mode svg text {
+      font-size: 13px !important;
+    }
+
+    body.pres-mode svg line, body.pres-mode svg path {
+      stroke-width: 1.5px !important;
+    }
+
+    /* Dynamic Equation Substitutions */
+    .eq-sub-container {
+      background: var(--svg-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 10px;
+      margin-bottom: 14px;
+      border-left: 4px solid var(--primary-color);
+    }
+
+    .eq-sub-title {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--primary-color);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .eq-sub-step {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-color);
+      line-height: 1.6;
+      word-break: break-all;
+    }
+
+    .eq-sub-step strong {
+      color: var(--primary-color);
+      font-size: 13px;
+    }
+
+    .eq-status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: bold;
+      font-family: 'Inter', sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
+    }
+
+    .eq-status-badge.ok {
+      background: var(--ok-bg);
+      color: var(--ok-text);
+      border: 1px solid var(--ok-border);
+    }
+
+    .eq-status-badge.warning {
+      background: var(--warn-bg);
+      color: var(--warn-text);
+      border: 1px solid var(--warn-border);
+    }
+
+    .eq-status-badge.danger {
+      background: var(--danger-bg);
+      color: var(--danger-text);
+      border: 1px solid var(--danger-border);
+    }
   </style>
 </head>
 <body>
@@ -933,6 +1215,10 @@
       <div class="subhead" id="hdrMeta">Tag: — • Location: — • P&ID: —</div>
     </div>
     <div class="header-actions">
+      <button class="theme-btn" id="presToggle" title="Toggle Presentation Mode" style="width: auto; padding: 0 10px; gap: 6px; font-size: 11px; font-weight: 700; font-family: inherit;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        <span>Presentation</span>
+      </button>
       <button class="theme-btn" id="themeToggle" title="Toggle Dark/Light Mode">
         <!-- Default Moon icon -->
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -1354,6 +1640,103 @@
         </div>
       </div>
 
+      <!-- Calculation References & Equations -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">6. Calculation References & Equations</h2>
+        </div>
+        <div class="card-body">
+          <div class="eq-section">
+            <h3 class="eq-title">ASME B31.3 Para. 304.1.2 — Required Wall Thickness (t<sub>req</sub>)</h3>
+            <div class="eq-box">
+              t<sub>req</sub> = <div class="fraction"><span class="numerator">P &middot; D</span><span class="denominator">2 &middot; (S &middot; E &middot; W + P &middot; Y)</span></div>
+            </div>
+            <div class="eq-box">
+              t<sub>req_total</sub> = t<sub>req</sub> + CA
+            </div>
+            
+            <div class="eq-sub-container">
+              <span class="eq-sub-title">Dynamic Calculation Substitution:</span>
+              <div class="eq-sub-step" id="stepTreq">
+                t<sub>req</sub> = <div class="fraction"><span class="numerator"><span class="sub-P">—</span> &middot; <span class="sub-D">—</span></span><span class="denominator">2 &middot; (<span class="sub-S">—</span> &middot; <span class="sub-E">—</span> &middot; <span class="sub-W">—</span> + <span class="sub-P">—</span> &middot; <span class="sub-Y">—</span>)</span></div> = <strong class="sub-treq-val">—</strong> mm
+              </div>
+              <div class="eq-sub-step" id="stepTreqTotal" style="margin-top: 8px;">
+                t<sub>req_total</sub> = <span class="sub-treq-val">—</span> mm + <span class="sub-CA">—</span> mm = <strong class="sub-treq-total-val">—</strong> mm
+              </div>
+            </div>
+
+            <ul class="eq-legend-list">
+              <li><strong>P:</strong> Internal Design Pressure (MPa)</li>
+              <li><strong>D:</strong> Pipe Outside Diameter (mm)</li>
+              <li><strong>S:</strong> Allowable Material Stress (MPa)</li>
+              <li><strong>E:</strong> Joint Quality Factor</li>
+              <li><strong>W:</strong> Weld Strength Reduction Factor</li>
+              <li><strong>Y:</strong> Temperature Coefficient</li>
+              <li><strong>CA:</strong> Corrosion Allowance (mm)</li>
+            </ul>
+          </div>
+          
+          <div class="eq-section" style="margin-top:16px; border-top:1px dashed var(--card-border); padding-top:16px;">
+            <h3 class="eq-title">ASME B31.3 Para. 304.1.2 — Max Allowable Working Pressure (MAWP)</h3>
+            <div class="eq-box">
+              MAWP = <div class="fraction"><span class="numerator">2 &middot; S &middot; E &middot; W &middot; t<sub>use</sub></span><span class="denominator">D - 2 &middot; Y &middot; t<sub>use</sub></span></div>
+            </div>
+            
+            <div class="eq-sub-container">
+              <span class="eq-sub-title">Dynamic Calculation Substitution:</span>
+              <div class="eq-sub-step" id="stepMawpWith">
+                t<sub>use</sub> (with CA) = max(0, <span class="sub-tmeas">—</span> - <span class="sub-CA">—</span>) = <span class="sub-tuse-with">—</span> mm<br>
+                MAWP (With CA) = <div class="fraction"><span class="numerator">2 &middot; <span class="sub-S">—</span> &middot; <span class="sub-E">—</span> &middot; <span class="sub-W">—</span> &middot; <span class="sub-tuse-with">—</span></span><span class="denominator"><span class="sub-D">—</span> - 2 &middot; <span class="sub-Y">—</span> &middot; <span class="sub-tuse-with">—</span></span></div> = <span class="sub-mawp-with-mpa">—</span> MPa = <strong class="sub-mawp-with-res">—</strong> <span class="p-unit-lbl">bar</span>
+              </div>
+              <div class="eq-sub-step" id="stepMawpNo" style="margin-top: 12px; border-top: 1px dotted var(--card-border); padding-top: 8px;">
+                t<sub>use</sub> (no CA) = <span class="sub-tmeas">—</span> mm<br>
+                MAWP (No CA) = <div class="fraction"><span class="numerator">2 &middot; <span class="sub-S">—</span> &middot; <span class="sub-E">—</span> &middot; <span class="sub-W">—</span> &middot; <span class="sub-tmeas">—</span></span><span class="denominator"><span class="sub-D">—</span> - 2 &middot; <span class="sub-Y">—</span> &middot; <span class="sub-tmeas">—</span></span></div> = <span class="sub-mawp-no-mpa">—</span> MPa = <strong class="sub-mawp-no-res">—</strong> <span class="p-unit-lbl">bar</span>
+              </div>
+            </div>
+
+            <ul class="eq-legend-list">
+              <li><strong>MAWP (With CA):</strong> Calculated using t<sub>use</sub> = max(0, t<sub>meas</sub> - CA)</li>
+              <li><strong>MAWP (No CA):</strong> Calculated using t<sub>use</sub> = t<sub>meas</sub></li>
+              <li><strong>t<sub>meas</sub>:</strong> Remaining measured wall thickness (mm)</li>
+            </ul>
+          </div>
+          
+          <div class="eq-section" style="margin-top:16px; border-top:1px dashed var(--card-border); padding-top:16px;">
+            <h3 class="eq-title">API RP 574 — Structural Minimum Thickness (t<sub>struct</sub>)</h3>
+            <p style="font-size:11px; color:var(--text-muted); line-height:1.4; margin-top:4px;">
+              Absolute minimum threshold to prevent mechanical sagging, buckling, or collapse at support points (lookup based on NPS size).
+            </p>
+            <div class="eq-sub-container" style="margin-top: 10px;">
+              <span class="eq-sub-title">Dynamic Lookup & Status:</span>
+              <div class="eq-sub-step">
+                For NPS = <strong><span class="sub-nps">—</span></strong>: structural minimum t<sub>struct</sub> = <strong><span class="sub-tstruct">—</span> mm</strong>.<br>
+                Remaining measured wall thickness t<sub>meas</sub> = <strong><span class="sub-tmeas">—</span> mm</strong>.<br>
+                Status: <span id="eqSubStructStatus" class="eq-status-badge">—</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="eq-section" id="eqSectionErl" style="margin-top:16px; border-top:1px dashed var(--card-border); padding-top:16px; display: none;">
+            <h3 class="eq-title">Estimated Remaining Life (ERL)</h3>
+            <div class="eq-box">
+              ERL = <div class="fraction"><span class="numerator">t<sub>meas</sub> - t<sub>req_total</sub></span><span class="denominator">CR</span></div>
+            </div>
+            
+            <div class="eq-sub-container">
+              <span class="eq-sub-title">Dynamic Calculation Substitution:</span>
+              <div class="eq-sub-step" id="stepErl">
+                ERL = <div class="fraction"><span class="numerator"><span class="sub-tmeas">—</span> - <span class="sub-treq-total-val">—</span></span><span class="denominator"><span class="sub-CR">—</span></span></div> = <strong class="sub-erl-val">—</strong> years
+              </div>
+            </div>
+
+            <ul class="eq-legend-list">
+              <li><strong>CR:</strong> Corrosion Rate (mm/year)</li>
+              <li>If Corrosion Rate is zero, ERL is infinite (or not applicable).</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
     </div>
 
   </div>
@@ -1621,6 +2004,7 @@ const stressInput = document.getElementById('S');
 const pUnitSelect = document.getElementById('pUnit');
 const modeSeg = document.getElementById('modeSeg');
 const themeToggle = document.getElementById('themeToggle');
+const presToggle = document.getElementById('presToggle');
 const corrTypeSelect = document.getElementById('corrType');
 
 /* Setup NPS, schedules, and materials dynamically */
@@ -1682,6 +2066,14 @@ function updateSchedules() {
     .map(sch => `<option value="${sch}">${pipe.schedules[sch].label}</option>`)
     .join('');
 }
+
+/* Presentation Mode Switching */
+presToggle.addEventListener('click', () => {
+  document.body.classList.toggle('pres-mode');
+  const isPres = document.body.classList.contains('pres-mode');
+  localStorage.setItem('presMode', isPres ? 'true' : 'false');
+  recalc();
+});
 
 /* Theme Switching */
 themeToggle.addEventListener('click', () => {
@@ -1900,7 +2292,12 @@ function runCalculations() {
     CR,
     P_input,
     pUnit,
-    isInternal
+    isInternal,
+    S,
+    E,
+    W,
+    Y,
+    P
   };
 }
 
@@ -2047,6 +2444,113 @@ function updateRepairAdvisor(res) {
   `;
 }
 
+/* ASME B31.3 & API 574 Dynamic Equation Values Renderer */
+function updateDynamicEquations(res) {
+  if (!res || res.hasErrors) {
+    document.querySelectorAll('.eq-section .sub-P').forEach(el => el.textContent = '—');
+    document.querySelectorAll('.eq-section .sub-D').forEach(el => el.textContent = '—');
+    document.querySelectorAll('.eq-section .sub-S').forEach(el => el.textContent = '—');
+    document.querySelectorAll('.eq-section .sub-E').forEach(el => el.textContent = '—');
+    document.querySelectorAll('.eq-section .sub-W').forEach(el => el.textContent = '—');
+    document.querySelectorAll('.eq-section .sub-Y').forEach(el => el.textContent = '—');
+    document.querySelectorAll('.eq-section .sub-CA').forEach(el => el.textContent = '—');
+    document.querySelectorAll('.eq-section .sub-tmeas').forEach(el => el.textContent = '—');
+    document.querySelectorAll('.eq-section .sub-CR').forEach(el => el.textContent = '—');
+    
+    document.querySelectorAll('.eq-section .sub-treq-val').forEach(el => el.textContent = '—');
+    document.querySelectorAll('.eq-section .sub-treq-total-val').forEach(el => el.textContent = '—');
+    document.querySelectorAll('.eq-section .sub-tuse-with').forEach(el => el.textContent = '—');
+    document.querySelectorAll('.eq-section .sub-mawp-with-mpa').forEach(el => el.textContent = '—');
+    document.querySelectorAll('.eq-section .sub-mawp-with-res').forEach(el => el.textContent = '—');
+    document.querySelectorAll('.eq-section .sub-mawp-no-mpa').forEach(el => el.textContent = '—');
+    document.querySelectorAll('.eq-section .sub-mawp-no-res').forEach(el => el.textContent = '—');
+    
+    document.querySelectorAll('.eq-section .sub-nps').forEach(el => el.textContent = '—');
+    document.querySelectorAll('.eq-section .sub-tstruct').forEach(el => el.textContent = '—');
+    
+    const structBadge = document.getElementById('eqSubStructStatus');
+    if (structBadge) {
+      structBadge.className = 'eq-status-badge';
+      structBadge.textContent = '—';
+    }
+    
+    const erlSec = document.getElementById('eqSectionErl');
+    if (erlSec) erlSec.style.display = 'none';
+    return;
+  }
+
+  const P_mpa_str = fmt(res.P, 3);
+  const D_str = fmt(res.D, 2);
+  const S_str = fmt(res.S, 1);
+  const E_str = fmt(res.E, 2);
+  const W_str = fmt(res.W, 2);
+  const Y_str = fmt(res.Y, 1);
+  const CA_str = fmt(res.ca, 2);
+  const tmeas_str = fmt(res.t_meas, 2);
+  const CR_str = fmt(res.CR, 2);
+  const treq_str = fmt(res.t_req_noCA, 3);
+  const treq_total_str = fmt(res.t_req_total, 3);
+  
+  document.querySelectorAll('.sub-P').forEach(el => el.textContent = P_mpa_str);
+  document.querySelectorAll('.sub-D').forEach(el => el.textContent = D_str);
+  document.querySelectorAll('.sub-S').forEach(el => el.textContent = S_str);
+  document.querySelectorAll('.sub-E').forEach(el => el.textContent = E_str);
+  document.querySelectorAll('.sub-W').forEach(el => el.textContent = W_str);
+  document.querySelectorAll('.sub-Y').forEach(el => el.textContent = Y_str);
+  document.querySelectorAll('.sub-CA').forEach(el => el.textContent = CA_str);
+  document.querySelectorAll('.sub-tmeas').forEach(el => el.textContent = tmeas_str);
+  
+  document.querySelectorAll('.sub-treq-val').forEach(el => el.textContent = treq_str);
+  document.querySelectorAll('.sub-treq-total-val').forEach(el => el.textContent = treq_total_str);
+  
+  const t_use_with = Math.max(0, res.t_meas - res.ca);
+  const t_use_with_str = fmt(t_use_with, 2);
+  
+  const denom_with = res.D - (2 * res.Y * t_use_with);
+  const mawp_with_mpa = denom_with > 0 ? (2 * res.S * res.E * res.W * t_use_with) / denom_with : 0;
+  
+  const denom_no = res.D - (2 * res.Y * res.t_meas);
+  const mawp_no_mpa = denom_no > 0 ? (2 * res.S * res.E * res.W * res.t_meas) / denom_no : 0;
+  
+  document.querySelectorAll('.sub-tuse-with').forEach(el => el.textContent = t_use_with_str);
+  document.querySelectorAll('.sub-mawp-with-mpa').forEach(el => el.textContent = fmt(mawp_with_mpa, 2));
+  document.querySelectorAll('.sub-mawp-with-res').forEach(el => el.textContent = fmt(res.mawp_with, 2));
+  document.querySelectorAll('.sub-mawp-no-mpa').forEach(el => el.textContent = fmt(mawp_no_mpa, 2));
+  document.querySelectorAll('.sub-mawp-no-res').forEach(el => el.textContent = fmt(res.mawp_no, 2));
+  
+  document.querySelectorAll('.sub-nps').forEach(el => el.textContent = npsSelect.value);
+  document.querySelectorAll('.sub-tstruct').forEach(el => el.textContent = fmt(res.t_struct, 2));
+  
+  const structBadge = document.getElementById('eqSubStructStatus');
+  if (structBadge) {
+    structBadge.className = 'eq-status-badge';
+    if (res.t_meas < res.t_struct) {
+      structBadge.classList.add('warning');
+      structBadge.textContent = 'Thin (t_meas < t_struct)';
+    } else {
+      structBadge.classList.add('ok');
+      structBadge.textContent = 'OK (t_meas \u2265 t_struct)';
+    }
+  }
+  
+  const erlSec = document.getElementById('eqSectionErl');
+  if (erlSec) {
+    if (res.CR > 0) {
+      erlSec.style.display = 'block';
+      document.querySelectorAll('.sub-CR').forEach(el => el.textContent = CR_str);
+      document.querySelectorAll('.sub-erl-val').forEach(el => {
+        if (res.remainingLife !== null) {
+          el.textContent = res.remainingLife >= 0 ? fmt(res.remainingLife, 2) : '0.00';
+        } else {
+          el.textContent = '—';
+        }
+      });
+    } else {
+      erlSec.style.display = 'none';
+    }
+  }
+}
+
 /* Recalc & Update DOM */
 function recalc() {
   const res = runCalculations();
@@ -2072,6 +2576,7 @@ function recalc() {
     
     drawSvgPipe(null);
     updateRepairAdvisor(null);
+    updateDynamicEquations(null);
     return;
   }
 
@@ -2164,6 +2669,7 @@ function recalc() {
   // Redraw SVG & advisor
   drawSvgPipe(res);
   updateRepairAdvisor(res);
+  updateDynamicEquations(res);
 }
 
 /* Save PDF with tag in file name (via title) */
@@ -2226,6 +2732,12 @@ function initApp() {
     document.body.classList.add('dark');
   }
   updateThemeIcon();
+
+  // Load local storage presentation mode
+  const savedPres = localStorage.getItem('presMode');
+  if (savedPres === 'true') {
+    document.body.classList.add('pres-mode');
+  }
 
   initSelections();
   resetDefaults();
