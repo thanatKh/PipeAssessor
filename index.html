@@ -418,6 +418,98 @@
       background: rgba(0, 0, 0, 0.03);
     }
 
+    /* Thickness Comparison Gauge */
+    .thickness-gauge-container {
+      margin-bottom: 24px;
+      padding: 16px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+    }
+
+    .thickness-gauge-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .thickness-gauge-bar-wrapper {
+      position: relative;
+      margin-bottom: 12px;
+    }
+
+    .thickness-gauge-track {
+      height: 18px;
+      background: var(--svg-loss); /* red/rose representing lost metal */
+      border-radius: 9px;
+      position: relative;
+      overflow: visible; /* so indicator markers can overflow slightly */
+      border: 1px solid var(--card-border);
+    }
+
+    .thickness-gauge-fill {
+      height: 100%;
+      background: var(--svg-metal); /* blue/teal representing remaining metal */
+      border-radius: 8px 0 0 8px;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+
+    .thickness-gauge-indicator {
+      position: absolute;
+      top: -4px;
+      bottom: -4px;
+      width: 3px;
+      border-radius: 1.5px;
+      transition: left 0.3s ease;
+      z-index: 5;
+    }
+
+    .thickness-gauge-indicator.req-total {
+      background: #f59e0b; /* Amber */
+    }
+
+    .thickness-gauge-indicator.struct-min {
+      background: #7c3aed; /* Purple */
+    }
+
+    .thickness-gauge-legend {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .legend-color {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+    }
+
+    .legend-color.fill-color {
+      background: var(--svg-metal);
+    }
+
+    .legend-color.req-color {
+      background: #f59e0b;
+    }
+
+    .legend-color.struct-color {
+      background: #7c3aed;
+    }
+
     /* Value Grid */
     .res-grid {
       display: grid;
@@ -976,6 +1068,27 @@
           <h2 class="card-title">4. Calculations Results</h2>
         </div>
         <div class="card-body">
+          
+          <!-- Thickness Comparison Visual Gauge -->
+          <div class="thickness-gauge-container">
+            <div class="thickness-gauge-labels">
+              <span>0 mm (Hollow ID)</span>
+              <span>Nominal Wall: <span id="gaugeTnom">—</span></span>
+            </div>
+            <div class="thickness-gauge-bar-wrapper">
+              <div class="thickness-gauge-track">
+                <div class="thickness-gauge-fill" id="gaugeFill"></div>
+                <div class="thickness-gauge-indicator req-total" id="gaugeIndicatorReqTotal" title="Required Thickness (incl. CA)"></div>
+                <div class="thickness-gauge-indicator struct-min" id="gaugeIndicatorStruct" title="API 574 Structural Min."></div>
+              </div>
+            </div>
+            <div class="thickness-gauge-legend">
+              <span class="legend-item"><span class="legend-color fill-color"></span> Remaining: <span id="gaugeValTmeas">—</span></span>
+              <span class="legend-item"><span class="legend-color req-color"></span> Required incl. CA: <span id="gaugeValReqTotal">—</span></span>
+              <span class="legend-item"><span class="legend-color struct-color"></span> API 574 Min: <span id="gaugeValStruct">—</span></span>
+            </div>
+          </div>
+
           <div class="res-grid">
             <div class="res-item">
               <span class="res-name">Nominal Wall Thickness (t<sub>nom</sub>)</span>
@@ -1744,9 +1857,13 @@ function recalc() {
     document.getElementById('statusNotes').textContent = 'Calculation halted. Please check highlighted invalid input parameters.';
     
     // Clear outputs
-    ['resTnom', 'resPct', 'resTreq', 'resTreqCa', 'resTstruct', 'resMargin', 'resPres', 'resMawpWith', 'resMawpNoCA', 'resCa', 'resCr', 'resLife'].forEach(id => {
+    ['resTnom', 'resPct', 'resTreq', 'resTreqCa', 'resTstruct', 'resMargin', 'resPres', 'resMawpWith', 'resMawpNoCA', 'resCa', 'resCr', 'resLife', 'gaugeTnom', 'gaugeValTmeas', 'gaugeValReqTotal', 'gaugeValStruct'].forEach(id => {
       document.getElementById(id).textContent = '—';
     });
+    
+    document.getElementById('gaugeFill').style.width = '0%';
+    document.getElementById('gaugeIndicatorReqTotal').style.left = '0%';
+    document.getElementById('gaugeIndicatorStruct').style.left = '0%';
     
     drawSvgPipe(null);
     updateRepairAdvisor(null);
@@ -1785,6 +1902,21 @@ function recalc() {
   document.getElementById('resCa').textContent = `${fmt(res.ca)} mm`;
   document.getElementById('resCr').textContent = res.CR > 0 ? `${fmt(res.CR, 2)} mm/year` : '—';
   
+  // Update visual comparison gauge values
+  document.getElementById('gaugeTnom').textContent = `${fmt(res.t_nom)} mm`;
+  document.getElementById('gaugeValTmeas').textContent = `${fmt(res.t_meas)} mm`;
+  document.getElementById('gaugeValReqTotal').textContent = `${fmt(res.t_req_total, 3)} mm`;
+  document.getElementById('gaugeValStruct').textContent = tStructText;
+
+  // Update gauge bar fill and indicators (percentages relative to t_nom)
+  const fillPct = Math.min(100, Math.max(0, (res.t_meas / res.t_nom) * 100));
+  const reqTotalPct = Math.min(100, Math.max(0, (res.t_req_total / res.t_nom) * 100));
+  const structPct = Math.min(100, Math.max(0, (res.t_struct / res.t_nom) * 100));
+
+  document.getElementById('gaugeFill').style.width = fillPct.toFixed(1) + '%';
+  document.getElementById('gaugeIndicatorReqTotal').style.left = reqTotalPct.toFixed(1) + '%';
+  document.getElementById('gaugeIndicatorStruct').style.left = structPct.toFixed(1) + '%';
+
   if (res.remainingLife !== null) {
     document.getElementById('resLife').textContent = res.remainingLife >= 0 
       ? `${fmt(res.remainingLife, 2)} years` 
