@@ -897,25 +897,36 @@
                   <stop offset="85%" stop-color="#0369a1" />
                   <stop offset="100%" stop-color="#0f172a" stop-opacity="0.15" />
                 </radialGradient>
+                <!-- Clip path for the 90-degree top-right quadrant sector -->
+                <clipPath id="sectorClip">
+                  <polygon points="50,220 50,10 250,10 250,220" />
+                </clipPath>
               </defs>
 
-              <!-- Circle 1: Nominal outer boundaries / remaining metal -->
-              <circle id="svgOdCircle" cx="135" cy="135" r="110" fill="var(--svg-metal)" />
-              
-              <!-- Circle 2: Measured boundaries / represents metal loss area in red -->
-              <circle id="svgMeasCircle" cx="135" cy="135" r="90" fill="var(--svg-loss)" stroke="var(--svg-loss-border)" stroke-width="1.5" />
-              
-              <!-- Circle 3: Nominal inner circle / interior hollow background masking -->
-              <circle id="svgNomCircle" cx="135" cy="135" r="75" fill="var(--svg-bg)" />
-              
-              <!-- Circle 4: Required thickness boundary with CA (dashed orange) -->
-              <circle id="svgReqTotalCircle" cx="135" cy="135" r="98" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="3 3" />
-              
-              <!-- Circle 5: Required thickness boundary without CA (solid red) -->
-              <circle id="svgReqNoCaCircle" cx="135" cy="135" r="105" fill="none" stroke="#ef4444" stroke-width="1.5" />
+              <!-- Concentric circles representing wall thickness, clipped to top-right quadrant -->
+              <g clip-path="url(#sectorClip)">
+                <!-- Circle 1: Nominal outer boundaries / remaining metal -->
+                <circle id="svgOdCircle" cx="50" cy="220" r="180" fill="var(--svg-metal)" />
+                
+                <!-- Circle 2: Measured boundaries / represents metal loss area in red -->
+                <circle id="svgMeasCircle" cx="50" cy="220" r="140" fill="var(--svg-loss)" stroke="var(--svg-loss-border)" stroke-width="1.5" />
+                
+                <!-- Circle 3: Nominal inner circle / interior hollow background masking -->
+                <circle id="svgNomCircle" cx="50" cy="220" r="110" fill="var(--svg-bg)" />
+                
+                <!-- Circle 4: Required thickness boundary with CA (dashed orange) -->
+                <circle id="svgReqTotalCircle" cx="50" cy="220" r="130" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="3 3" />
+                
+                <!-- Circle 5: Required thickness boundary without CA (solid red) -->
+                <circle id="svgReqNoCaCircle" cx="50" cy="220" r="135" fill="none" stroke="#ef4444" stroke-width="1.5" />
+              </g>
 
-              <!-- Center Point -->
-              <circle cx="135" cy="135" r="2.5" fill="var(--text-light)" />
+              <!-- Cutaway Section Borders (cut through actual pipe wall only, updated dynamically) -->
+              <line id="svgBorderV" x1="50" y1="110" x2="50" y2="40" stroke="var(--text-light)" stroke-width="1.5" opacity="0.8" />
+              <line id="svgBorderH" x1="140" y1="220" x2="230" y2="220" stroke="var(--text-light)" stroke-width="1.5" opacity="0.8" />
+
+              <!-- Center Point (Vertex of cutaway) -->
+              <circle cx="50" cy="220" r="2.5" fill="var(--text-light)" />
 
               <!-- CAD-style Orthogonal Leader Lines & Texts -->
               <!-- Nominal OD -->
@@ -1531,9 +1542,10 @@ function drawSvgPipe(res) {
     return;
   }
 
-  const R_od = 110; // Nominal OD scaled radius
-  const center = 135;
-  const t_nom_px = 55;
+  const R_od = 180; // Nominal OD scaled radius
+  const cx = 50;
+  const cy = 220;
+  const t_nom_px = 90;
   const scale = t_nom_px / res.t_nom;
   
   const R_nom = Math.max(10, R_od - t_nom_px);
@@ -1552,22 +1564,28 @@ function drawSvgPipe(res) {
   document.getElementById('svgReqTotalCircle').setAttribute('r', R_req_total);
   document.getElementById('svgReqNoCaCircle').setAttribute('r', R_req_noCA);
 
+  // Update Cutaway borders
+  document.getElementById('svgBorderV').setAttribute('y1', cy - R_nom);
+  document.getElementById('svgBorderV').setAttribute('y2', cy - R_od);
+  document.getElementById('svgBorderH').setAttribute('x1', cx + R_nom);
+  document.getElementById('svgBorderH').setAttribute('x2', cx + R_od);
+
   // Update SVG Labels & Leaders (orthogonal paths)
-  updateLeaderLine('svgLOd', center + R_od, 35, `Nominal OD: ${fmt(res.D)} mm`);
-  updateLeaderLine('svgLNom', center + R_nom, 225, `Nominal ID: ${fmt(res.D - 2*res.t_nom)} mm`);
-  updateLeaderLine('svgLMeas', center + R_meas, 75, `Measured ID: ${fmt(res.D - 2*res.t_meas)} mm (t_meas: ${fmt(res.t_meas)} mm)`);
-  updateLeaderLine('svgLReqTotal', center + R_req_total, 175, `t_req+CA: ${fmt(res.t_req_total, 3)} mm`);
-  updateLeaderLine('svgLReqNo', center + R_req_noCA, 125, `t_req (Design): ${fmt(res.t_req_noCA, 3)} mm`);
+  updateLeaderLine('svgLOd', cx + R_od, 35, `Nominal OD: ${fmt(res.D)} mm`);
+  updateLeaderLine('svgLNom', cx + R_nom, 225, `Nominal ID: ${fmt(res.D - 2*res.t_nom)} mm`);
+  updateLeaderLine('svgLMeas', cx + R_meas, 75, `Measured ID: ${fmt(res.D - 2*res.t_meas)} mm (t_meas: ${fmt(res.t_meas)} mm)`);
+  updateLeaderLine('svgLReqTotal', cx + R_req_total, 175, `t_req+CA: ${fmt(res.t_req_total, 3)} mm`);
+  updateLeaderLine('svgLReqNo', cx + R_req_noCA, 125, `t_req (Design): ${fmt(res.t_req_noCA, 3)} mm`);
 }
 
 function updateLeaderLine(id, xPoint, yLine, label) {
   const lineEl = document.getElementById(id + 'Line');
   const textEl = document.getElementById(id + 'Text');
-  const center = 135;
+  const cy = 220;
   const xTextStart = 255;
   
-  // Path drawing a line: from right edge of circle (xPoint, center) to the label track on the right
-  lineEl.setAttribute('d', `M ${xPoint} ${center} L ${xPoint} ${yLine} L ${xTextStart} ${yLine}`);
+  // Path drawing a line: from right edge of circle (xPoint, cy) to the label track on the right
+  lineEl.setAttribute('d', `M ${xPoint} ${cy} L ${xPoint} ${yLine} L ${xTextStart} ${yLine}`);
   textEl.setAttribute('x', xTextStart + 6);
   textEl.setAttribute('y', yLine + 4);
   textEl.textContent = label;
