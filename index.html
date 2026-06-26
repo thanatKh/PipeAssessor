@@ -1,704 +1,1767 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Pipe Assessor – v15</title>
-<style>
-  :root{
-    --bg:#f8fafc;--surface:#ffffff;--ink:#0f172a;--muted:#475569;--muter:#64748b;
-    --ok:#059669;--warn:#f59e0b;--danger:#dc2626;
-    --brand:#103C5C; --primary:#156B95;
-    --loss:#ef4444; --req:#6366f1; --ca:#94a3b8;
-    --row:#f1f5f9; --base:#e5e7eb;
-    --sum:#eef1f5; --sumBorder:#cbd5e1;
-  }
-  *{box-sizing:border-box}
-  html,body{background:#f8fafc;color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
-  .wrap{max-width:1100px;margin:auto;padding:20px}
-  header{background:var(--brand);color:#fff;position:sticky;top:0;z-index:1}
-  header .wrap{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;position:relative}
-  h1{font-size:18px;margin:0}
-  .hdr-logo{height:50px;width:auto;object-fit:contain}
-  .grid{display:grid;gap:16px}
-  .card{background:#fff;border-radius:12px;box-shadow:0 10px 25px -5px rgba(0,0,0,.08), 0 10px 10px -5px rgba(0,0,0,.04);padding:0}
-  .card-inner{padding:18px}
-  label{display:block;font-size:12px;color:#475569;margin-bottom:6px}
-  label .title{font-weight:700;color:#0f172a}
-  input,select{width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;font-size:14px}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media (max-width:740px){.row{grid-template-columns:1fr}}
-  .kv{display:flex;align-items:center;justify-content:space-between;border-bottom:1px dashed #e2e8f0;padding:8px 10px;border-radius:8px;transition:background .15s}
-  .kv:hover{background:var(--row)}
-  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
-  .hint{font-size:12px;color:#64748b;margin-top:6px}
-  .status{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:999px;color:#fff;font-weight:600;font-size:12px}
-  .s-ok{background:var(--ok)} .s-mon{background:var(--warn)} .s-rep{background:var(--danger)}
-  .callout{margin:10px 0;padding:10px 12px;border-radius:10px;font-size:13px}
-  .c-warn{background:#fff7ed;border:1px solid #fed7aa;color:#7c2d12}
-  .c-bad{background:#fee2e2;border:1px solid #fecaca;color:#7f1d1d}
-  .btn{cursor:pointer;border-radius:10px;padding:10px 12px;font-size:14px}
-  .btn-primary{background:#156B95;color:#fff;border:1px solid #0d4f6e}
-  .btn-ghost{background:#fff;color:#0f172a;border:1px solid #cbd5e1}
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Pipe Assessor – ASME B31.3 / PCC-2</title>
+  <!-- Google Fonts Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      /* Theme variables - Light Mode Default */
+      --bg-color: #f8fafc;
+      --text-color: #0f172a;
+      --text-muted: #475569;
+      --text-light: #64748b;
+      
+      --card-bg: #ffffff;
+      --card-border: #e2e8f0;
+      --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+      
+      --input-bg: #ffffff;
+      --input-border: #cbd5e1;
+      --input-focus: #14b8a6;
+      
+      --header-bg: #103C5C;
+      --header-text: #ffffff;
+      --subhead-text: #93c5fd;
+      
+      --button-primary: #156B95;
+      --button-primary-hover: #0d4f6e;
+      --button-ghost: #ffffff;
+      --button-ghost-border: #cbd5e1;
+      --button-ghost-hover: #f1f5f9;
+      
+      --ok-color: #059669;
+      --ok-bg: #dcfce7;
+      --ok-border: #bbf7d0;
+      --ok-text: #166534;
+      
+      --warn-color: #d97706;
+      --warn-bg: #fef3c7;
+      --warn-border: #fde68a;
+      --warn-text: #92400e;
+      
+      --danger-color: #dc2626;
+      --danger-bg: #fee2e2;
+      --danger-border: #fecaca;
+      --danger-text: #991b1b;
+      
+      /* SVG Colors */
+      --svg-bg: #f8fafc;
+      --svg-metal: #156B95;
+      --svg-loss: #fee2e2;
+      --svg-loss-border: #ef4444;
+    }
 
-  /* Segmented control */
-  .segmented{display:inline-flex;border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff}
-  .segmented button{padding:10px 14px;border:0;background:#fff;color:#334155;font-size:13px;cursor:pointer}
-  .segmented button.active{background:#e2e8f0;font-weight:700}
-  .segmented button + button{border-left:1px solid #cbd5e1}
+    body.dark {
+      /* Dark Mode Variables */
+      --bg-color: #0f172a;
+      --text-color: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-light: #64748b;
+      
+      --card-bg: #1e293b;
+      --card-border: #334155;
+      --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+      
+      --input-bg: #1e293b;
+      --input-border: #475569;
+      --input-focus: #2dd4bf;
+      
+      --header-bg: #020617;
+      --header-text: #f8fafc;
+      --subhead-text: #38bdf8;
+      
+      --button-primary: #0284c7;
+      --button-primary-hover: #0369a1;
+      --button-ghost: #1e293b;
+      --button-ghost-border: #475569;
+      --button-ghost-hover: #334155;
+      
+      --ok-color: #10b981;
+      --ok-bg: #064e3b;
+      --ok-border: #047857;
+      --ok-text: #a7f3d0;
+      
+      --warn-color: #f59e0b;
+      --warn-bg: #78350f;
+      --warn-border: #b45309;
+      --warn-text: #fde68a;
+      
+      --danger-color: #f43f5e;
+      --danger-bg: #7f1d1d;
+      --danger-border: #991b1b;
+      --danger-text: #fecaca;
+      
+      /* SVG Colors */
+      --svg-bg: #1e293b;
+      --svg-metal: #0ea5e9;
+      --svg-loss: #450a0a;
+      --svg-loss-border: #f87171;
+    }
 
-  /* Accordion */
-  details{border-radius:12px;overflow:hidden}
-  summary{list-style:none;padding:14px 18px;cursor:pointer;display:flex;align-items:center;gap:10px;background:var(--sum); border-bottom:1px solid var(--sumBorder)}
-  summary::-webkit-details-marker{display:none}
-  .caret{width:12px;height:12px;border-right:2px solid #334155;border-bottom:2px solid #334155;transform:rotate(-45deg);transition:.15s}
-  details[open] .caret{transform:rotate(45deg)}
-  .title-txt{font-weight:800}
+    * {
+      box-sizing: border-box;
+      transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+    }
 
-  /* Graphics */
-  .graph-wrap{padding:8px 4px}
-  .track-top{position:relative;height:54px;background:var(--base);overflow:hidden}
-  .seg{position:absolute;left:0;top:0;height:100%}
-  .seg-remaining{background:var(--brand)}
-  .seg-loss{background:var(--loss)}
-  .overlay{position:relative;margin-top:10px}
-  .base{height:22px;background:var(--base);width:100%}
-  .overlay .bar{position:absolute;left:0;top:0;height:22px}
-  .overlay .req{background:var(--req)}
-  .overlay .ca{background:var(--ca)}
-  .val{position:absolute;top:6px;font-size:12px;font-weight:700;color:#fff;white-space:nowrap;transform:translateX(-50%)}
-  .val.dark{color:#0f172a}
-  .below{top:auto;bottom:2px;font-size:11px}
-  .white{color:#fff}
-  .legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
-  .chip{display:inline-flex;gap:6px;align-items:center;padding:4px 8px;border-radius:999px;border:1px solid #cbd5e1;background:#fff;font-size:12px}
-  .chip div{width:14px;height:8px}
-  .box-remain{background:var(--brand)}
-  .box-loss{background:var(--loss)}
-  .box-req{background:var(--req)}
-  .box-ca{background:var(--ca)}
-  .box-nom{background:var(--base);border:1px dashed #cbd5e1}
+    html, body {
+      background: var(--bg-color);
+      color: var(--text-color);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
 
-  .footer{color:#94a3b8;font-size:12px;text-align:center;padding:16px 0;display:flex;gap:8px;flex-direction:column;align-items:center}
-  .footer img{width:250px;height:auto;opacity:.95}
+    .wrap {
+      max-width: 1200px;
+      margin: auto;
+      padding: 20px;
+    }
 
-  .resgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-  @media (max-width:740px){.resgrid{grid-template-columns:1fr}}
+    header {
+      background: var(--header-bg);
+      color: var(--header-text);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
 
-  /* CSS equations */
-  .eqs{margin-top:8px}
-  .eq{font-size:14px;color:#0f172a;margin:10px 0}
-  .frac{display:inline-block;vertical-align:middle}
-  .frac .num{display:block;text-align:left;padding:0 6px}
-  .frac .den{display:block;text-align:left;border-top:1px solid #0f172a;margin-top:2px;padding:1px 6px}
-  .var{font-weight:700}
-  .unit{color:#64748b;font-size:12px;margin-left:8px}
+    header .wrap {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+    }
 
-  @media print{
-    *{-webkit-print-color-adjust:exact; print-color-adjust:exact}
-    .btn{display:none!important}
-    .card{box-shadow:none}
-    body{background:#fff}
-  }
-</style>
+    .header-info h1 {
+      font-size: 20px;
+      font-weight: 800;
+      margin: 0;
+      letter-spacing: -0.5px;
+    }
+
+    .subhead {
+      font-size: 12px;
+      color: var(--subhead-text);
+      margin-top: 4px;
+      font-weight: 500;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .hdr-logo {
+      height: 40px;
+      width: auto;
+      object-fit: contain;
+    }
+
+    /* Dashboard Layout */
+    .dashboard {
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    @media (max-width: 950px) {
+      .dashboard {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      box-shadow: var(--card-shadow);
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 16px 20px;
+      background: rgba(0, 0, 0, 0.02);
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-color);
+      margin: 0;
+    }
+
+    .card-body {
+      padding: 20px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 500px) {
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .input-wrapper {
+      display: flex;
+      align-items: center;
+      position: relative;
+    }
+
+    .input-wrapper select.unit-select {
+      position: absolute;
+      right: 4px;
+      width: auto;
+      border: none;
+      background: transparent;
+      padding: 0 8px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--input-border);
+      border-radius: 10px;
+      background: var(--input-bg);
+      color: var(--text-color);
+      font-size: 14px;
+      font-family: inherit;
+      font-weight: 500;
+      outline: none;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--input-focus);
+      box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
+    }
+
+    /* Invalid Input Warning Styles */
+    .input-invalid {
+      border-color: var(--danger-color) !important;
+      box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15) !important;
+    }
+
+    .validation-alert {
+      color: var(--danger-color);
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 4px;
+      display: none;
+    }
+
+    .hint {
+      font-size: 11px;
+      color: var(--text-light);
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+
+    .segmented {
+      display: inline-flex;
+      border: 1px solid var(--input-border);
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--input-bg);
+      width: 100%;
+      margin-bottom: 16px;
+    }
+
+    .segmented button {
+      flex: 1;
+      padding: 10px 12px;
+      border: 0;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .segmented button.active {
+      background: var(--button-primary);
+      color: #ffffff;
+    }
+
+    .segmented button + button {
+      border-left: 1px solid var(--input-border);
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .btn {
+      flex: 1;
+      cursor: pointer;
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      border: 1px solid transparent;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: var(--button-primary);
+      color: #ffffff;
+    }
+
+    .btn-primary:hover {
+      background: var(--button-primary-hover);
+    }
+
+    .btn-ghost {
+      background: var(--button-ghost);
+      border-color: var(--button-ghost-border);
+      color: var(--text-color);
+    }
+
+    .btn-ghost:hover {
+      background: var(--button-ghost-hover);
+    }
+
+    /* Status Banner */
+    .status-banner {
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border: 1px solid transparent;
+    }
+
+    .status-banner.s-ok {
+      background: var(--ok-bg);
+      border-color: var(--ok-border);
+      color: var(--ok-text);
+    }
+
+    .status-banner.s-mon {
+      background: var(--warn-bg);
+      border-color: var(--warn-border);
+      color: var(--warn-text);
+    }
+
+    .status-banner.s-rep {
+      background: var(--danger-bg);
+      border-color: var(--danger-border);
+      color: var(--danger-text);
+    }
+
+    .status-label {
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .status-value {
+      font-size: 24px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+    }
+
+    .status-desc {
+      font-size: 13px;
+      font-weight: 500;
+      margin-top: 12px;
+      line-height: 1.4;
+      padding: 10px 14px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.03);
+    }
+
+    /* Value Grid */
+    .res-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    @media (max-width: 500px) {
+      .res-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .res-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border-bottom: 1px dashed var(--card-border);
+    }
+
+    .res-item:hover {
+      background: rgba(0, 0, 0, 0.02);
+    }
+
+    .res-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .res-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-color);
+    }
+
+    /* SVG Cross-section visualizer styling */
+    .svg-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 10px;
+    }
+
+    /* Repair Advisor list */
+    .advisor-list {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .advisor-list li {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+
+    .theme-btn {
+      background: transparent;
+      border: 1px solid var(--button-ghost-border);
+      border-radius: 10px;
+      width: 38px;
+      height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-color);
+      cursor: pointer;
+    }
+
+    .theme-btn:hover {
+      background: var(--button-ghost-hover);
+    }
+
+    .footer {
+      color: var(--text-light);
+      font-size: 12px;
+      text-align: center;
+      padding: 24px 0;
+      display: flex;
+      gap: 8px;
+      flex-direction: column;
+      align-items: center;
+      border-top: 1px solid var(--card-border);
+      margin-top: 40px;
+    }
+
+    .footer img {
+      width: 200px;
+      height: auto;
+      opacity: .85;
+      margin-bottom: 4px;
+    }
+
+    /* Dynamic checkbox overrides */
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      accent-color: var(--button-primary);
+    }
+
+    /* Hide the print-only block during normal display */
+    .print-signature-block, .print-header-meta {
+      display: none;
+    }
+
+    /* PRINT STYLES */
+    @media print {
+      body {
+        background: #ffffff !important;
+        color: #000000 !important;
+        font-size: 12px;
+      }
+
+      .wrap {
+        max-width: 100% !important;
+        padding: 0 !important;
+      }
+
+      header, .theme-btn, .btn-group, .segmented, .hint, .checkbox-label, .hdr-logo, .theme-toggle {
+        display: none !important;
+      }
+
+      .dashboard {
+        display: block !important;
+      }
+
+      .card {
+        border: 1px solid #cbd5e1 !important;
+        box-shadow: none !important;
+        page-break-inside: avoid;
+        margin-bottom: 20px;
+        border-radius: 8px !important;
+      }
+
+      .card-header {
+        background: #f1f5f9 !important;
+        border-bottom: 1px solid #cbd5e1 !important;
+        padding: 8px 12px !important;
+      }
+
+      .card-title {
+        color: #000000 !important;
+        font-size: 12px !important;
+      }
+
+      .card-body {
+        padding: 12px !important;
+      }
+
+      .form-row {
+        grid-template-columns: 1fr 1fr 1fr !important;
+        gap: 12px !important;
+      }
+
+      /* Make input and select tags look like normal bold text */
+      input, select {
+        border: none !important;
+        background: transparent !important;
+        padding: 0 !important;
+        font-weight: 700 !important;
+        color: #000000 !important;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        font-size: 12px !important;
+      }
+
+      .unit-select {
+        display: none !important;
+      }
+
+      /* Add units explicitly after input values for print */
+      .form-group[data-unit]::after {
+        content: " " attr(data-unit);
+        font-weight: 700;
+        color: #000000;
+        font-size: 12px;
+      }
+
+      .print-header-meta {
+        display: block !important;
+        border-bottom: 2px solid #000000;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+      }
+
+      .print-header-title {
+        font-size: 24px;
+        font-weight: 800;
+        text-align: center;
+        margin-bottom: 16px;
+        text-transform: uppercase;
+      }
+
+      .print-header-meta-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 10px;
+        font-size: 11px;
+      }
+
+      .print-signature-block {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        gap: 60px;
+        margin-top: 50px;
+        page-break-inside: avoid;
+      }
+
+      .signature-line {
+        border-top: 1px solid #000000;
+        margin-top: 40px;
+        padding-top: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        text-align: center;
+      }
+
+      .footer {
+        border-top: 1px solid #cbd5e1 !important;
+        margin-top: 30px;
+      }
+
+      .footer img {
+        filter: grayscale(100%);
+      }
+    }
+  </style>
 </head>
 <body>
+
 <header>
-  <div class="wrap" id="hdr">
-    <div>
-      <h1>Pipe Assessor (v15)</h1>
+  <div class="wrap">
+    <div class="header-info">
+      <h1>Pipe Assessor</h1>
       <div class="subhead" id="hdrMeta">Tag: — • Location: — • P&ID: —</div>
     </div>
-    <img class="hdr-logo" src="https://img2.pic.in.th/pic/RGB_OR_invert_logo-on-BlueOR-Trans.png" alt="OR Logo"/>
+    <div class="header-actions">
+      <button class="theme-btn" id="themeToggle" title="Toggle Dark/Light Mode">
+        <!-- Default Moon icon -->
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <img class="hdr-logo" src="https://img2.pic.in.th/pic/RGB_OR_invert_logo-on-BlueOR-Trans.png" alt="OR Logo"/>
+    </div>
   </div>
 </header>
 
-<div class="wrap grid" style="margin-top:16px">
+<div class="wrap">
 
-  <!-- Header meta -->
-  <details open class="card">
-    <summary><span class="caret"></span><span class="title-txt">Header Meta</span></summary>
-    <div class="card-inner">
-      <div class="row meta">
-        <div>
-          <label><span class="title">Tag</span></label>
-          <input id="metaTag" placeholder='e.g., 14"-GAS-101-A'/>
-        </div>
-        <div>
-          <label><span class="title">Location</span></label>
-          <input id="metaLoc" placeholder="e.g., KBY Terminal – Berth 3"/>
-        </div>
-        <div>
-          <label><span class="title">P&ID</span></label>
-          <input id="metaPid" placeholder="e.g., KBY-PID-003 Rev.2"/>
-        </div>
-      </div>
+  <!-- Print-Only Header Block -->
+  <div class="print-header-meta">
+    <div class="print-header-title">Pipe Wall Thickness Assessment Report</div>
+    <div class="print-header-meta-grid">
+      <div><strong>TAG:</strong> <span id="printTag">—</span></div>
+      <div><strong>LOCATION:</strong> <span id="printLoc">—</span></div>
+      <div><strong>P&ID:</strong> <span id="printPid">—</span></div>
+      <div><strong>ASSESSMENT DATE:</strong> <span id="printDate">—</span></div>
+      <div><strong>ASSESSOR:</strong> <span id="printAssessor">—</span></div>
+      <div><strong>STANDARDS:</strong> ASME B31.3 / ASME PCC-2</div>
     </div>
-  </details>
+  </div>
 
-  <!-- Inputs -->
-  <details open class="card">
-    <summary><span class="caret"></span><span class="title-txt">Inputs</span></summary>
-    <div class="card-inner">
-
-      <div class="segmented" id="modeSeg">
-        <button data-mode="depth" class="active">Wall loss depth (depth)</button>
-        <button data-mode="tmeas">Measured minimum (t<sub>meas</sub>)</button>
-      </div>
-      <div class="hint">
-        Choose <b>Wall loss depth</b> to enter metal loss depth; the app computes <span class="mono">t_meas = t_nom − depth</span>.
-        Or choose <b>Measured minimum</b> to input the minimum thickness directly.
-      </div>
-
-      <div class="row" style="margin-top:10px">
-        <div>
-          <label><span class="title">Nominal Pipe Size (NPS)</span></label>
-          <select id="nps"></select>
-          <div class="hint">
-            Per <b>ASME B36.10M</b>. OD (D) and nominal wall (t_nom) are taken from the table.
+  <div class="dashboard">
+  
+    <!-- Left Column: Inputs & Config -->
+    <div class="column">
+      
+      <!-- Metadata -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">1. Header Metadata</h2>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label for="metaTag">Pipe Tag / Line Ident.</label>
+            <input id="metaTag" placeholder='e.g., 14"-GAS-101-A' type="text">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="metaLoc">Location / System</label>
+              <input id="metaLoc" placeholder="e.g., KBY Terminal" type="text">
+            </div>
+            <div class="form-group">
+              <label for="metaPid">P&ID Drawing No.</label>
+              <input id="metaPid" placeholder="e.g., KBY-PID-003" type="text">
+            </div>
           </div>
         </div>
-        <div>
-          <label style="display:flex;justify-content:space-between;align-items:center">
-            <span class="title">Schedule</span>
-            <span style="display:flex;gap:8px;align-items:center;font-weight:700;color:#334155">
-              <input id="ovrChk" type="checkbox" style="width:16px;height:16px;margin:0"> Override t<sub>nom</sub>
-            </span>
-          </label>
-          <select id="sch"></select>
-          <div class="hint">
-            Policy: <b>½"–1½"</b> → <b>XS (Sch 80)</b>; <b>≥2"</b> → <b>STD (Sch 40)</b>. Use override if drawings/MTR differ.
+      </div>
+
+      <!-- Geometry -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">2. Pipe Geometry</h2>
+        </div>
+        <div class="card-body">
+          
+          <div class="segmented" id="modeSeg">
+            <button data-mode="depth" class="active">Wall Loss Mode</button>
+            <button data-mode="tmeas">Measured Thickness Mode</button>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="nps">Nominal Pipe Size (NPS)</label>
+              <select id="nps"></select>
+            </div>
+            <div class="form-group">
+              <label style="display:flex; justify-content:space-between; align-items:center;">
+                <span>Schedule</span>
+                <span class="checkbox-label">
+                  <input id="ovrChk" type="checkbox"> Override t<sub>nom</sub>
+                </span>
+              </label>
+              <select id="sch"></select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <!-- Wall Loss Input Group -->
+            <div class="form-group" id="grpDepth">
+              <label for="depth">Wall Loss Depth (mm)</label>
+              <input id="depth" type="number" step="0.01" placeholder="e.g., 1.2">
+              <div class="validation-alert" id="errDepth">Wall loss cannot exceed nominal wall thickness.</div>
+              <div class="hint">Measured wall loss relative to nominal wall.</div>
+            </div>
+
+            <!-- Measured Thickness Input Group -->
+            <div class="form-group" id="grpTmeas" style="display:none">
+              <label for="tmeas">Measured Minimum Thickness (mm)</label>
+              <input id="tmeas" type="number" step="0.01" value="6.0">
+              <div class="validation-alert" id="errTmeas">Measured thickness cannot exceed nominal wall.</div>
+              <div class="hint">Remaining minimum thickness measured via UT.</div>
+            </div>
+
+            <div class="form-group">
+              <label for="ca">Corrosion Allowance, CA (mm)</label>
+              <input id="ca" type="number" step="0.1" value="1.5">
+              <div class="validation-alert" id="errCa">CA cannot exceed remaining measured wall thickness.</div>
+              <div class="hint">Design corrosion allowance.</div>
+            </div>
+          </div>
+
+          <!-- Nominal Override Row -->
+          <div class="form-group" id="ovrRow" style="display:none">
+            <label for="overrideTnom">Override Nominal Thickness (mm)</label>
+            <input id="overrideTnom" type="number" step="0.01" placeholder="Enter custom t_nom value">
+            <div class="validation-alert" id="errOvr">Value must be positive.</div>
+            <div class="hint">Used when drawing nominal details differ from standard schedules.</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Design Conditions -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">3. Design Parameters (ASME B31.3)</h2>
+        </div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group" data-unit="bar" id="printPGroup">
+              <label for="P">Design Pressure</label>
+              <div class="input-wrapper">
+                <input id="P" type="number" step="0.1" value="7.0">
+                <select id="pUnit" class="unit-select">
+                  <option value="bar">bar</option>
+                  <option value="psi">psi</option>
+                </select>
+              </div>
+              <div class="validation-alert" id="errP">Pressure must be positive.</div>
+            </div>
+
+            <div class="form-group">
+              <label for="material">Piping Material</label>
+              <select id="material"></select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group" data-unit="MPa" id="printSGroup">
+              <label for="S">Allowable Stress, S (MPa)</label>
+              <input id="S" type="number" step="0.1" value="137.9">
+              <div class="validation-alert" id="errS">Stress must be positive.</div>
+              <div class="hint">Allowable stress from Table A-1.</div>
+            </div>
+
+            <div class="form-group">
+              <label for="E">Longitudinal Joint Factor, E</label>
+              <input id="E" type="number" step="0.01" value="1.0">
+              <div class="hint">Seamless/ERW typical default is 1.0.</div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="W">Weld Strength Red. Factor, W</label>
+              <input id="W" type="number" step="0.01" value="1.0">
+              <div class="hint">Ambient temp defaults to 1.0.</div>
+            </div>
+
+            <div class="form-group">
+              <label for="Y">ASME B31.3 Coefficient, Y</label>
+              <input id="Y" type="number" step="0.05" value="0.4">
+              <div class="hint">Standard geometry factor is 0.4.</div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group" data-unit="mm/yr">
+              <label for="CR">Corrosion Rate (mm/year) - Opt.</label>
+              <input id="CR" type="number" step="0.01" placeholder="e.g., 0.15">
+              <div class="hint">Used to compute remaining life.</div>
+            </div>
+
+            <div class="form-group">
+              <label for="enteredBy">Assessor Name</label>
+              <input id="enteredBy" placeholder="e.g., John Doe" type="text">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="remarks">Remarks / Remarks Notes</label>
+            <input id="remarks" placeholder="Optional notes about pipe inspection" type="text">
+          </div>
+
+          <div class="btn-group">
+            <button class="btn btn-primary" onclick="recalc()">Calculate</button>
+            <button class="btn btn-ghost" onclick="resetDefaults()">Reset</button>
+            <button class="btn btn-ghost" onclick="savePDF()">Save as PDF</button>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right Column: Visualization & Results -->
+    <div class="column">
+      
+      <!-- Status Banner -->
+      <div class="card" id="statusCard">
+        <div class="card-body" style="padding: 16px;">
+          <div class="status-banner" id="statusBox">
+            <div class="status-label">Integrity Status</div>
+            <div class="status-value" id="statusVal">-</div>
+          </div>
+          <div class="status-desc" id="statusNotes">—</div>
+        </div>
+      </div>
+
+      <!-- Interactive SVG Pipe Diagram -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Pipe Wall Thickness Cross-Section</h2>
+        </div>
+        <div class="card-body">
+          <div class="svg-container">
+            <svg id="pipeSvg" width="100%" height="270" viewBox="0 0 450 270" xmlns="http://www.w3.org/2000/svg" style="background: var(--svg-bg); border-radius: 8px;">
+              <defs>
+                <radialGradient id="metalGrad" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+                  <stop offset="0%" stop-color="#0284c7" />
+                  <stop offset="85%" stop-color="#0369a1" />
+                  <stop offset="100%" stop-color="#0f172a" stop-opacity="0.15" />
+                </radialGradient>
+              </defs>
+
+              <!-- Circle 1: Nominal outer boundaries / remaining metal -->
+              <circle id="svgOdCircle" cx="135" cy="135" r="110" fill="var(--svg-metal)" />
+              
+              <!-- Circle 2: Measured boundaries / represents metal loss area in red -->
+              <circle id="svgMeasCircle" cx="135" cy="135" r="90" fill="var(--svg-loss)" stroke="var(--svg-loss-border)" stroke-width="1.5" />
+              
+              <!-- Circle 3: Nominal inner circle / interior hollow background masking -->
+              <circle id="svgNomCircle" cx="135" cy="135" r="75" fill="var(--svg-bg)" />
+              
+              <!-- Circle 4: Required thickness boundary with CA (dashed orange) -->
+              <circle id="svgReqTotalCircle" cx="135" cy="135" r="98" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="3 3" />
+              
+              <!-- Circle 5: Required thickness boundary without CA (solid red) -->
+              <circle id="svgReqNoCaCircle" cx="135" cy="135" r="105" fill="none" stroke="#ef4444" stroke-width="1.5" />
+
+              <!-- Center Point -->
+              <circle cx="135" cy="135" r="2.5" fill="var(--text-light)" />
+
+              <!-- CAD-style Orthogonal Leader Lines & Texts -->
+              <!-- Nominal OD -->
+              <path id="svgLOdLine" d="" fill="none" stroke="var(--text-light)" stroke-width="1" opacity="0.6" />
+              <text id="svgLOdText" font-size="11" font-family="Inter, sans-serif" fill="var(--text-color)" font-weight="600"></text>
+              
+              <!-- Remaining wall (Measured ID) -->
+              <path id="svgLMeasLine" d="" fill="none" stroke="var(--text-light)" stroke-width="1" opacity="0.6" />
+              <text id="svgLMeasText" font-size="11" font-family="Inter, sans-serif" fill="var(--text-color)" font-weight="600"></text>
+
+              <!-- Required with CA (Amber) -->
+              <path id="svgLReqTotalLine" d="" fill="none" stroke="#d97706" stroke-width="1" opacity="0.8" />
+              <text id="svgLReqTotalText" font-size="11" font-family="Inter, sans-serif" fill="#d97706" font-weight="700"></text>
+
+              <!-- Required no CA (Red) -->
+              <path id="svgLReqNoLine" d="" fill="none" stroke="#ef4444" stroke-width="1" opacity="0.8" />
+              <text id="svgLReqNoText" font-size="11" font-family="Inter, sans-serif" fill="#ef4444" font-weight="700"></text>
+
+              <!-- Nominal Inner ID -->
+              <path id="svgLNomLine" d="" fill="none" stroke="var(--text-light)" stroke-width="1" opacity="0.6" />
+              <text id="svgLNomText" font-size="11" font-family="Inter, sans-serif" fill="var(--text-color)" font-weight="600"></text>
+            </svg>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center; font-size:11px; font-weight:600; margin-top:8px;">
+            <span style="display:flex; align-items:center; gap:4px;"><span style="display:inline-block; width:12px; height:12px; background:var(--svg-metal); border-radius:3px;"></span> Remaining Wall</span>
+            <span style="display:flex; align-items:center; gap:4px;"><span style="display:inline-block; width:12px; height:12px; background:var(--svg-loss); border:1px solid var(--svg-loss-border); border-radius:3px;"></span> Wall Loss Area</span>
+            <span style="display:flex; align-items:center; gap:4px;"><span style="border-bottom:2px dashed #f59e0b; width:16px;"></span> limit (t<sub>req</sub> + CA)</span>
+            <span style="display:flex; align-items:center; gap:4px;"><span style="border-bottom:2px solid #ef4444; width:16px;"></span> limit (t<sub>req</sub>)</span>
           </div>
         </div>
+      </div>
 
-        <div id="grpDepth">
-          <label><span class="title">Wall loss depth (mm)</span></label>
-          <input id="depth" type="number" step="0.01" placeholder="e.g., 1.2">
-          <div class="hint">Max metal loss relative to original wall, from UT grid/pit gauge.</div>
+      <!-- Results Parameters Table -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">4. Calculations Results</h2>
         </div>
-        <div id="grpTmeas" style="display:none">
-          <label><span class="title">Measured minimum wall thickness (mm)</span></label>
-          <input id="tmeas" type="number" step="0.01" value="6.0">
-          <div class="hint">Minimum remaining thickness measured on pipe (after removing coating/scale when needed).</div>
-        </div>
-
-        <div>
-          <label><span class="title">Corrosion allowance, CA (mm)</span></label>
-          <input id="ca" type="number" step="0.1" value="1.5">
-          <div class="hint">Design corrosion allowance per project/company standard.</div>
-        </div>
-        <div>
-          <label><span class="title">Design pressure, P (bar)</span></label>
-          <input id="Pbar" type="number" step="0.1" value="7.0">
-          <div class="hint">Internal design pressure; converted to MPa for the equations.</div>
-        </div>
-        <div>
-          <label><span class="title">Allowable stress, S (MPa)</span></label>
-          <input id="S" type="number" step="1" value="138">
-          <div class="hint">From company table or ASME B31.3 Table A-1 for the material and temperature.</div>
-        </div>
-        <div>
-          <label><span class="title">Longitudinal joint factor, E</span></label>
-          <input id="E" type="number" step="0.01" value="1.0">
-          <div class="hint">Pipe seam quality factor per B31.3. Seamless/qualified ERW/SAW typically 1.0.</div>
-        </div>
-        <div>
-          <label><span class="title">Weld strength reduction factor, W</span></label>
-          <input id="W" type="number" step="0.01" value="1.0">
-          <div class="hint">Usually 1.0 at ambient; apply table values in creep range.</div>
-        </div>
-        <div>
-          <label><span class="title">B31.3 coefficient, Y</span></label>
-          <input id="Y" type="number" step="0.05" value="0.4">
-          <div class="hint">Geometry factor per B31.3 304 rules (common default 0.4).</div>
-        </div>
-        <div>
-          <label><span class="title">Corrosion rate, CR (mm/year) — optional</span></label>
-          <input id="CR" type="number" step="0.01" placeholder="e.g., 0.10">
-          <div class="hint">Used to estimate Remaining Life until t_req + CA.</div>
+        <div class="card-body">
+          <div class="res-grid">
+            <div class="res-item">
+              <span class="res-name">Nominal Wall Thickness (t<sub>nom</sub>)</span>
+              <span class="res-val" id="resTnom">-</span>
+            </div>
+            <div class="res-item">
+              <span class="res-name">Remaining Wall Percentage</span>
+              <span class="res-val" id="resPct">-</span>
+            </div>
+            <div class="res-item">
+              <span class="res-name">Required Thickness (t<sub>req</sub>)</span>
+              <span class="res-val" id="resTreq">-</span>
+            </div>
+            <div class="res-item">
+              <span class="res-name">Required Incl. CA (t<sub>req</sub> + CA)</span>
+              <span class="res-val" id="resTreqCa">-</span>
+            </div>
+            <div class="res-item">
+              <span class="res-name">Remaining Margin</span>
+              <span class="res-val" id="resMargin">-</span>
+            </div>
+            <div class="res-item">
+              <span class="res-name">Design Pressure (P)</span>
+              <span class="res-val" id="resPres">-</span>
+            </div>
+            <div class="res-item">
+              <span class="res-name">MAWP (With CA)</span>
+              <span class="res-val" id="resMawpWith">-</span>
+            </div>
+            <div class="res-item">
+              <span class="res-name">MAWP (No CA)</span>
+              <span class="res-val" id="resMawpNoCA">-</span>
+            </div>
+            <div class="res-item">
+              <span class="res-name">Corrosion Rate (CR)</span>
+              <span class="res-val" id="resCr">-</span>
+            </div>
+            <div class="res-item">
+              <span class="res-name">Estimated Remaining Life</span>
+              <span class="res-val" id="resLife">-</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Override t_nom -->
-      <div class="row" id="ovrRow" style="display:none">
-        <div>
-          <label><span class="title">Override nominal wall thickness (mm)</span></label>
-          <input id="overrideTnom" type="number" step="0.01" placeholder="Use only when different from B36.10M table">
-          <div class="hint">Enter if drawings/MTRs show a nominal wall different from schedule.</div>
+      <!-- Repair Advisor (ASME PCC-2) -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">5. ASME PCC-2 Repair Advisor</h2>
+        </div>
+        <div class="card-body">
+          <ul class="advisor-list" id="advisorList">
+            <li>No data calculated. Provide input geometry and run calculations.</li>
+          </ul>
         </div>
       </div>
 
-      <!-- Audit trail -->
-      <div class="row">
-        <div>
-          <label><span class="title">Entered by</span></label>
-          <input id="enteredBy" placeholder="Assessor name">
-        </div>
-        <div>
-          <label><span class="title">Remarks (optional)</span></label>
-          <input id="remarks" placeholder="Notes">
-        </div>
-      </div>
-
-      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="recalc()">Calculate</button>
-        <button class="btn btn-ghost" onclick="resetDefaults()">Reset</button>
-        <button class="btn btn-ghost" onclick="savePDF()">Save as PDF</button>
-      </div>
-
-      <!-- Equations & References (CSS-based for compatibility) -->
-      <div class="eqs">
-        <div class="hint"><b>Equations (ASME B31.3):</b></div>
-        <div class="eq">
-          <span class="var">t</span> = 
-          <span class="frac"><span class="num">P · D</span><span class="den">2 · (S · E · W + P · Y)</span></span>
-        </div>
-        <div class="eq">
-          <span class="var">t<sub>req+CA</sub></span> = <span class="var">t</span> + <span class="var">CA</span>
-        </div>
-        <div class="eq">
-          <span class="var">P</span> =
-          <span class="frac"><span class="num">2 · S · E · W · t</span><span class="den">D − 2 · Y · t</span></span>
-          <span class="unit">(MPa; divide by 0.1 to convert to bar)</span>
-        </div>
-        <div class="hint" style="margin-top:6px">
-          <b>Symbols:</b> P = pressure (MPa), D = outside diameter (mm), S = allowable stress, E = longitudinal joint factor, W = weld strength reduction factor, Y = B31.3 coefficient, t = wall thickness (mm), CA = corrosion allowance.
-        </div>
-        <div class="hint" style="margin-top:8px">
-          <b>References:</b> ASME B31.3 (para. 304 rules), ASME B36.10M, ASME PCC-2, API 579-1 / ASME FFS-1.
-        </div>
-      </div>
     </div>
-  </details>
 
-  <!-- Pipe Information -->
-  <details open class="card">
-    <summary><span class="caret"></span><span class="title-txt">Pipe Information</span></summary>
-    <div class="card-inner">
-      <div class="row">
-        <div>
-          <div class="kv"><div>Tag</div><div class="mono" id="tagShow">-</div></div>
-          <div class="kv"><div>Location</div><div class="mono" id="locShow">-</div></div>
-          <div class="kv"><div>P&amp;ID</div><div class="mono" id="pidShow">-</div></div>
-          <div class="kv"><div>Nominal Pipe Size (NPS)</div><div class="mono" id="npsShow">-</div></div>
-          <div class="kv"><div>Schedule</div><div class="mono" id="schShow">-</div></div>
-        </div>
-        <div>
-          <div class="kv"><div>Nominal wall thickness</div><div class="mono" id="tnomShow">-</div></div>
-          <div class="kv"><div>Measured minimum wall thickness</div><div class="mono" id="tmeasShow">-</div></div>
-          <div class="kv"><div>Wall loss depth</div><div class="mono" id="depthShow">-</div></div>
-          <div class="kv"><div>Corrosion allowance, CA</div><div class="mono" id="caShow">-</div></div>
-          <div class="kv"><div>Design pressure</div><div class="mono" id="pbarShow2">-</div></div>
-          <div class="kv"><div>Allowable stress, S</div><div class="mono" id="sShow">-</div></div>
-          <div class="kv"><div>Audit trail</div><div class="mono" id="auditShow">-</div></div>
-        </div>
-      </div>
+  </div>
+
+  <!-- Print Signature Block -->
+  <div class="print-signature-block">
+    <div>
+      <div class="signature-line">Assessed By (Name &amp; Signature)</div>
     </div>
-  </details>
-
-  <!-- Results -->
-  <details open class="card">
-    <summary><span class="caret"></span><span class="title-txt">Results</span></summary>
-    <div class="card-inner">
-      <div id="statusBox" style="margin-bottom:10px"></div>
-      <div id="warnBox"></div>
-
-      <!-- Graphics -->
-      <div class="graph-wrap">
-        <!-- Top: Remaining + Loss (Nominal=100%) -->
-        <div class="track-top" id="trackMain">
-          <div class="seg seg-remaining" id="segRemain" style="width:0%"></div>
-          <div class="seg seg-loss" id="segLoss" style="width:0%"></div>
-          <div class="val" id="lblRemain" style="left:-9999px">Remaining</div>
-          <div class="val" id="lblLoss" style="left:-9999px">Loss</div>
-        </div>
-
-        <!-- Bottom: base 100% + overlays (Req + CA) -->
-        <div class="overlay" id="overlay">
-          <div class="base"></div>
-          <div class="bar req" id="segReq" style="width:0%"></div>
-          <div class="bar ca"  id="segCA"  style="left:0;width:0%"></div>
-          <div class="val white below" id="lblReq" style="left:-9999px">Req</div>
-          <div class="val dark below"  id="lblCA"  style="left:-9999px">CA</div>
-        </div>
-
-        <div class="legend">
-          <span class="chip"><div class="box-nom"></div> Nominal = 100%</span>
-          <span class="chip"><div class="box-remain"></div> Remaining</span>
-          <span class="chip"><div class="box-loss"></div> Wall loss</span>
-          <span class="chip"><div class="box-req"></div> Required (no CA)</span>
-          <span class="chip"><div class="box-ca"></div> CA</span>
-        </div>
-      </div>
-
-      <!-- Values -->
-      <div class="resgrid" style="margin-top:14px">
-        <div class="kv"><div>Nominal wall thickness</div><div class="mono" id="tnom">-</div></div>
-        <div class="kv"><div>Remaining vs nominal</div><div class="mono" id="pct">-</div></div>
-        <div class="kv"><div>Required (without CA)</div><div class="mono" id="treq">-</div></div>
-        <div class="kv"><div>Required (incl. CA)</div><div class="mono" id="treqca">-</div></div>
-        <div class="kv"><div>Margin</div><div class="mono" id="margin">-</div></div>
-        <div class="kv"><div>Design pressure</div><div class="mono" id="pbarShow">-</div></div>
-        <div class="kv"><div>MAWP (t<sub>use</sub>=t<sub>meas</sub>−CA)</div><div class="mono" id="mawpWith">-</div></div>
-        <div class="kv"><div>MAWP (no CA)</div><div class="mono" id="mawpNoCA">-</div></div>
-        <div class="kv"><div>Corrosion rate, CR</div><div class="mono" id="crShow">-</div></div>
-        <div class="kv"><div>Estimated remaining life</div><div class="mono" id="rlife">-</div></div>
-      </div>
-
-      <div id="notes" class="hint" style="margin-top:10px"></div>
-      <div class="hint" style="margin-top:6px">
-        <b>MAWP note:</b> formula yields MPa; divide by 0.1 to convert to bar.
-      </div>
+    <div>
+      <div class="signature-line">Approved By (Name &amp; Signature)</div>
     </div>
-  </details>
-
-  <!-- Repair Advisor -->
-  <details open class="card">
-    <summary><span class="caret"></span><span class="title-txt">Repair Advisor (ASME PCC-2)</span></summary>
-    <div class="card-inner">
-      <div id="advisor" class="muted">Enter inputs and click Calculate.</div>
-      <div id="advisorList" style="margin-top:8px"></div>
-      <div class="hint" style="margin-top:10px">
-        <b>PCC-2 categories:</b> Part 2 – Composite, Part 3 – Welded, Part 4 – Mechanical. Recommendations depend on STATUS.
-      </div>
-    </div>
-  </details>
+  </div>
 
   <div class="footer">
     <img src="https://uppic.cloud/ib/TegMMWNNMoyhrHv_1736230877.png" alt="Division Logo"/>
     <div><strong>Central and Eastern Engineering and Maintenance Division</strong></div>
     <div>PTT Oil and Retail Business Public Company Limited</div>
   </div>
+
 </div>
 
 <script>
-/* ===== Pipe data (B36.10M subset; XS for ½–1½", STD for ≥2") ===== */
-const PIPE_DIMS = [
-  { nps:'1/2"',   schedule:'80', od_mm:21.34,  t_nom_mm:3.73 },
-  { nps:'3/4"',   schedule:'80', od_mm:26.67,  t_nom_mm:3.91 },
-  { nps:'1"',     schedule:'80', od_mm:33.40,  t_nom_mm:4.55 },
-  { nps:'1-1/4"', schedule:'80', od_mm:42.16,  t_nom_mm:4.85 },
-  { nps:'1-1/2"', schedule:'80', od_mm:48.26,  t_nom_mm:5.08 },
-  { nps:'2"',     schedule:'40', od_mm:60.33,  t_nom_mm:3.91 },
-  { nps:'2-1/2"', schedule:'40', od_mm:73.03,  t_nom_mm:5.16 },
-  { nps:'3"',     schedule:'40', od_mm:88.90,  t_nom_mm:5.49 },
-  { nps:'3-1/2"', schedule:'40', od_mm:101.60, t_nom_mm:5.74 },
-  { nps:'4"',     schedule:'40', od_mm:114.30, t_nom_mm:6.02 },
-  { nps:'5"',     schedule:'40', od_mm:141.30, t_nom_mm:6.55 },
-  { nps:'6"',     schedule:'40', od_mm:168.28, t_nom_mm:7.11 },
-  { nps:'8"',     schedule:'40', od_mm:219.08, t_nom_mm:8.18 },
-  { nps:'10"',    schedule:'40', od_mm:273.05, t_nom_mm:9.27 },
-  { nps:'12"',    schedule:'40', od_mm:323.85, t_nom_mm:9.53 },
-  { nps:'14"',    schedule:'40', od_mm:355.60, t_nom_mm:9.53 },
-  { nps:'16"',    schedule:'40', od_mm:406.40, t_nom_mm:9.53 },
-  { nps:'18"',    schedule:'40', od_mm:457.20, t_nom_mm:9.53 },
-  { nps:'20"',    schedule:'40', od_mm:508.00, t_nom_mm:9.53 },
-  { nps:'22"',    schedule:'40', od_mm:558.80, t_nom_mm:9.53 },
-  { nps:'24"',    schedule:'40', od_mm:609.60, t_nom_mm:9.53 },
-  { nps:'26"',    schedule:'40', od_mm:660.40, t_nom_mm:9.53 },
-  { nps:'28"',    schedule:'40', od_mm:711.20, t_nom_mm:9.53 },
-  { nps:'30"',    schedule:'40', od_mm:762.00, t_nom_mm:11.13 },
-  { nps:'32"',    schedule:'40', od_mm:812.80, t_nom_mm:11.13 },
-  { nps:'34"',    schedule:'40', od_mm:863.60, t_nom_mm:11.13 },
-  { nps:'36"',    schedule:'40', od_mm:914.40, t_nom_mm:12.70 },
+/* ================= ASME B36.10M COMPLETE PIPE DATA ================= */
+const PIPE_DATABASE = {
+  '1/2"': {
+    od: 21.34,
+    schedules: {
+      '40': { t: 2.77, label: 'Sch 40 (STD)' },
+      '80': { t: 3.73, label: 'Sch 80 (XS)' },
+      '160': { t: 4.78, label: 'Sch 160' },
+      'XXS': { t: 7.47, label: 'Sch XXS' }
+    }
+  },
+  '3/4"': {
+    od: 26.67,
+    schedules: {
+      '40': { t: 2.87, label: 'Sch 40 (STD)' },
+      '80': { t: 3.91, label: 'Sch 80 (XS)' },
+      '160': { t: 5.56, label: 'Sch 160' },
+      'XXS': { t: 7.82, label: 'Sch XXS' }
+    }
+  },
+  '1"': {
+    od: 33.40,
+    schedules: {
+      '40': { t: 3.38, label: 'Sch 40 (STD)' },
+      '80': { t: 4.55, label: 'Sch 80 (XS)' },
+      '160': { t: 6.35, label: 'Sch 160' },
+      'XXS': { t: 9.09, label: 'Sch XXS' }
+    }
+  },
+  '1-1/4"': {
+    od: 42.16,
+    schedules: {
+      '40': { t: 3.56, label: 'Sch 40 (STD)' },
+      '80': { t: 4.85, label: 'Sch 80 (XS)' },
+      '160': { t: 6.35, label: 'Sch 160' },
+      'XXS': { t: 9.70, label: 'Sch XXS' }
+    }
+  },
+  '1-1/2"': {
+    od: 48.26,
+    schedules: {
+      '40': { t: 3.68, label: 'Sch 40 (STD)' },
+      '80': { t: 5.08, label: 'Sch 80 (XS)' },
+      '160': { t: 7.14, label: 'Sch 160' },
+      'XXS': { t: 10.15, label: 'Sch XXS' }
+    }
+  },
+  '2"': {
+    od: 60.33,
+    schedules: {
+      '10': { t: 2.77, label: 'Sch 10' },
+      '40': { t: 3.91, label: 'Sch 40 (STD)' },
+      '80': { t: 5.54, label: 'Sch 80 (XS)' },
+      '160': { t: 8.74, label: 'Sch 160' },
+      'XXS': { t: 11.07, label: 'Sch XXS' }
+    }
+  },
+  '2-1/2"': {
+    od: 73.03,
+    schedules: {
+      '10': { t: 3.05, label: 'Sch 10' },
+      '40': { t: 5.16, label: 'Sch 40 (STD)' },
+      '80': { t: 7.01, label: 'Sch 80 (XS)' },
+      '160': { t: 9.53, label: 'Sch 160' },
+      'XXS': { t: 14.02, label: 'Sch XXS' }
+    }
+  },
+  '3"': {
+    od: 88.90,
+    schedules: {
+      '10': { t: 3.05, label: 'Sch 10' },
+      '40': { t: 5.49, label: 'Sch 40 (STD)' },
+      '80': { t: 8.08, label: 'Sch 80 (XS)' },
+      '160': { t: 11.13, label: 'Sch 160' },
+      'XXS': { t: 15.24, label: 'Sch XXS' }
+    }
+  },
+  '4"': {
+    od: 114.30,
+    schedules: {
+      '10': { t: 3.05, label: 'Sch 10' },
+      '40': { t: 6.02, label: 'Sch 40 (STD)' },
+      '80': { t: 8.56, label: 'Sch 80 (XS)' },
+      '120': { t: 11.13, label: 'Sch 120' },
+      '160': { t: 13.49, label: 'Sch 160' },
+      'XXS': { t: 17.12, label: 'Sch XXS' }
+    }
+  },
+  '6"': {
+    od: 168.28,
+    schedules: {
+      '10': { t: 3.40, label: 'Sch 10' },
+      '40': { t: 7.11, label: 'Sch 40 (STD)' },
+      '80': { t: 10.97, label: 'Sch 80 (XS)' },
+      '120': { t: 14.27, label: 'Sch 120' },
+      '160': { t: 18.26, label: 'Sch 160' },
+      'XXS': { t: 21.95, label: 'Sch XXS' }
+    }
+  },
+  '8"': {
+    od: 219.08,
+    schedules: {
+      '10': { t: 3.76, label: 'Sch 10' },
+      '20': { t: 6.35, label: 'Sch 20' },
+      '30': { t: 7.04, label: 'Sch 30' },
+      '40': { t: 8.18, label: 'Sch 40 (STD)' },
+      '60': { t: 10.31, label: 'Sch 60' },
+      '80': { t: 12.70, label: 'Sch 80 (XS)' },
+      '100': { t: 15.09, label: 'Sch 100' },
+      '120': { t: 18.26, label: 'Sch 120' },
+      '140': { t: 20.62, label: 'Sch 140' },
+      '160': { t: 23.01, label: 'Sch 160' },
+      'XXS': { t: 22.23, label: 'Sch XXS' }
+    }
+  },
+  '10"': {
+    od: 273.05,
+    schedules: {
+      '10': { t: 4.19, label: 'Sch 10' },
+      '20': { t: 6.35, label: 'Sch 20' },
+      '30': { t: 7.80, label: 'Sch 30' },
+      '40': { t: 9.27, label: 'Sch 40 (STD)' },
+      '60': { t: 12.70, label: 'Sch 60 (XS)' },
+      '80': { t: 15.09, label: 'Sch 80' },
+      '100': { t: 18.26, label: 'Sch 100' },
+      '120': { t: 21.44, label: 'Sch 120' },
+      '140': { t: 25.40, label: 'Sch 140' },
+      '160': { t: 28.58, label: 'Sch 160' }
+    }
+  },
+  '12"': {
+    od: 323.85,
+    schedules: {
+      '10': { t: 4.57, label: 'Sch 10' },
+      '20': { t: 6.35, label: 'Sch 20' },
+      '30': { t: 8.38, label: 'Sch 30' },
+      '40': { t: 10.31, label: 'Sch 40 (STD)' },
+      '60': { t: 14.27, label: 'Sch 60' },
+      '80': { t: 17.48, label: 'Sch 80 (XS)' },
+      '100': { t: 21.44, label: 'Sch 100' },
+      '120': { t: 25.40, label: 'Sch 120' },
+      '140': { t: 28.58, label: 'Sch 140' },
+      '160': { t: 33.32, label: 'Sch 160' }
+    }
+  },
+  '14"': {
+    od: 355.60,
+    schedules: {
+      '10': { t: 6.35, label: 'Sch 10' },
+      '20': { t: 7.92, label: 'Sch 20' },
+      '30': { t: 9.53, label: 'Sch 30 (STD/XS)' },
+      '40': { t: 11.13, label: 'Sch 40' },
+      '60': { t: 15.09, label: 'Sch 60' },
+      '80': { t: 19.05, label: 'Sch 80' },
+      '100': { t: 23.83, label: 'Sch 100' },
+      '120': { t: 27.79, label: 'Sch 120' },
+      '140': { t: 31.75, label: 'Sch 140' },
+      '160': { t: 35.71, label: 'Sch 160' }
+    }
+  },
+  '16"': {
+    od: 406.40,
+    schedules: {
+      '10': { t: 6.35, label: 'Sch 10' },
+      '20': { t: 7.92, label: 'Sch 20' },
+      '30': { t: 9.53, label: 'Sch 30 (STD)' },
+      '40': { t: 12.70, label: 'Sch 40 (XS)' },
+      '60': { t: 16.66, label: 'Sch 60' },
+      '80': { t: 21.44, label: 'Sch 80' },
+      '100': { t: 26.19, label: 'Sch 100' },
+      '120': { t: 30.96, label: 'Sch 120' },
+      '140': { t: 36.53, label: 'Sch 140' },
+      '160': { t: 40.49, label: 'Sch 160' }
+    }
+  },
+  '18"': {
+    od: 457.20,
+    schedules: {
+      '10': { t: 6.35, label: 'Sch 10' },
+      '20': { t: 7.92, label: 'Sch 20' },
+      '30': { t: 11.13, label: 'Sch 30 (STD)' },
+      '40': { t: 14.27, label: 'Sch 40 (XS)' },
+      '60': { t: 19.05, label: 'Sch 60' },
+      '80': { t: 23.83, label: 'Sch 80' },
+      '100': { t: 29.36, label: 'Sch 100' },
+      '120': { t: 34.93, label: 'Sch 120' },
+      '140': { t: 39.67, label: 'Sch 140' },
+      '160': { t: 45.24, label: 'Sch 160' }
+    }
+  },
+  '20"': {
+    od: 508.00,
+    schedules: {
+      '10': { t: 6.35, label: 'Sch 10' },
+      '20': { t: 9.53, label: 'Sch 20 (STD)' },
+      '30': { t: 12.70, label: 'Sch 30 (XS)' },
+      '40': { t: 15.09, label: 'Sch 40' },
+      '60': { t: 20.62, label: 'Sch 60' },
+      '80': { t: 26.19, label: 'Sch 80' },
+      '100': { t: 32.54, label: 'Sch 100' },
+      '120': { t: 38.10, label: 'Sch 120' },
+      '140': { t: 44.45, label: 'Sch 140' },
+      '160': { t: 50.01, label: 'Sch 160' }
+    }
+  },
+  '24"': {
+    od: 609.60,
+    schedules: {
+      '10': { t: 6.35, label: 'Sch 10' },
+      '20': { t: 9.53, label: 'Sch 20 (STD)' },
+      '30': { t: 14.27, label: 'Sch 30 (XS)' },
+      '40': { t: 17.48, label: 'Sch 40' },
+      '60': { t: 24.61, label: 'Sch 60' },
+      '80': { t: 30.96, label: 'Sch 80' },
+      '100': { t: 38.89, label: 'Sch 100' },
+      '120': { t: 46.02, label: 'Sch 120' },
+      '140': { t: 52.37, label: 'Sch 140' },
+      '160': { t: 59.54, label: 'Sch 160' }
+    }
+  }
+};
+
+const MATERIALS = [
+  { name: 'Carbon Steel: ASTM A106 Gr. B / A53 Gr. B', stress: 137.9, code: 'A106B' },
+  { name: 'Carbon Steel: API 5L Gr. B', stress: 137.9, code: 'API5LB' },
+  { name: 'High Yield Carbon Steel: API 5L X42', stress: 144.8, code: 'X42' },
+  { name: 'High Yield Carbon Steel: API 5L X52', stress: 179.3, code: 'X52' },
+  { name: 'High Yield Carbon Steel: API 5L X60', stress: 206.8, code: 'X60' },
+  { name: 'Stainless Steel: ASTM A312 TP304', stress: 137.9, code: 'TP304' },
+  { name: 'Stainless Steel: ASTM A312 TP316', stress: 137.9, code: 'TP316' },
+  { name: 'Manual Input (Specify below)', stress: null, code: 'MANUAL' }
 ];
-const NPS_ORDER = ['1/2"','3/4"','1"','1-1/4"','1-1/2"','2"','2-1/2"','3"','3-1/2"','4"','5"','6"','8"','10"','12"','14"','16"','18"','20"','22"','24"','26"','28"','30"','32"','34"','36"'];
 
-const npsSel = document.getElementById('nps');
-const schSel = document.getElementById('sch');
-const modeSeg = document.getElementById('modeSeg');
+/* Elements */
+const npsSelect = document.getElementById('nps');
+const schSelect = document.getElementById('sch');
 const ovrChk = document.getElementById('ovrChk');
-const hdrMeta = document.getElementById('hdrMeta');
+const overrideTnom = document.getElementById('overrideTnom');
+const ovrRow = document.getElementById('ovrRow');
+const materialSelect = document.getElementById('material');
+const stressInput = document.getElementById('S');
+const pUnitSelect = document.getElementById('pUnit');
+const modeSeg = document.getElementById('modeSeg');
+const themeToggle = document.getElementById('themeToggle');
 
-function fillNps(){ npsSel.innerHTML = NPS_ORDER.map(v=>`<option>${v}</option>`).join(''); }
-function fillSch(){
-  const nps = npsSel.value;
-  const small = ['1/2"','3/4"','1"','1-1/4"','1-1/2"'];
-  let opts = [];
-  if (small.includes(nps)){ opts = [{v:'80', label:'XS (Sch 80)'}]; }
-  else { opts = [{v:'40', label:'STD (Sch 40)'}]; }
-  schSel.innerHTML = opts.map(o=>`<option value="${o.v}">${o.label}</option>`).join('');
+/* Setup NPS, schedules, and materials dynamically */
+function initSelections() {
+  npsSelect.innerHTML = Object.keys(PIPE_DATABASE).map(nps => `<option value="${nps}">${nps}</option>`).join('');
+  materialSelect.innerHTML = MATERIALS.map(mat => `<option value="${mat.code}">${mat.name}</option>`).join('');
+  
+  npsSelect.addEventListener('change', () => {
+    updateSchedules();
+    recalc();
+  });
+  
+  schSelect.addEventListener('change', recalc);
+  
+  ovrChk.addEventListener('change', () => {
+    ovrRow.style.display = ovrChk.checked ? 'block' : 'none';
+    recalc();
+  });
+  
+  materialSelect.addEventListener('change', () => {
+    const selected = MATERIALS.find(m => m.code === materialSelect.value);
+    if (selected && selected.stress !== null) {
+      stressInput.value = selected.stress;
+      stressInput.disabled = true;
+    } else {
+      stressInput.disabled = false;
+    }
+    recalc();
+  });
+
+  pUnitSelect.addEventListener('change', () => {
+    // Dynamically adjust design pressure label & units
+    const printPGroup = document.getElementById('printPGroup');
+    printPGroup.setAttribute('data-unit', pUnitSelect.value);
+    recalc();
+  });
+  
+  // Tab control for segmented
+  modeSeg.addEventListener('click', (e) => {
+    if (e.target.tagName !== 'BUTTON') return;
+    [...modeSeg.children].forEach(btn => btn.classList.remove('active'));
+    e.target.classList.add('active');
+    
+    const mode = e.target.dataset.mode;
+    document.getElementById('grpTmeas').style.display = (mode === 'tmeas') ? 'block' : 'none';
+    document.getElementById('grpDepth').style.display = (mode === 'depth') ? 'block' : 'none';
+    recalc();
+  });
 }
 
-function onModeClick(e){
-  if (e.target.tagName!=='BUTTON') return;
-  [...modeSeg.children].forEach(b=>b.classList.remove('active'));
-  e.target.classList.add('active');
-  const mode = e.target.dataset.mode;
-  document.getElementById('grpTmeas').style.display = (mode==='tmeas') ? '' : 'none';
-  document.getElementById('grpDepth').style.display = (mode==='depth') ? '' : 'none';
-  recalc();
+function updateSchedules() {
+  const nps = npsSelect.value;
+  const pipe = PIPE_DATABASE[nps];
+  if (!pipe) return;
+  
+  schSelect.innerHTML = Object.keys(pipe.schedules)
+    .map(sch => `<option value="${sch}">${pipe.schedules[sch].label}</option>`)
+    .join('');
 }
-modeSeg.addEventListener('click', onModeClick);
 
-npsSel.addEventListener('change', ()=>{ fillSch(); recalc(); });
-schSel.addEventListener('change', recalc);
-ovrChk.addEventListener('change', ()=>{
-  document.getElementById('ovrRow').style.display = ovrChk.checked ? '' : 'none';
+/* Theme Switching */
+themeToggle.addEventListener('click', () => {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  updateThemeIcon();
   recalc();
 });
 
+function updateThemeIcon() {
+  const isDark = document.body.classList.contains('dark');
+  themeToggle.innerHTML = isDark 
+    ? `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>` 
+    : `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+}
+
+/* Helpers */
+function fmt(val, decimals = 2) {
+  return (val !== null && isFinite(val)) ? Number(val).toFixed(decimals) : '—';
+}
+
+/* Core Calculations */
+function runCalculations() {
+  const nps = npsSelect.value;
+  const sch = schSelect.value;
+  const pipe = PIPE_DATABASE[nps];
+  if (!pipe) return null;
+  
+  const D = pipe.od;
+  
+  // Nominal Wall Thickness
+  let t_nom = pipe.schedules[sch].t;
+  if (ovrChk.checked) {
+    const customT = parseFloat(overrideTnom.value);
+    if (!isNaN(customT) && customT > 0) {
+      t_nom = customT;
+    }
+  }
+
+  // Active Mode (Wall loss vs Measured minimum)
+  const mode = document.querySelector('#modeSeg .active').dataset.mode;
+  let t_meas = 0;
+  let depth = 0;
+  
+  if (mode === 'depth') {
+    depth = parseFloat(document.getElementById('depth').value) || 0;
+    t_meas = Math.max(0, t_nom - depth);
+  } else {
+    t_meas = parseFloat(document.getElementById('tmeas').value) || 0;
+    depth = Math.max(0, t_nom - t_meas);
+  }
+
+  const ca = parseFloat(document.getElementById('ca').value) || 0;
+  const P_input = parseFloat(document.getElementById('P').value) || 0;
+  const pUnit = pUnitSelect.value;
+  
+  // Convert design pressure to MPa
+  const P = (pUnit === 'bar') ? P_input * 0.1 : P_input * 0.006894757;
+  
+  const S = parseFloat(stressInput.value) || 0;
+  const E = parseFloat(document.getElementById('E').value) || 1;
+  const W = parseFloat(document.getElementById('W').value) || 1;
+  const Y = parseFloat(document.getElementById('Y').value) || 0.4;
+  const CR = parseFloat(document.getElementById('CR').value) || 0;
+
+  // Validation Check
+  let hasErrors = false;
+  
+  // 1. Check if design parameters are valid
+  if (P_input <= 0) {
+    document.getElementById('errP').style.display = 'block';
+    document.getElementById('P').classList.add('input-invalid');
+    hasErrors = true;
+  } else {
+    document.getElementById('errP').style.display = 'none';
+    document.getElementById('P').classList.remove('input-invalid');
+  }
+
+  if (S <= 0) {
+    document.getElementById('errS').style.display = 'block';
+    stressInput.classList.add('input-invalid');
+    hasErrors = true;
+  } else {
+    document.getElementById('errS').style.display = 'none';
+    stressInput.classList.remove('input-invalid');
+  }
+
+  // 2. Check depth limits
+  if (mode === 'depth' && depth > t_nom) {
+    document.getElementById('errDepth').style.display = 'block';
+    document.getElementById('depth').classList.add('input-invalid');
+    hasErrors = true;
+  } else {
+    document.getElementById('errDepth').style.display = 'none';
+    if(document.getElementById('depth')) document.getElementById('depth').classList.remove('input-invalid');
+  }
+
+  // 3. Check measured wall thickness limits
+  if (mode === 'tmeas' && t_meas > t_nom) {
+    document.getElementById('errTmeas').style.display = 'block';
+    document.getElementById('tmeas').classList.add('input-invalid');
+    hasErrors = true;
+  } else {
+    document.getElementById('errTmeas').style.display = 'none';
+    if(document.getElementById('tmeas')) document.getElementById('tmeas').classList.remove('input-invalid');
+  }
+
+  // 4. Check corrosion allowance
+  if (ca >= t_meas) {
+    document.getElementById('errCa').style.display = 'block';
+    document.getElementById('ca').classList.add('input-invalid');
+    hasErrors = true;
+  } else {
+    document.getElementById('errCa').style.display = 'none';
+    document.getElementById('ca').classList.remove('input-invalid');
+  }
+
+  if (hasErrors) {
+    return { hasErrors: true };
+  }
+
+  // ASME B31.3 Para. 304.1.2 Required Thickness
+  // t = (P * D) / (2 * (S*E*W + P*Y))
+  const denom = 2 * (S * E * W + P * Y);
+  const t_req_noCA = denom > 0 ? (P * D) / denom : 0;
+  const t_req_total = t_req_noCA + ca;
+  const margin = t_meas - t_req_total;
+  const pctRemainNom = (t_meas / t_nom) * 100;
+
+  // MAWP calculations
+  // P = (2 * S * E * W * t) / (D - 2 * Y * t)
+  function computeMAWP(t_use) {
+    if (t_use <= 0) return 0;
+    const denomM = D - (2 * Y * t_use);
+    if (denomM <= 0) return 0;
+    const P_mpa = (2 * S * E * W * t_use) / denomM;
+    // Convert back to original unit
+    return (pUnit === 'bar') ? P_mpa / 0.1 : P_mpa / 0.006894757;
+  }
+
+  const mawp_with = computeMAWP(Math.max(0, t_meas - ca));
+  const mawp_no = computeMAWP(t_meas);
+
+  // Status Rules
+  let status = 'OK';
+  let desc = 'Pipe meets allowable pressure limits with sufficient design margin.';
+  
+  if (margin < 0) {
+    status = 'REPAIR';
+    desc = 'CRITICAL: Remaining wall thickness is below minimum required design limit (including Corrosion Allowance). Immediately plan repair or spool replacement.';
+  } else if (margin < 0.1 * t_req_total || pctRemainNom < 50) {
+    status = 'MONITOR';
+    desc = 'WARNING: Wall thickness is approaching design limits (remaining margin is less than 10% of required limit, or pipe has lost over 50% of its nominal thickness). Increase inspection frequency.';
+  }
+
+  // Remaining Life
+  let remainingLife = null;
+  if (CR > 0) {
+    remainingLife = (t_meas - t_req_total) / CR;
+  }
+
+  return {
+    hasErrors: false,
+    t_nom,
+    t_meas,
+    depth,
+    D,
+    t_req_noCA,
+    t_req_total,
+    margin,
+    pctRemainNom,
+    mawp_with,
+    mawp_no,
+    status,
+    desc,
+    remainingLife,
+    ca,
+    CR,
+    P_input,
+    pUnit
+  };
+}
+
+/* SVG Rendering */
+function drawSvgPipe(res) {
+  if (!res || res.hasErrors) {
+    // Hide leader lines and reset circles
+    ['svgLOd', 'svgLMeas', 'svgLReqNo', 'svgLReqTotal', 'svgLNom'].forEach(id => {
+      document.getElementById(id + 'Line').setAttribute('d', '');
+      document.getElementById(id + 'Text').textContent = '';
+    });
+    return;
+  }
+
+  const R_od = 110; // Nominal OD scaled radius
+  const center = 135;
+  const t_nom_px = 55;
+  const scale = t_nom_px / res.t_nom;
+  
+  const R_nom = Math.max(10, R_od - t_nom_px);
+  
+  // Capped visualization to nominal inner wall to prevent visual inverted display
+  const tMeasDraw = Math.min(res.t_nom, res.t_meas);
+  const R_meas = Math.max(10, R_od - (tMeasDraw * scale));
+  
+  const R_req_noCA = Math.max(10, R_od - (res.t_req_noCA * scale));
+  const R_req_total = Math.max(10, R_od - (res.t_req_total * scale));
+
+  // Update SVG Circles Attributes
+  document.getElementById('svgOdCircle').setAttribute('r', R_od);
+  document.getElementById('svgMeasCircle').setAttribute('r', R_meas);
+  document.getElementById('svgNomCircle').setAttribute('r', R_nom);
+  document.getElementById('svgReqTotalCircle').setAttribute('r', R_req_total);
+  document.getElementById('svgReqNoCaCircle').setAttribute('r', R_req_noCA);
+
+  // Update SVG Labels & Leaders (orthogonal paths)
+  updateLeaderLine('svgLOd', center + R_od, 35, `Nominal OD: ${fmt(res.D)} mm`);
+  updateLeaderLine('svgLNom', center + R_nom, 225, `Nominal ID: ${fmt(res.D - 2*res.t_nom)} mm`);
+  updateLeaderLine('svgLMeas', center + R_meas, 75, `Measured ID: ${fmt(res.D - 2*res.t_meas)} mm (t_meas: ${fmt(res.t_meas)} mm)`);
+  updateLeaderLine('svgLReqTotal', center + R_req_total, 175, `t_req+CA: ${fmt(res.t_req_total, 3)} mm`);
+  updateLeaderLine('svgLReqNo', center + R_req_noCA, 125, `t_req (Design): ${fmt(res.t_req_noCA, 3)} mm`);
+}
+
+function updateLeaderLine(id, xPoint, yLine, label) {
+  const lineEl = document.getElementById(id + 'Line');
+  const textEl = document.getElementById(id + 'Text');
+  const center = 135;
+  const xTextStart = 255;
+  
+  // Path drawing a line: from right edge of circle (xPoint, center) to the label track on the right
+  lineEl.setAttribute('d', `M ${xPoint} ${center} L ${xPoint} ${yLine} L ${xTextStart} ${yLine}`);
+  textEl.setAttribute('x', xTextStart + 6);
+  textEl.setAttribute('y', yLine + 4);
+  textEl.textContent = label;
+}
+
+/* ASME PCC-2 Repair Advisor */
+function updateRepairAdvisor(res) {
+  const listEl = document.getElementById('advisorList');
+  if (!res || res.hasErrors) {
+    listEl.innerHTML = `<li>No data calculated. Correct active errors and recalculate.</li>`;
+    return;
+  }
+
+  if (res.status === 'OK') {
+    listEl.innerHTML = `
+      <li><strong>PCC-2 Compliance:</strong> Wall thickness is above design limit + corrosion allowance. No structural repair required.</li>
+      <li><strong>Monitoring Recommendation:</strong> Maintain standard inspection intervals and trend any nominal wall loss.</li>
+    `;
+    return;
+  }
+
+  if (res.status === 'MONITOR') {
+    listEl.innerHTML = `
+      <li><strong>Monitoring Plan:</strong> Trend thickness using localized UT grid arrays. Verify corrosion rate ($CR$).</li>
+      <li><strong>Prevention (PCC-2 Part 5):</strong> Enhance external coating integrity or cathodic protection to mitigate local corrosion.</li>
+      <li>Plan a re-assessment prior to the next scheduled maintenance outage.</li>
+    `;
+    return;
+  }
+
+  // REPAIR Status Recommendations
+  const pctLoss = (1 - (res.t_meas / res.t_nom)) * 100;
+  let replacementBullet = '';
+  if (pctLoss > 80) {
+    replacementBullet = `<li><strong>CRITICAL (PCC-2 Part 3):</strong> Metal loss exceeds 80% of nominal wall. Full spool replacement is highly recommended.</li>`;
+  }
+
+  listEl.innerHTML = `
+    ${replacementBullet}
+    <li><strong>Composite Repair (PCC-2 Part 2):</strong> Engineered non-metallic wraps (e.g., carbon fiber/epoxy wraps) can be applied for non-leaking defects to restore pressure containment.</li>
+    <li><strong>Welded Repair (PCC-2 Part 3):</strong> 
+      <ul>
+        <li>Type B full-encirclement split welded sleeve designed for full pressure rating.</li>
+        <li>Weld metal overlay/build-up (requires qualified WPS/PQR, preheat, and post-weld NDE).</li>
+      </ul>
+    </li>
+    <li><strong>Mechanical Repair (PCC-2 Part 4):</strong> Engineered mechanical clamp or leak containment encapsulation box (preferred if hot work or welding is restricted).</li>
+  `;
+}
+
+/* Recalc & Update DOM */
+function recalc() {
+  const res = runCalculations();
+  
+  if (!res || res.hasErrors) {
+    document.getElementById('statusBox').className = 'status-banner';
+    document.getElementById('statusVal').textContent = 'ERROR';
+    document.getElementById('statusNotes').textContent = 'Calculation halted. Please check highlighted invalid input parameters.';
+    
+    // Clear outputs
+    ['resTnom', 'resPct', 'resTreq', 'resTreqCa', 'resMargin', 'resPres', 'resMawpWith', 'resMawpNoCA', 'resCr', 'resLife'].forEach(id => {
+      document.getElementById(id).textContent = '—';
+    });
+    
+    drawSvgPipe(null);
+    updateRepairAdvisor(null);
+    return;
+  }
+
+  // Update Header details
+  const tag = (document.getElementById('metaTag').value || '—');
+  const loc = (document.getElementById('metaLoc').value || '—');
+  const pid = (document.getElementById('metaPid').value || '—');
+  const assessor = (document.getElementById('enteredBy').value || '—');
+  const stamp = new Date().toLocaleString();
+
+  document.getElementById('hdrMeta').textContent = `Tag: ${tag} • Location: ${loc} • P&ID: ${pid}`;
+
+  // Update print targets
+  document.getElementById('printTag').textContent = tag;
+  document.getElementById('printLoc').textContent = loc;
+  document.getElementById('printPid').textContent = pid;
+  document.getElementById('printDate').textContent = stamp;
+  document.getElementById('printAssessor').textContent = `${assessor} (${stamp})`;
+
+  // Update Results Table
+  document.getElementById('resTnom').textContent = `${fmt(res.t_nom)} mm`;
+  document.getElementById('resPct').textContent = `${fmt(res.pctRemainNom, 1)} %`;
+  document.getElementById('resTreq').textContent = `${fmt(res.t_req_noCA, 3)} mm`;
+  document.getElementById('resTreqCa').textContent = `${fmt(res.t_req_total, 3)} mm`;
+  document.getElementById('resMargin').textContent = `${fmt(res.margin, 3)} mm`;
+  document.getElementById('resPres').textContent = `${fmt(res.P_input, 1)} ${res.pUnit}`;
+  document.getElementById('resMawpWith').textContent = `${fmt(res.mawp_with, 2)} ${res.pUnit}`;
+  document.getElementById('resMawpNoCA').textContent = `${fmt(res.mawp_no, 2)} ${res.pUnit}`;
+  document.getElementById('resCr').textContent = res.CR > 0 ? `${fmt(res.CR, 2)} mm/year` : '—';
+  
+  if (res.remainingLife !== null) {
+    document.getElementById('resLife').textContent = res.remainingLife >= 0 
+      ? `${fmt(res.remainingLife, 2)} years` 
+      : '0.00 years (exceeded design limit)';
+  } else {
+    document.getElementById('resLife').textContent = '—';
+  }
+
+  // Update Status banner class and values
+  const banner = document.getElementById('statusBox');
+  banner.className = 'status-banner';
+  
+  if (res.status === 'OK') banner.classList.add('s-ok');
+  else if (res.status === 'MONITOR') banner.classList.add('s-mon');
+  else if (res.status === 'REPAIR') banner.classList.add('s-rep');
+
+  document.getElementById('statusVal').textContent = res.status;
+  document.getElementById('statusNotes').textContent = res.desc;
+
+  // Print units groups sync
+  document.getElementById('printPGroup').setAttribute('data-unit', res.pUnit);
+
+  // Redraw SVG & advisor
+  drawSvgPipe(res);
+  updateRepairAdvisor(res);
+}
+
 /* Save PDF with tag in file name (via title) */
 let _origTitle = document.title;
-function savePDF(){
-  const tag = (document.getElementById('metaTag').value || 'Pipe Assessor');
-  const title = `Pipe Assessor - ${tag}`;
+function savePDF() {
+  const tag = (document.getElementById('metaTag').value || 'Pipe Assessor Report');
+  const title = `Pipe_Assessor_Report_${tag.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
   _origTitle = document.title;
   document.title = title;
   window.print();
 }
-window.addEventListener('afterprint', ()=>{ document.title = _origTitle; });
 
-function lookupDim(nps, sch){
-  return PIPE_DIMS.find(d => d.nps===nps && d.schedule===sch) || null;
-}
+window.addEventListener('afterprint', () => { 
+  document.title = _origTitle; 
+});
 
-function calcB313({D, t_meas, c, Pbar, S, E, W, Y, t_nom}){
-  const P = Pbar * 0.1; // bar -> MPa
-  const denom = 2*(S*E*W + P*Y);
-  const t_req_noCA = (P*D)/denom;
-  const t_req_total = t_req_noCA + c;
-  const margin = t_meas - t_req_total;
-  const pctRemainNom = (t_meas / t_nom) * 100;
-
-  function calcMAWP(t_use){
-    const denomM = (D - 2*Y*t_use);
-    if (t_use<=0 || denomM<=0) return null;
-    const Pmpa = (2*S*E*W*t_use) / denomM; // MPa
-    return Pmpa / 0.1; // bar
-  }
-  const mawp_with = calcMAWP(Math.max(0, t_meas - c));
-  const mawp_no   = calcMAWP(t_meas);
-
-  let status = 'OK';
-  const notes = [];
-  const warns = [];
-  if (margin < 0){ status='REPAIR'; notes.push('Measured thickness is below required (incl. CA).'); }
-  else if (margin < 0.1*t_req_total){ status='MONITOR'; warns.push('Thickness approaching limit: margin < 10% of requirement.'); }
-  if (pctRemainNom < 50 && status==='OK'){ status='MONITOR'; warns.push('Remaining vs nominal < 50%.'); }
-
-  return {t_req_noCA, t_req_total, margin, pctRemainNom, status, notes, warns, mawp_with, mawp_no};
-}
-function fmt(x, d=2){ return (isFinite(x) ? Number(x).toFixed(d) : '-'); }
-function statusBadge(s){
-  const cls = s==='OK' ? 's-ok' : s==='MONITOR' ? 's-mon' : 's-rep';
-  return `<span class="status ${cls}"><span>STATUS</span> ${s}</span>`;
-}
-
-/* Bars (Nominal = 100%) */
-function drawBars({t_nom, t_meas, t_req_noCA, c}){
-  const scale = Math.max(t_nom, 1e-6);
-  const wRemain = 100 * Math.max(0, Math.min(t_meas, t_nom)) / scale;
-  const wLoss = 100 * Math.max(0, t_nom - Math.min(t_meas, t_nom)) / scale;
-
-  const segRemain = document.getElementById('segRemain');
-  const segLoss   = document.getElementById('segLoss');
-  segRemain.style.width = wRemain + '%';
-  segLoss.style.left = wRemain + '%';
-  segLoss.style.width = wLoss + '%';
-
-  placeLabel('lblRemain', wRemain, `Remaining ${fmt(t_meas,2)} mm`);
-  placeLabel('lblLoss',   wLoss,   (wLoss>0 ? `Loss ${fmt(t_nom - t_meas,2)} mm` : ''), wRemain);
-
-  const wReq = 100 * Math.max(0, t_req_noCA) / scale;
-  const wCA  = 100 * Math.max(0, c) / scale;
-  const reqWidth = Math.min(100, wReq);
-  const caLeft = reqWidth;
-  const caWidth = Math.min(100 - caLeft, wCA);
-  document.getElementById('segReq').style.width = reqWidth + '%';
-  document.getElementById('segCA').style.left = caLeft + '%';
-  document.getElementById('segCA').style.width = caWidth + '%';
-  placeLabel('lblReq', reqWidth, `Req ${fmt(t_req_noCA,2)} mm`, 0, true, false, true);
-  placeLabel('lblCA',  caWidth,  `CA ${fmt(c,2)} mm`, caLeft, true, true, false);
-}
-function placeLabel(id, w, text, offset=0, below=false, useDark=false, forceWhite=false){
-  const el = document.getElementById(id);
-  if (!text || w < 8){ el.style.left = '-9999px'; return; }
-  el.style.left = `calc(${offset + w/2}% )`;
-  el.textContent = text;
-  el.classList.toggle('below', !!below);
-  el.classList.toggle('dark', !!useDark);
-  el.classList.toggle('white', !!forceWhite);
-}
-
-/* Advisor — show methods only when REPAIR; MONITOR has tips; OK none */
-function advisorRules({status, t_nom, t_meas}){
-  const out = {headline:'', bullets:[]};
-  const lossPct = (1 - (t_meas / t_nom)) * 100;
-
-  if (status === 'OK'){
-    out.headline = 'Meets requirements — no repair needed';
-    out.bullets.push('Continue normal inspection intervals.');
-    if (lossPct > 50) out.bullets.push('Consider increasing UT frequency due to high % loss vs nominal.');
-    return out;
-  }
-
-  if (status === 'MONITOR'){
-    out.headline = 'Low margin — increase monitoring';
-    out.bullets.push('Increase UT frequency; trend corrosion rate; plan re-check before next shutdown.');
-    return out;
-  }
-
-  // REPAIR
-  out.headline = 'Below required thickness — repair required';
-  if (lossPct > 80){
-    out.bullets.push('Loss > 80% of nominal — plan replacement of the spool (preferred).');
-  }
-  out.bullets.push(
-    'PCC-2 Part 2 (Composite): engineered wrap (local or full wrap).',
-    'PCC-2 Part 3 (Welded): Type B sleeve or weld build-up (requires WPS/PQR, NDE).',
-    'PCC-2 Part 4 (Mechanical): clamp/encapsulation where hot work is restricted.',
-    'After repair: surface prep and coating/CP improvement to slow future corrosion.'
-  );
-  return out;
-}
-
-function recalc(){
-  const nps = npsSel.value;
-  const sch = schSel.value;
-  const dim = lookupDim(nps, sch);
-  if (!dim) return;
-
-  const D = dim.od_mm;
-
-  let t_nom = null;
-  if (ovrChk.checked){
-    const tOvr = parseFloat(document.getElementById('overrideTnom').value);
-    t_nom = (isFinite(tOvr) && tOvr>0) ? tOvr : null;
-  } else {
-    t_nom = dim.t_nom_mm;
-  }
-
-  const mode = document.querySelector('#modeSeg .active').dataset.mode;
-  const depth = parseFloat(document.getElementById('depth')?.value);
-  let t_meas = parseFloat(document.getElementById('tmeas')?.value);
-  if (mode==='depth'){
-    const d = isNaN(depth) ? 0 : depth;
-    t_meas = Math.max(0, (t_nom||0) - d);
-  }
-
-  const c = parseFloat(document.getElementById('ca').value);
-  const Pbar = parseFloat(document.getElementById('Pbar').value);
-  const S = parseFloat(document.getElementById('S').value);
-  const E = parseFloat(document.getElementById('E').value);
-  const W = parseFloat(document.getElementById('W').value);
-  const Y = parseFloat(document.getElementById('Y').value);
-  const CR = parseFloat(document.getElementById('CR').value);
-
-  const tag = (document.getElementById('metaTag').value || '—');
-  const loc = (document.getElementById('metaLoc').value || '—');
-  const pid = (document.getElementById('metaPid').value || '—');
-  hdrMeta.textContent = `Tag: ${tag} • Location: ${loc} • P&ID: ${pid}`;
-
-  document.getElementById('tagShow').textContent = tag;
-  document.getElementById('locShow').textContent = loc;
-  document.getElementById('pidShow').textContent = pid;
-  document.getElementById('npsShow').textContent = nps;
-  document.getElementById('schShow').textContent = (sch==='80' && ['1/2"','3/4"','1"','1-1/4"','1-1/2"'].includes(nps)) ? 'XS (Sch 80)' : 'STD (Sch 40)';
-  document.getElementById('tnomShow').textContent = (t_nom && isFinite(t_nom)) ? `${fmt(t_nom,2)} mm` : '—';
-  document.getElementById('tmeasShow').textContent = isFinite(t_meas) ? `${fmt(t_meas,2)} mm` : '—';
-  document.getElementById('depthShow').textContent = isNaN(depth) ? '-' : `${fmt(depth,2)} mm`;
-  document.getElementById('caShow').textContent = `${fmt(c,2)} mm`;
-  document.getElementById('pbarShow2').textContent = `${fmt(Pbar,1)} bar`;
-  document.getElementById('sShow').textContent = `${fmt(S,0)} MPa`;
-
-  const name = (document.getElementById('enteredBy').value || '—');
-  const stamp = new Date().toLocaleString();
-  document.getElementById('auditShow').textContent = `${name} @ ${stamp}`;
-
-  if (!t_nom || !isFinite(t_nom) || t_nom<=0){
-    document.getElementById('statusBox').innerHTML = '<span class="status s-mon">Please provide nominal thickness (override) to compute.</span>';
-    clearVisuals();
-    return;
-  }
-
-  let r;
-  try{ r = calcB313({D, t_meas, c, Pbar, S, E, W, Y, t_nom}); }catch(e){ console.error(e); return; }
-
-  document.getElementById('tnom').textContent   = `${fmt(t_nom,2)} mm`;
-  document.getElementById('treq').textContent   = `${fmt(r.t_req_noCA,3)} mm`;
-  document.getElementById('treqca').textContent = `${fmt(r.t_req_total,3)} mm`;
-  document.getElementById('margin').textContent = `${fmt(r.margin,3)} mm`;
-  document.getElementById('pct').textContent    = `${fmt(r.pctRemainNom,0)} %`;
-  document.getElementById('mawpWith').textContent = (r.mawp_with!=null) ? `${fmt(r.mawp_with,2)} bar` : '—';
-  document.getElementById('mawpNoCA').textContent = (r.mawp_no!=null) ? `${fmt(r.mawp_no,2)} bar` : '—';
-  document.getElementById('pbarShow').textContent = `${fmt(Pbar,1)} bar`;
-  document.getElementById('crShow').textContent   = isFinite(CR) ? `${fmt(CR,2)} mm/year` : '-';
-
-  drawBars({t_nom, t_meas, t_req_noCA: r.t_req_noCA, c});
-
-  document.getElementById('statusBox').innerHTML = statusBadge(r.status);
-  const warnBox = document.getElementById('warnBox');
-  warnBox.innerHTML = '';
-  if (r.status === 'REPAIR'){
-    warnBox.innerHTML = `<div class="callout c-bad"><b>Critical:</b> Measured thickness is below required (incl. CA). Reduce risk and plan repair.</div>`;
-  } else if (r.warns.length){
-    warnBox.innerHTML = `<div class="callout c-warn">${r.warns.map(x=>`<div>• ${x}</div>`).join('')}</div>`;
-  }
-
-  document.getElementById('notes').innerHTML = r.notes.length
-    ? ('<ul>' + r.notes.map(x=>`<li>${x}</li>`).join('') + '</ul>') : '—';
-
-  let RL = null;
-  if (!isNaN(CR) && CR > 0){
-    RL = (t_meas - r.t_req_total) / CR;
-    document.getElementById('rlife').textContent = RL >= 0 ? `${fmt(RL,2)} years` : '0 (below requirement)';
-  } else {
-    document.getElementById('rlife').textContent = '-';
-  }
-
-  const adv = advisorRules({status:r.status, t_nom, t_meas});
-  document.getElementById('advisor').textContent = adv.headline;
-  document.getElementById('advisorList').innerHTML = adv.bullets.length
-    ? '<ul>' + adv.bullets.map(x=>`<li>${x}</li>`).join('') + '</ul>' : '';
-}
-
-function clearVisuals(){
-  ['segRemain','segLoss','segReq','segCA','lblRemain','lblLoss','lblReq','lblCA'].forEach(id=>{
-    const el = document.getElementById(id);
-    if (!el) return;
-    if (el.classList.contains('seg') || el.classList.contains('bar')) el.style.width = '0%';
-    else el.style.left = '-9999px';
-  });
-  ['treq','treqca','margin','pct','pbarShow','crShow','rlife','tnom','mawpWith','mawpNoCA'].forEach(id=>{
-    const n=document.getElementById(id); if(n) n.textContent='-';
-  });
-}
-
-/* Defaults */
-function resetDefaults(){
-  fillNps();
-  npsSel.value = '4"';
-  fillSch();
-  schSel.value = '40';
-  document.getElementById('Pbar').value = 7.0;
-  document.getElementById('tmeas').value = 6.0;
+/* Reset default setup */
+function resetDefaults() {
+  initSelections();
+  
+  // Set default values
+  npsSelect.value = '4"';
+  updateSchedules();
+  schSelect.value = '40';
+  
   document.getElementById('depth').value = '';
-  document.getElementById('ca').value = 1.5;
-  document.getElementById('S').value = 138;
-  document.getElementById('E').value = 1.0;
-  document.getElementById('W').value = 1.0;
-  document.getElementById('Y').value = 0.4;
+  document.getElementById('tmeas').value = '6.02'; // standard NPS 4 Sch 40 thickness
+  document.getElementById('ca').value = '1.5';
+  document.getElementById('P').value = '7.0';
+  pUnitSelect.value = 'bar';
+  materialSelect.value = 'A106B';
+  stressInput.value = '137.9';
+  stressInput.disabled = true;
+  document.getElementById('E').value = '1.0';
+  document.getElementById('W').value = '1.0';
+  document.getElementById('Y').value = '0.4';
   document.getElementById('CR').value = '';
   document.getElementById('overrideTnom').value = '';
   document.getElementById('ovrRow').style.display = 'none';
   ovrChk.checked = false;
+  document.getElementById('enteredBy').value = '';
+  document.getElementById('remarks').value = '';
 
-  // Segmented default
-  [...modeSeg.children].forEach(b=>b.classList.remove('active'));
+  // Reset tab selection
+  [...modeSeg.children].forEach(btn => btn.classList.remove('active'));
   modeSeg.querySelector('button[data-mode="depth"]').classList.add('active');
-  document.getElementById('grpDepth').style.display = '';
+  document.getElementById('grpDepth').style.display = 'block';
   document.getElementById('grpTmeas').style.display = 'none';
 
-  hdrMeta.textContent = 'Tag: — • Location: — • P&ID: —';
+  // Apply print units defaults
+  document.getElementById('printPGroup').setAttribute('data-unit', 'bar');
 
   recalc();
 }
-['tmeas','depth','ca','Pbar','S','E','W','Y','CR','overrideTnom','enteredBy','remarks','metaTag','metaLoc','metaPid'].forEach(id=>{
-  const el = document.getElementById(id);
-  if (el) el.addEventListener('input', recalc);
+
+/* Initial start */
+document.addEventListener('DOMContentLoaded', () => {
+  // Load local storage theme
+  const savedTheme = localStorage.getItem('theme');
+  if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.body.classList.add('dark');
+  }
+  updateThemeIcon();
+
+  resetDefaults();
+  
+  // Attach input event listeners for live recalculations
+  ['depth', 'tmeas', 'ca', 'P', 'S', 'E', 'W', 'Y', 'CR', 'overrideTnom', 'metaTag', 'metaLoc', 'metaPid', 'enteredBy', 'remarks']
+    .forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', recalc);
+    });
 });
-resetDefaults();
 </script>
 </body>
 </html>
