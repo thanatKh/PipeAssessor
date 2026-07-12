@@ -8,7 +8,49 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  
+
+  <!-- Basecoat CSS: shadcn/ui component classes (buttons, cards, inputs, selects) via CDN, no build step -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/basecoat-css@1.0.1/dist/basecoat.cdn.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/basecoat-css@1.0.1/dist/js/basecoat.min.js" defer></script>
+
+  <!-- jsPDF + AutoTable: client-side engineering report generation (versions pinned; do not bump without retesting) -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js" defer></script>
+
+  <!-- Brand theme override: map Basecoat's shadcn variable names onto this app's existing palette -->
+  <style>
+    :root {
+      --background: #f8fafc;
+      --foreground: #0f172a;
+      --card: #ffffff;
+      --card-foreground: #0f172a;
+      --border: #e2e8f0;
+      --input: #cbd5e1;
+      --ring: #14b8a6;
+      --primary: #156B95;
+      --primary-foreground: #ffffff;
+      --muted-foreground: #475569;
+      --destructive: #dc2626;
+      --destructive-foreground: #ffffff;
+      --radius: 0.5rem;
+    }
+
+    html.dark {
+      --background: #0f172a;
+      --foreground: #f8fafc;
+      --card: #1e293b;
+      --card-foreground: #f8fafc;
+      --border: #334155;
+      --input: #475569;
+      --ring: #2dd4bf;
+      --primary: #0284c7;
+      --primary-foreground: #ffffff;
+      --muted-foreground: #94a3b8;
+      --destructive: #f43f5e;
+      --destructive-foreground: #ffffff;
+    }
+  </style>
+
   <style>
     :root {
       /* Theme variables - Light Mode Default */
@@ -19,7 +61,7 @@
       
       --card-bg: #ffffff;
       --card-border: #e2e8f0;
-      --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+      --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
       
       --input-bg: #ffffff;
       --input-border: #cbd5e1;
@@ -66,7 +108,7 @@
       
       --card-bg: #1e293b;
       --card-border: #334155;
-      --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+      --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
       
       --input-bg: #1e293b;
       --input-border: #475569;
@@ -137,7 +179,25 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 20px;
+      padding: 16px 20px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    @media (max-width: 480px) {
+      header .wrap {
+        justify-content: center;
+      }
+
+      .header-info {
+        flex: 1 0 100%;
+        text-align: center;
+      }
+
+      .header-actions {
+        flex: 1 0 100%;
+        justify-content: center;
+      }
     }
 
     .header-info h1 {
@@ -160,6 +220,49 @@
       gap: 12px;
     }
 
+    .hdr-btn-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .hdr-btn {
+      flex: none;
+      padding: 8px 14px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .hdr-btn[data-variant="outline"] {
+      background: transparent;
+      border-color: var(--button-ghost-border);
+      color: var(--header-text);
+    }
+
+    .hdr-btn[data-variant="outline"]:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    @media (max-width: 700px) {
+      .hdr-logo {
+        display: none;
+      }
+
+      .hdr-btn {
+        padding: 8px 10px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .hdr-btn-group {
+        gap: 6px;
+      }
+
+      .hdr-btn {
+        padding: 7px 8px;
+        font-size: 11px;
+      }
+    }
+
     .hdr-logo {
       height: 40px;
       width: auto;
@@ -170,8 +273,8 @@
     .dashboard {
       display: grid;
       grid-template-columns: 340px 1fr;
-      gap: 20px;
-      margin-top: 20px;
+      gap: 12px;
+      margin-top: 12px;
     }
 
     @media (max-width: 950px) {
@@ -183,20 +286,110 @@
     .column {
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 12px;
     }
 
+    /* ============ Mobile tabbed layout (<768px): Inputs / Results panes ============ */
+    #mStatusStrip, #mTabBar {
+      display: none;
+    }
+
+    @media (max-width: 767px) {
+      body[data-mtab="inputs"] #colResults { display: none; }
+      body[data-mtab="results"] #colInputs { display: none; }
+
+      #mTabBar {
+        display: flex;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 90;
+        background: var(--card-bg);
+        border-top: 1px solid var(--card-border);
+        padding-bottom: env(safe-area-inset-bottom);
+      }
+
+      #mTabBar button {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        min-height: 56px;
+        border: 0;
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      #mTabBar button[aria-selected="true"] {
+        color: var(--button-primary);
+        box-shadow: inset 0 2px 0 var(--button-primary);
+      }
+
+      #mStatusStrip {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: calc(56px + env(safe-area-inset-bottom));
+        z-index: 90;
+        padding: 6px 14px;
+        font-size: 12px;
+        font-weight: 700;
+        background: var(--card-bg);
+        border-top: 1px solid var(--card-border);
+      }
+
+      #mStatusStrip .m-strip-label {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.7px;
+        color: var(--text-muted);
+      }
+
+      #mStatusStrip #mErfVal {
+        margin-left: auto;
+        font-family: 'JetBrains Mono', monospace;
+        font-variant-numeric: tabular-nums;
+      }
+
+      #mStatusStrip.s-ok { background: var(--ok-bg); color: var(--ok-text); border-color: var(--ok-border); }
+      #mStatusStrip.s-mon { background: var(--warn-bg); color: var(--warn-text); border-color: var(--warn-border); }
+      #mStatusStrip.s-rep { background: var(--danger-bg); color: var(--danger-text); border-color: var(--danger-border); }
+
+      /* room for strip + tab bar */
+      body {
+        padding-bottom: calc(100px + env(safe-area-inset-bottom));
+      }
+
+      /* comfortable touch targets */
+      input, select {
+        min-height: 44px;
+      }
+
+      .hdr-btn {
+        min-height: 40px;
+      }
+    }
+
+    /* Basecoat's .card ships its own 24px padding + 24px header/body gap — this app manages
+       card spacing via .card-header / .card-body instead, so zero those out. */
     .card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 16px;
-      box-shadow: var(--card-shadow);
-      overflow: hidden;
+      padding: 0;
+      gap: 0;
     }
 
     .card-header {
-      padding: 16px 20px;
-      background: rgba(0, 0, 0, 0.02);
+      padding: 8px 12px;
+      background: rgba(0, 0, 0, 0.03);
       border-bottom: 1px solid var(--card-border);
       display: flex;
       align-items: center;
@@ -204,26 +397,68 @@
     }
 
     .card-title {
-      font-size: 14px;
+      font-size: 12px;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.8px;
       color: var(--text-color);
       margin: 0;
     }
 
+    /* Collapsible left-column cards (native <details>/<summary>) */
+    .collapsible-card > summary.card-header {
+      cursor: pointer;
+      list-style: none;
+      user-select: none;
+    }
+
+    .collapsible-card > summary.card-header::-webkit-details-marker {
+      display: none;
+    }
+
+    .collapsible-card > summary.card-header::after {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid var(--text-muted);
+      border-bottom: 2px solid var(--text-muted);
+      transform: rotate(45deg);
+      transition: transform 0.2s ease;
+      flex-shrink: 0;
+      margin-left: 12px;
+    }
+
+    .collapsible-card:not([open]) > summary.card-header::after {
+      transform: rotate(-45deg);
+    }
+
+    .collapsible-card:not([open]) > summary.card-header {
+      border-bottom: none;
+    }
+
     .card-body {
-      padding: 20px;
+      padding: 12px 14px;
     }
 
     .form-group {
-      margin-bottom: 16px;
+      margin-bottom: 10px;
+    }
+
+    /* Basecoat's .field already supplies its own internal label/input gap and padding;
+       zero those out here to avoid stacking with the legacy label margin and card padding above. */
+    .field.form-group {
+      padding: 0;
+      gap: 6px;
+    }
+
+    .field.form-group label {
+      margin-bottom: 0;
     }
 
     .form-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 16px;
+      gap: 10px;
     }
 
     @media (max-width: 500px) {
@@ -234,12 +469,12 @@
 
     label {
       display: block;
-      font-size: 11px;
-      font-weight: 700;
+      font-size: 10px;
+      font-weight: 600;
       color: var(--text-muted);
       margin-bottom: 6px;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.7px;
     }
 
     .input-wrapper {
@@ -248,29 +483,51 @@
       position: relative;
     }
 
+    .input-wrapper input {
+      padding-right: 58px;
+    }
+
     .input-wrapper select.unit-select {
       position: absolute;
-      right: 4px;
+      right: 6px;
       width: auto;
-      border: none;
-      background: transparent;
-      padding: 0 8px;
-      font-weight: 600;
-      color: var(--text-muted);
+      border: 1px solid var(--input-border);
+      background: var(--bg-color);
+      border-radius: 7px;
+      padding: 5px 22px 5px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-color);
       cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%), linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+      background-position: calc(100% - 12px) center, calc(100% - 8px) center;
+      background-size: 4px 4px, 4px 4px;
+      background-repeat: no-repeat;
+    }
+
+    .input-wrapper select.unit-select:hover {
+      background-color: var(--button-ghost-hover);
     }
 
     input, select {
       width: 100%;
-      padding: 10px 14px;
+      padding: 7px 12px;
       border: 1px solid var(--input-border);
-      border-radius: 10px;
+      border-radius: 6px;
       background: var(--input-bg);
       color: var(--text-color);
-      font-size: 14px;
+      font-size: 13px;
       font-family: inherit;
       font-weight: 500;
       outline: none;
+    }
+
+    /* Engineering data entry: numeric values in monospace with aligned digits */
+    input[type="number"] {
+      font-family: 'JetBrains Mono', monospace;
+      font-variant-numeric: tabular-nums;
     }
 
     input:focus, select:focus {
@@ -279,7 +536,9 @@
     }
 
     /* Invalid Input Warning Styles */
-    .input-invalid {
+    .input-invalid,
+    .input[aria-invalid="true"],
+    .select[aria-invalid="true"] {
       border-color: var(--danger-color) !important;
       box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15) !important;
     }
@@ -297,6 +556,21 @@
       color: var(--text-light);
       margin-top: 4px;
       line-height: 1.4;
+    }
+
+    /* Report-relevant caveats: same look as .hint, but must survive print (unlike input hints) */
+    .report-caveat {
+      font-size: 11px;
+      color: var(--text-light);
+      line-height: 1.4;
+      font-style: italic;
+    }
+
+    @media print {
+      .report-caveat {
+        color: #000000 !important;
+        font-size: 9.5px !important;
+      }
     }
 
     /* Form Sections & Modern Switch Redesign */
@@ -383,16 +657,16 @@
     .segmented {
       display: inline-flex;
       border: 1px solid var(--input-border);
-      border-radius: 10px;
+      border-radius: 6px;
       overflow: hidden;
       background: var(--input-bg);
       width: 100%;
-      margin-bottom: 16px;
+      margin-bottom: 10px;
     }
 
     .segmented button {
       flex: 1;
-      padding: 10px 12px;
+      padding: 8px 12px;
       border: 0;
       background: transparent;
       color: var(--text-muted);
@@ -423,43 +697,10 @@
       width: 100%;
     }
 
-    .btn {
-      flex: 1;
-      cursor: pointer;
-      border-radius: 10px;
-      padding: 12px 16px;
-      font-size: 13px;
-      font-weight: 700;
-      border: 1px solid transparent;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
-
-    .btn-primary {
-      background: var(--button-primary);
-      color: #ffffff;
-    }
-
-    .btn-primary:hover {
-      background: var(--button-primary-hover);
-    }
-
-    .btn-ghost {
-      background: var(--button-ghost);
-      border-color: var(--button-ghost-border);
-      color: var(--text-color);
-    }
-
-    .btn-ghost:hover {
-      background: var(--button-ghost-hover);
-    }
-
     /* Status Banner */
     .status-banner {
-      border-radius: 12px;
-      padding: 16px 20px;
+      border-radius: 8px;
+      padding: 10px 14px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -498,13 +739,167 @@
     }
 
     .status-desc {
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 500;
-      margin-top: 12px;
+      margin-top: 8px;
       line-height: 1.4;
-      padding: 10px 14px;
-      border-radius: 8px;
+      padding: 8px 12px;
+      border-radius: 6px;
       background: rgba(0, 0, 0, 0.03);
+    }
+
+    /* Code compliance verdicts */
+    .compliance-box {
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      margin-bottom: 14px;
+      overflow: hidden;
+    }
+
+    .compliance-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .compliance-row:last-of-type {
+      border-bottom: none;
+    }
+
+    .compliance-name {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .compliance-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 10px;
+      border-radius: 4px;
+      letter-spacing: 1px;
+    }
+
+    .compliance-badge.pass {
+      background: var(--ok-bg);
+      color: var(--ok-text);
+      border: 1px solid var(--ok-border);
+    }
+
+    .compliance-badge.fail {
+      background: var(--danger-bg);
+      color: var(--danger-text);
+      border: 1px solid var(--danger-border);
+    }
+
+    .compliance-ffs-note {
+      padding: 8px 10px;
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--warn-text);
+      background: var(--warn-bg);
+      border-top: 1px solid var(--warn-border);
+    }
+
+    /* Scope & Limitations disclaimer */
+    .scope-notice {
+      font-size: 10.5px;
+      line-height: 1.5;
+      color: var(--text-muted);
+      background: var(--warn-bg);
+      border: 1px solid var(--warn-border);
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+
+    .scope-notice strong {
+      color: var(--warn-text);
+    }
+
+    /* ============ PDF report preview dialog ============ */
+    #pdfPreviewDialog {
+      width: min(920px, 94vw);
+      height: min(88vh, 1100px);
+      padding: 0;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      background: var(--card-bg);
+      color: var(--text-color);
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #pdfPreviewDialog[open] {
+      display: flex;
+    }
+
+    #pdfPreviewDialog::backdrop {
+      background: rgba(15, 23, 42, 0.6);
+    }
+
+    .pdf-dialog-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--card-border);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .pdf-dialog-head span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #pdfFrame {
+      flex: 1;
+      width: 100%;
+      border: 0;
+      background: #525659; /* matches Chrome's PDF viewer chrome */
+    }
+
+    #pdfMobileFallback {
+      flex: 1;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 24px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .pdf-dialog-foot {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 8px 12px;
+      border-top: 1px solid var(--card-border);
+    }
+
+    @media print {
+      .scope-notice {
+        background: #f1f5f9 !important;
+        border: 1px solid #cbd5e1 !important;
+        color: #000000 !important;
+        font-size: 9.5px !important;
+        page-break-inside: avoid;
+      }
+
+      .scope-notice strong {
+        color: #000000 !important;
+      }
     }
 
     /* Visual Wrapper and Vertical Gauge Styles */
@@ -734,6 +1129,10 @@
       background: #ffffff;
     }
 
+    .pressure-gauge-pointer.pinned {
+      background: repeating-linear-gradient(45deg, #000 0 3px, #7f1d1d 3px 6px);
+    }
+
     .pointer-tip {
       position: absolute;
       top: -6px;
@@ -771,10 +1170,26 @@
     }
 
     /* Value Grid */
+    .res-section-title {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--button-primary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin: 14px 0 6px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .res-section-title:first-child {
+      margin-top: 0;
+    }
+
     .res-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
+      column-gap: 24px;
+      row-gap: 0;
     }
 
     @media (min-width: 1100px) {
@@ -792,27 +1207,42 @@
     .res-item {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      padding: 10px 12px;
-      border-radius: 8px;
-      border-bottom: 1px dashed var(--card-border);
+      align-items: baseline;
+      gap: 12px;
+      padding: 5px 8px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .res-item:nth-child(even) {
+      background: rgba(0, 0, 0, 0.015);
+    }
+
+    body.dark .res-item:nth-child(even) {
+      background: rgba(255, 255, 255, 0.02);
     }
 
     .res-item:hover {
-      background: rgba(0, 0, 0, 0.02);
+      background: rgba(0, 0, 0, 0.04);
+    }
+
+    body.dark .res-item:hover {
+      background: rgba(255, 255, 255, 0.05);
     }
 
     .res-name {
-      font-size: 12px;
-      font-weight: 600;
+      font-size: 11px;
+      font-weight: 500;
       color: var(--text-muted);
     }
 
     .res-val {
       font-family: 'JetBrains Mono', monospace;
+      font-variant-numeric: tabular-nums;
       font-size: 13px;
       font-weight: 700;
       color: var(--text-color);
+      text-align: right;
+      white-space: nowrap;
     }
 
     /* SVG Cross-section visualizer styling */
@@ -840,9 +1270,9 @@
     .theme-btn {
       background: transparent;
       border: 1px solid var(--button-ghost-border);
-      border-radius: 10px;
-      width: 38px;
-      height: 38px;
+      border-radius: 6px;
+      width: 36px;
+      height: 36px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -908,12 +1338,22 @@
         padding: 0 !important;
       }
 
-      header, .theme-btn, .btn-group, .segmented, .hint, .checkbox-label, .hdr-logo, .theme-toggle {
+      header, .theme-btn, .btn-group, .segmented, .hint, .checkbox-label, .hdr-logo, .theme-toggle,
+      #mTabBar, #mStatusStrip, #pdfPreviewDialog {
         display: none !important;
       }
 
       .dashboard {
         display: block !important;
+      }
+
+      /* Both panes always print, regardless of the active mobile tab */
+      #colInputs, #colResults {
+        display: flex !important;
+      }
+
+      .collapsible-card > summary.card-header::after {
+        display: none !important;
       }
 
       .card {
@@ -1035,9 +1475,9 @@
       background: var(--svg-bg);
       border: 1px solid var(--card-border);
       border-radius: 6px;
-      padding: 12px;
+      padding: 10px;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 13px;
+      font-size: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1217,6 +1657,11 @@
       <div class="subhead" id="hdrMeta">Tag: — • Location: — • P&ID: —</div>
     </div>
     <div class="header-actions">
+      <div class="hdr-btn-group">
+        <button class="btn hdr-btn" onclick="recalc(); switchToResultsTabIfMobile()">Calculate</button>
+        <button class="btn hdr-btn" data-variant="outline" onclick="confirmReset()">Reset</button>
+        <button class="btn hdr-btn" data-variant="outline" onclick="savePDF()">Save as PDF</button>
+      </div>
       <button class="theme-btn" id="themeToggle" title="Toggle Dark/Light Mode">
         <!-- Default Moon icon -->
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -1225,6 +1670,23 @@
     </div>
   </div>
 </header>
+
+<!-- Mobile-only: compact status strip + bottom tab bar (hidden >=768px and in print) -->
+<div id="mStatusStrip" aria-live="polite">
+  <span class="m-strip-label">Status</span>
+  <span id="mStatusVal">—</span>
+  <span id="mErfVal">ERF —</span>
+</div>
+<nav id="mTabBar" aria-label="Mobile sections">
+  <button type="button" data-tab="inputs" aria-selected="true">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+    Inputs
+  </button>
+  <button type="button" data-tab="results" aria-selected="false">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    Results
+  </button>
+</nav>
 
 <div class="wrap">
 
@@ -1242,38 +1704,38 @@
   </div>
 
   <div class="dashboard">
-  
+
     <!-- Left Column: Inputs & Config -->
-    <div class="column">
+    <div class="column" id="colInputs">
       
       <!-- Metadata -->
-      <div class="card">
-        <div class="card-header">
+      <details class="card collapsible-card" open>
+        <summary class="card-header">
           <h2 class="card-title">1. Header Metadata</h2>
-        </div>
-        <div class="card-body">
-          <div class="form-group">
+        </summary>
+        <section class="card-body">
+          <div role="group" class="field form-group">
             <label for="metaTag">Pipe Tag / Line Ident.</label>
-            <input id="metaTag" placeholder='e.g., 14"-GAS-101-A' type="text">
+            <input id="metaTag" class="input" placeholder='e.g., 14"-GAS-101-A' type="text">
           </div>
-          <div class="form-group">
+          <div role="group" class="field form-group">
             <label for="metaLoc">Location / System</label>
-            <input id="metaLoc" placeholder="e.g., KBY Terminal" type="text">
+            <input id="metaLoc" class="input" placeholder="e.g., KBY Terminal" type="text">
           </div>
-          <div class="form-group">
+          <div role="group" class="field form-group">
             <label for="metaPid">P&ID Drawing No.</label>
-            <input id="metaPid" placeholder="e.g., KBY-PID-003" type="text">
+            <input id="metaPid" class="input" placeholder="e.g., KBY-PID-003" type="text">
           </div>
-        </div>
-      </div>
+        </section>
+      </details>
 
       <!-- Geometry -->
-      <div class="card">
-        <div class="card-header">
+      <details class="card collapsible-card" open>
+        <summary class="card-header">
           <h2 class="card-title">2. Pipe Geometry</h2>
-        </div>
-        <div class="card-body">
-          
+        </summary>
+        <section class="card-body">
+
           <!-- Section 1: Pipe Specification -->
           <div class="form-section">
             <div class="form-section-title">
@@ -1281,14 +1743,14 @@
               Pipe Specification
             </div>
             
-            <div class="form-group">
+            <div role="group" class="field form-group">
               <label for="nps">Nominal Pipe Size (NPS)</label>
-              <select id="nps"></select>
+              <select id="nps" class="select"></select>
             </div>
-            
-            <div class="form-group">
+
+            <div role="group" class="field form-group">
               <label for="sch">Schedule</label>
-              <select id="sch"></select>
+              <select id="sch" class="select"></select>
             </div>
 
             <div class="switch-row">
@@ -1300,11 +1762,27 @@
             </div>
 
             <!-- Nominal Override Row -->
-            <div class="form-group" id="ovrRow" style="display:none; margin-top: 8px;">
+            <div role="group" class="field form-group" id="ovrRow" style="display:none; margin-top: 8px;">
               <label for="overrideTnom">Override Nominal Thickness (mm)</label>
-              <input id="overrideTnom" type="number" step="0.01" placeholder="Enter custom t_nom value">
+              <input id="overrideTnom" class="input" type="number" step="0.01" placeholder="Enter custom t_nom value">
               <div class="validation-alert" id="errOvr">Value must be positive.</div>
               <div class="hint">Used when drawing nominal details differ from standard schedules.</div>
+            </div>
+
+            <div class="switch-row">
+              <label class="switch-container">
+                <input id="ovrOdChk" type="checkbox">
+                <span class="switch-slider"></span>
+                <span>Override Outside Diameter (D)</span>
+              </label>
+            </div>
+
+            <!-- OD Override Row -->
+            <div role="group" class="field form-group" id="ovrOdRow" style="display:none; margin-top: 8px;">
+              <label for="overrideOd">Override Outside Diameter (mm)</label>
+              <input id="overrideOd" class="input" type="number" step="0.01" placeholder="Enter as-found/actual OD">
+              <div class="validation-alert" id="errOvrOd">Value must be positive.</div>
+              <div class="hint">Used for non-standard, repaired, or as-found spools whose measured OD differs from the B36.10M table value.</div>
             </div>
           </div>
 
@@ -1320,48 +1798,48 @@
               <button data-mode="tmeas">Measured Thickness Mode</button>
             </div>
 
-            <div class="form-group">
+            <div role="group" class="field form-group">
               <label for="corrType">Corrosion Type</label>
-              <select id="corrType">
+              <select id="corrType" class="select">
                 <option value="internal">Internal Wall Loss</option>
                 <option value="external">External Wall Loss</option>
               </select>
             </div>
 
-            <div class="form-group">
+            <div role="group" class="field form-group">
               <label for="ca">Corrosion Allowance, CA (mm)</label>
-              <input id="ca" type="number" step="0.1" value="1.5">
+              <input id="ca" class="input" type="number" step="0.1" value="1.5">
               <div class="validation-alert" id="errCa">CA cannot exceed remaining measured wall thickness.</div>
               <div class="hint">Design corrosion allowance.</div>
             </div>
 
             <!-- Wall Loss Input Group -->
-            <div class="form-group" id="grpDepth">
+            <div role="group" class="field form-group" id="grpDepth">
               <label for="depth">Wall Loss Depth (mm)</label>
-              <input id="depth" type="number" step="0.01" placeholder="e.g., 1.2">
+              <input id="depth" class="input" type="number" step="0.01" placeholder="e.g., 1.2">
               <div class="validation-alert" id="errDepth">Wall loss cannot exceed nominal wall thickness.</div>
               <div class="hint">Measured wall loss relative to nominal wall.</div>
             </div>
 
             <!-- Measured Thickness Input Group -->
-            <div class="form-group" id="grpTmeas" style="display:none">
+            <div role="group" class="field form-group" id="grpTmeas" style="display:none">
               <label for="tmeas">Measured Minimum Thickness (mm)</label>
-              <input id="tmeas" type="number" step="0.01" value="6.0">
+              <input id="tmeas" class="input" type="number" step="0.01" value="6.0">
               <div class="validation-alert" id="errTmeas">Measured thickness cannot exceed nominal wall.</div>
               <div class="hint">Remaining minimum thickness measured via UT.</div>
             </div>
           </div>
 
-        </div>
-      </div>
+        </section>
+      </details>
 
       <!-- Design Conditions -->
-      <div class="card">
-        <div class="card-header">
+      <details class="card collapsible-card" open>
+        <summary class="card-header">
           <h2 class="card-title">3. Design Parameters (ASME B31.3)</h2>
-        </div>
-        <div class="card-body">
-          
+        </summary>
+        <section class="card-body">
+
           <!-- Section 1: Material & Process -->
           <div class="form-section">
             <div class="form-section-title">
@@ -1369,23 +1847,29 @@
               Material & Process
             </div>
 
-            <div class="form-group">
+            <div role="group" class="field form-group">
               <label for="material">Piping Material</label>
-              <select id="material"></select>
+              <select id="material" class="select"></select>
             </div>
 
-            <div class="form-group" data-unit="MPa" id="printSGroup">
+            <div role="group" class="field form-group" data-unit="&deg;C" id="printTempGroup">
+              <label for="designTemp">Design Temperature (&deg;C)</label>
+              <input id="designTemp" class="input" type="number" step="1" placeholder="e.g., 65">
+              <div class="hint">S and Y below must correspond to this temperature (ASME B31.3 Table A-1 / Table 304.1.1) &mdash; the auto-filled S is a room-temperature reference value only. Re-check both at the actual operating temperature.</div>
+            </div>
+
+            <div role="group" class="field form-group" data-unit="MPa" id="printSGroup">
               <label for="S">Allowable Stress, S (MPa)</label>
-              <input id="S" type="number" step="0.1" value="137.9">
+              <input id="S" class="input" type="number" step="0.1" value="137.9">
               <div class="validation-alert" id="errS">Stress must be positive.</div>
-              <div class="hint">Allowable stress from Table A-1.</div>
+              <div class="hint">Allowable stress from Table A-1, at the design temperature entered above.</div>
             </div>
 
-            <div class="form-group" data-unit="bar" id="printPGroup">
+            <div role="group" class="field form-group" data-unit="bar" id="printPGroup">
               <label for="P">Design Pressure</label>
               <div class="input-wrapper">
-                <input id="P" type="number" step="0.1" value="7.0">
-                <select id="pUnit" class="unit-select">
+                <input id="P" class="input" type="number" step="0.1" value="7.0">
+                <select id="pUnit" class="select unit-select">
                   <option value="bar">bar</option>
                   <option value="psi">psi</option>
                 </select>
@@ -1393,9 +1877,9 @@
               <div class="validation-alert" id="errP">Pressure must be positive.</div>
             </div>
 
-            <div class="form-group" data-unit="mm/yr">
+            <div role="group" class="field form-group" data-unit="mm/yr">
               <label for="CR">Corrosion Rate (mm/year) - Opt.</label>
-              <input id="CR" type="number" step="0.01" placeholder="e.g., 0.15">
+              <input id="CR" class="input" type="number" step="0.01" placeholder="e.g., 0.15">
               <div class="hint">Used to compute remaining life.</div>
             </div>
           </div>
@@ -1407,22 +1891,22 @@
               ASME Design Factors
             </div>
 
-            <div class="form-group">
+            <div role="group" class="field form-group">
               <label for="E">Longitudinal Joint Factor, E</label>
-              <input id="E" type="number" step="0.01" value="1.0">
-              <div class="hint">Seamless/ERW typical default is 1.0.</div>
+              <input id="E" class="input" type="number" step="0.01" value="1.0">
+              <div class="hint">Per B31.3 Table A-1B / Table 302.3.4, by seam type: Seamless = 1.0; ERW = 0.85; Furnace butt-weld = 0.60. Confirm against the actual pipe spec &mdash; do not assume 1.0.</div>
             </div>
 
-            <div class="form-group">
+            <div role="group" class="field form-group">
               <label for="W">Weld Strength Red. Factor, W</label>
-              <input id="W" type="number" step="0.01" value="1.0">
-              <div class="hint">Ambient temp defaults to 1.0.</div>
+              <input id="W" class="input" type="number" step="0.01" value="1.0">
+              <div class="hint">Per B31.3 Table 302.3.5(e), W = 1.0 unless the design temperature exceeds the table's threshold for welded construction (e.g., above ~510&deg;C for CS) &mdash; check against design temperature above.</div>
             </div>
 
-            <div class="form-group">
+            <div role="group" class="field form-group">
               <label for="Y">ASME B31.3 Coefficient, Y</label>
-              <input id="Y" type="number" step="0.05" value="0.4">
-              <div class="hint">Standard geometry factor is 0.4.</div>
+              <input id="Y" class="input" type="number" step="0.05" value="0.4">
+              <div class="hint">Per B31.3 Table 304.1.1, Y depends on material and design temperature (e.g., ferritic/austenitic steel below 482&deg;C: Y = 0.4; increases at higher temperatures). Verify against design temperature above &mdash; do not leave at the default for elevated-temperature service.</div>
             </div>
           </div>
 
@@ -1433,50 +1917,45 @@
               Assessment Details
             </div>
 
-            <div class="form-group">
+            <div role="group" class="field form-group">
               <label for="enteredBy">Assessor Name</label>
-              <input id="enteredBy" placeholder="e.g., John Doe" type="text">
+              <input id="enteredBy" class="input" placeholder="e.g., John Doe" type="text">
             </div>
 
-            <div class="form-group">
+            <div role="group" class="field form-group">
               <label for="remarks">Remarks / Remarks Notes</label>
-              <input id="remarks" placeholder="Optional notes about pipe inspection" type="text">
+              <input id="remarks" class="input" placeholder="Optional notes about pipe inspection" type="text">
             </div>
           </div>
 
-          <div class="btn-group">
-            <button class="btn btn-primary" onclick="recalc()">Calculate</button>
-            <div class="btn-row">
-              <button class="btn btn-ghost" onclick="resetDefaults()">Reset</button>
-              <button class="btn btn-ghost" onclick="savePDF()">Save as PDF</button>
-            </div>
-          </div>
-
-        </div>
-      </div>
+        </section>
+      </details>
 
     </div>
 
     <!-- Right Column: Visualization & Results -->
-    <div class="column">
+    <div class="column" id="colResults">
       
       <!-- Status Banner -->
       <div class="card" id="statusCard">
-        <div class="card-body" style="padding: 16px;">
+        <section class="card-body" style="padding: 10px;">
           <div class="status-banner" id="statusBox">
             <div class="status-label">Integrity Status</div>
             <div class="status-value" id="statusVal">-</div>
           </div>
           <div class="status-desc" id="statusNotes">—</div>
-        </div>
+        </section>
       </div>
+
+      <!-- Scope & Limitations Notice (content rendered from SCOPE_HTML in initApp — single source shared with the PDF report) -->
+      <div class="scope-notice" id="scopeNotice"></div>
 
       <!-- Interactive SVG Pipe Diagram -->
       <div class="card">
-        <div class="card-header">
+        <header class="card-header">
           <h2 class="card-title">Pipe Wall Thickness Cross-Section</h2>
-        </div>
-        <div class="card-body">
+        </header>
+        <section class="card-body">
           <div class="visual-wrapper">
             <div class="svg-container">
               <svg id="pipeSvg" width="100%" height="270" viewBox="0 0 450 270" xmlns="http://www.w3.org/2000/svg" style="background: var(--svg-bg); border-radius: 8px;">
@@ -1585,21 +2064,38 @@
             <span style="display:flex; align-items:center; gap:4px;"><span style="border-bottom:2px solid #ef4444; width:16px;"></span> limit (t<sub>req</sub>)</span>
             <span style="display:flex; align-items:center; gap:4px;"><span style="border-bottom:2px dashed #8b5cf6; width:16px;"></span> limit (t<sub>struct</sub>)</span>
           </div>
-        </div>
+        </section>
       </div>
 
       <!-- Results Parameters Table -->
       <div class="card">
-        <div class="card-header">
+        <header class="card-header">
           <h2 class="card-title">4. Calculations Results</h2>
-        </div>
-        <div class="card-body">
-          
+        </header>
+        <section class="card-body">
+
+          <!-- Code compliance verdicts -->
+          <div class="compliance-box">
+            <div class="compliance-row">
+              <span class="compliance-name">ASME B31.3 — Pressure design (t<sub>meas</sub> &ge; t<sub>req</sub> + CA)</span>
+              <span class="compliance-badge" id="compB313">—</span>
+            </div>
+            <div class="compliance-row">
+              <span class="compliance-name">API RP 574 — Structural minimum (t<sub>meas</sub> &ge; t<sub>struct</sub>)</span>
+              <span class="compliance-badge" id="comp574">—</span>
+            </div>
+            <div class="compliance-ffs-note" id="ffsNote" style="display:none;">
+              One or more code checks did not pass. Consider a Level 1/2 fitness-for-service assessment per
+              <strong>API 579-1/ASME FFS-1</strong> or a <strong>B31G/RSTRENG</strong> remaining-strength evaluation
+              before making the repair/replace decision.
+            </div>
+          </div>
+
           <!-- ERF Safety Gauge -->
           <div class="pressure-gauge-container">
             <div class="pressure-gauge-labels">
               <span>ERF: 0.0</span>
-              <span style="font-size: 12px; font-weight: 800; color: var(--text-color);">Estimated Repair Factor (ERF): <span id="gaugeErfVal">—</span></span>
+              <span style="font-size: 12px; font-weight: 800; color: var(--text-color);">Estimated Repair Factor (ERF): <span id="gaugeErfVal">—</span><span id="gaugeErfOvershoot" style="display:none; color: var(--danger-color);"> (off scale)</span></span>
               <span>Limit: 1.0</span>
             </div>
             <div class="pressure-gauge-bar-wrapper">
@@ -1607,7 +2103,7 @@
                 <!-- Color zones: Safe (Green: 0-0.8), Warning (Yellow: 0.8-1.0), Action (Red: >1.0) -->
                 <div class="pressure-zone safe" id="zoneSafe" style="background: #10b981;"></div>
                 <div class="pressure-zone warning" id="zoneWarning" style="background: #f59e0b;"></div>
-                
+
                 <!-- Limit Marker Line at 1.0 -->
                 <div style="position: absolute; left: 66.7%; top: 0; bottom: 0; width: 2px; background: rgba(0,0,0,0.5); z-index: 5;" title="Critical Limit (1.0)"></div>
 
@@ -1624,6 +2120,7 @@
             </div>
           </div>
 
+          <div class="res-section-title">Thickness</div>
           <div class="res-grid">
             <div class="res-item">
               <span class="res-name">Nominal Wall Thickness (t<sub>nom</sub>)</span>
@@ -1649,6 +2146,10 @@
               <span class="res-name">Remaining Margin</span>
               <span class="res-val" id="resMargin">-</span>
             </div>
+          </div>
+
+          <div class="res-section-title">Pressure &amp; ERF</div>
+          <div class="res-grid">
             <div class="res-item">
               <span class="res-name">Design Pressure (P)</span>
               <span class="res-val" id="resPres">-</span>
@@ -1669,6 +2170,10 @@
               <span class="res-name">ERF (No CA)</span>
               <span class="res-val" id="resErfNo">-</span>
             </div>
+          </div>
+
+          <div class="res-section-title">Remaining Life</div>
+          <div class="res-grid">
             <div class="res-item">
               <span class="res-name">Corrosion Allowance (CA)</span>
               <span class="res-val" id="resCa">-</span>
@@ -1682,27 +2187,30 @@
               <span class="res-val" id="resLife">-</span>
             </div>
           </div>
-        </div>
+          <p class="report-caveat" id="erlCaveat" style="margin-top:10px; display:none;">
+            Assumes a single, constant, linear corrosion rate for the life of the pipe &mdash; it is not a substitute for trending multiple UT surveys over time. Per API 570 practice, the next inspection interval should not exceed half the estimated remaining life (subject to a code-defined maximum).
+          </p>
+        </section>
       </div>
 
       <!-- Repair Advisor (ASME PCC-2) -->
       <div class="card">
-        <div class="card-header">
+        <header class="card-header">
           <h2 class="card-title">5. ASME PCC-2 Repair Advisor</h2>
-        </div>
-        <div class="card-body">
+        </header>
+        <section class="card-body">
           <ul class="advisor-list" id="advisorList">
             <li>No data calculated. Provide input geometry and run calculations.</li>
           </ul>
-        </div>
+        </section>
       </div>
 
       <!-- Calculation References & Equations -->
       <div class="card">
-        <div class="card-header">
+        <header class="card-header">
           <h2 class="card-title">6. Calculation References & Equations</h2>
-        </div>
-        <div class="card-body">
+        </header>
+        <section class="card-body">
           <div class="eq-section">
             <h3 class="eq-title">ASME B31.3 Para. 304.1.2 — Required Wall Thickness (t<sub>req</sub>)</h3>
             <div class="eq-box">
@@ -1791,7 +2299,7 @@
               <li>If Corrosion Rate is zero, ERL is infinite (or not applicable).</li>
             </ul>
           </div>
-        </div>
+        </section>
       </div>
 
     </div>
@@ -1815,6 +2323,25 @@
   </div>
 
 </div>
+
+<!-- Generated PDF report preview (native dialog; ESC closes; user saves from viewer/buttons) -->
+<dialog id="pdfPreviewDialog">
+  <div class="pdf-dialog-head">
+    <span id="pdfDialogTitle">Report.pdf</span>
+    <button type="button" class="btn" data-variant="ghost" data-size="sm" onclick="document.getElementById('pdfPreviewDialog').close()" aria-label="Close preview">✕</button>
+  </div>
+  <iframe id="pdfFrame" title="PDF report preview"></iframe>
+  <div id="pdfMobileFallback" style="display:none;">
+    <p>Your report is ready. Mobile browsers can't preview PDFs inline — save or share it below.</p>
+    <button type="button" class="btn" id="pdfShareBtn">Share / Save PDF</button>
+    <button type="button" class="btn" data-variant="outline" id="pdfOpenTabBtn">Open in new tab</button>
+  </div>
+  <div class="pdf-dialog-foot">
+    <a id="pdfSaveLink" class="btn" href="#" download>Save PDF</a>
+    <button type="button" class="btn" data-variant="outline" id="pdfPrintBtn">Print</button>
+    <button type="button" class="btn" data-variant="outline" onclick="document.getElementById('pdfPreviewDialog').close()">Close</button>
+  </div>
+</dialog>
 
 <script>
 /* ================= ASME B36.10M COMPLETE PIPE DATA ================= */
@@ -2056,6 +2583,9 @@ const schSelect = document.getElementById('sch');
 const ovrChk = document.getElementById('ovrChk');
 const overrideTnom = document.getElementById('overrideTnom');
 const ovrRow = document.getElementById('ovrRow');
+const ovrOdChk = document.getElementById('ovrOdChk');
+const overrideOd = document.getElementById('overrideOd');
+const ovrOdRow = document.getElementById('ovrOdRow');
 const materialSelect = document.getElementById('material');
 const stressInput = document.getElementById('S');
 const pUnitSelect = document.getElementById('pUnit');
@@ -2079,7 +2609,12 @@ function initSelections() {
     ovrRow.style.display = ovrChk.checked ? 'block' : 'none';
     recalc();
   });
-  
+
+  ovrOdChk.addEventListener('change', () => {
+    ovrOdRow.style.display = ovrOdChk.checked ? 'block' : 'none';
+    recalc();
+  });
+
   materialSelect.addEventListener('change', () => {
     const selected = MATERIALS.find(m => m.code === materialSelect.value);
     if (selected && selected.stress !== null) {
@@ -2127,6 +2662,8 @@ function updateSchedules() {
 themeToggle.addEventListener('click', () => {
   document.body.classList.toggle('dark');
   const isDark = document.body.classList.contains('dark');
+  // Basecoat's dark-mode component styles are gated on `html.dark`, so keep <html> in sync
+  document.documentElement.classList.toggle('dark', isDark);
   localStorage.setItem('theme', isDark ? 'dark' : 'light');
   updateThemeIcon();
   recalc();
@@ -2176,14 +2713,27 @@ function runCalculations() {
   const pipe = PIPE_DATABASE[nps];
   if (!pipe) return null;
   
-  const D = pipe.od;
-  
+  // Outside Diameter (with optional as-found override)
+  let D = pipe.od;
+  let ovrOdInvalid = false;
+  if (ovrOdChk.checked) {
+    const customD = parseFloat(overrideOd.value);
+    if (!isNaN(customD) && customD > 0) {
+      D = customD;
+    } else {
+      ovrOdInvalid = true;
+    }
+  }
+
   // Nominal Wall Thickness
   let t_nom = pipe.schedules[sch].t;
+  let ovrInvalid = false;
   if (ovrChk.checked) {
     const customT = parseFloat(overrideTnom.value);
     if (!isNaN(customT) && customT > 0) {
       t_nom = customT;
+    } else {
+      ovrInvalid = true;
     }
   }
 
@@ -2217,52 +2767,70 @@ function runCalculations() {
   let hasErrors = false;
   
   // 1. Check if design parameters are valid
+  if (ovrInvalid) {
+    document.getElementById('errOvr').style.display = 'block';
+    overrideTnom.setAttribute('aria-invalid', 'true');
+    hasErrors = true;
+  } else {
+    document.getElementById('errOvr').style.display = 'none';
+    overrideTnom.removeAttribute('aria-invalid');
+  }
+
+  if (ovrOdInvalid) {
+    document.getElementById('errOvrOd').style.display = 'block';
+    overrideOd.setAttribute('aria-invalid', 'true');
+    hasErrors = true;
+  } else {
+    document.getElementById('errOvrOd').style.display = 'none';
+    overrideOd.removeAttribute('aria-invalid');
+  }
+
   if (P_input <= 0) {
     document.getElementById('errP').style.display = 'block';
-    document.getElementById('P').classList.add('input-invalid');
+    document.getElementById('P').setAttribute('aria-invalid', 'true');
     hasErrors = true;
   } else {
     document.getElementById('errP').style.display = 'none';
-    document.getElementById('P').classList.remove('input-invalid');
+    document.getElementById('P').removeAttribute('aria-invalid');
   }
 
   if (S <= 0) {
     document.getElementById('errS').style.display = 'block';
-    stressInput.classList.add('input-invalid');
+    stressInput.setAttribute('aria-invalid', 'true');
     hasErrors = true;
   } else {
     document.getElementById('errS').style.display = 'none';
-    stressInput.classList.remove('input-invalid');
+    stressInput.removeAttribute('aria-invalid');
   }
 
   // 2. Check depth limits
   if (mode === 'depth' && depth > t_nom) {
     document.getElementById('errDepth').style.display = 'block';
-    document.getElementById('depth').classList.add('input-invalid');
+    document.getElementById('depth').setAttribute('aria-invalid', 'true');
     hasErrors = true;
   } else {
     document.getElementById('errDepth').style.display = 'none';
-    if(document.getElementById('depth')) document.getElementById('depth').classList.remove('input-invalid');
+    if(document.getElementById('depth')) document.getElementById('depth').removeAttribute('aria-invalid');
   }
 
   // 3. Check measured wall thickness limits
   if (mode === 'tmeas' && t_meas > t_nom) {
     document.getElementById('errTmeas').style.display = 'block';
-    document.getElementById('tmeas').classList.add('input-invalid');
+    document.getElementById('tmeas').setAttribute('aria-invalid', 'true');
     hasErrors = true;
   } else {
     document.getElementById('errTmeas').style.display = 'none';
-    if(document.getElementById('tmeas')) document.getElementById('tmeas').classList.remove('input-invalid');
+    if(document.getElementById('tmeas')) document.getElementById('tmeas').removeAttribute('aria-invalid');
   }
 
   // 4. Check corrosion allowance
   if (ca >= t_meas) {
     document.getElementById('errCa').style.display = 'block';
-    document.getElementById('ca').classList.add('input-invalid');
+    document.getElementById('ca').setAttribute('aria-invalid', 'true');
     hasErrors = true;
   } else {
     document.getElementById('errCa').style.display = 'none';
-    document.getElementById('ca').classList.remove('input-invalid');
+    document.getElementById('ca').removeAttribute('aria-invalid');
   }
 
   if (hasErrors) {
@@ -2300,15 +2868,22 @@ function runCalculations() {
   let status = 'OK';
   let desc = 'Pipe meets allowable pressure limits with sufficient design margin.';
   
+  let structRefWarning = false;
+
   if (margin < 0) {
     status = 'REPAIR';
     desc = 'CRITICAL: Remaining wall thickness is below minimum required design limit (including Corrosion Allowance). Immediately plan repair or spool replacement.';
   } else if (t_meas < t_struct) {
     status = 'MONITOR';
     desc = `WARNING: Remaining wall thickness (${fmt(t_meas)} mm) is below API 574 minimum structural threshold (${fmt(t_struct)} mm). Pipeline is at risk of sag or collapse under structural loads.`;
+    if (isCsRef) structRefWarning = true;
   } else if (margin < 0.1 * t_req_total || pctRemainNom < 50) {
     status = 'MONITOR';
     desc = 'WARNING: Wall thickness is approaching design limits (remaining margin is less than 10% of required limit, or pipe has lost over 50% of its nominal thickness). Increase inspection frequency.';
+  }
+
+  if (structRefWarning) {
+    desc += ' NOTE: The API 574 structural minimum used above is a carbon/low-alloy steel reference table; it has not been validated for the selected material and may not be an appropriate structural floor for this pipe.';
   }
 
   // Remaining Life
@@ -2631,53 +3206,57 @@ function initDragHandle() {
 }
 
 /* ASME PCC-2 Repair Advisor */
-function updateRepairAdvisor(res) {
-  const listEl = document.getElementById('advisorList');
+/* Pure PCC-2 advisor content shared by the DOM list and the PDF report.
+   Each item: { title, body, sub: [..] } — title may be '' for untitled bullets. */
+function getAdvisorItems(res) {
   if (!res || res.hasErrors) {
-    listEl.innerHTML = `<li>No data calculated. Correct active errors and recalculate.</li>`;
-    return;
+    return [{ title: '', body: 'No data calculated. Correct active errors and recalculate.', sub: [] }];
   }
 
   if (res.status === 'OK') {
-    listEl.innerHTML = `
-      <li><strong>PCC-2 Compliance:</strong> Wall thickness is above design limit + corrosion allowance. No structural repair required.</li>
-      <li><strong>Monitoring Recommendation:</strong> Maintain standard inspection intervals and trend any nominal wall loss.</li>
-    `;
-    return;
+    return [
+      { title: 'PCC-2 Compliance:', body: 'Wall thickness is above design limit + corrosion allowance. No structural repair required.', sub: [] },
+      { title: 'Monitoring Recommendation:', body: 'Maintain standard inspection intervals and trend any nominal wall loss.', sub: [] }
+    ];
   }
 
   if (res.status === 'MONITOR') {
-    let structuralSupportBullet = '';
+    const items = [];
     if (res.t_meas < res.t_struct) {
-      structuralSupportBullet = `<li><strong>Structural Support (API 574):</strong> Remaining thickness is below the structural minimum threshold. Inspect pipe spans for sagging and verify support spacing to prevent buckling or collapse.</li>`;
+      items.push({ title: 'Structural Support (API 574):', body: 'Remaining thickness is below the structural minimum threshold. Inspect pipe spans for sagging and verify support spacing to prevent buckling or collapse.', sub: [] });
     }
-    listEl.innerHTML = `
-      ${structuralSupportBullet}
-      <li><strong>Monitoring Plan:</strong> Trend thickness using localized UT grid arrays. Verify corrosion rate ($CR$).</li>
-      <li><strong>Prevention (PCC-2 Part 5):</strong> Enhance external coating integrity or cathodic protection to mitigate local corrosion.</li>
-      <li>Plan a re-assessment prior to the next scheduled maintenance outage.</li>
-    `;
-    return;
+    items.push(
+      { title: 'Monitoring Plan:', body: 'Trend thickness using localized UT grid arrays. Verify corrosion rate ($CR$).', sub: [] },
+      { title: 'Prevention (PCC-2 Part 5):', body: 'Enhance external coating integrity or cathodic protection to mitigate local corrosion.', sub: [] },
+      { title: '', body: 'Plan a re-assessment prior to the next scheduled maintenance outage.', sub: [] }
+    );
+    return items;
   }
 
   // REPAIR Status Recommendations
+  const items = [];
   const pctLoss = (1 - (res.t_meas / res.t_nom)) * 100;
-  let replacementBullet = '';
   if (pctLoss > 80) {
-    replacementBullet = `<li><strong>CRITICAL (PCC-2 Part 3):</strong> Metal loss exceeds 80% of nominal wall. Full spool replacement is highly recommended.</li>`;
+    items.push({ title: 'CRITICAL (PCC-2 Part 3):', body: 'Metal loss exceeds 80% of nominal wall. Full spool replacement is highly recommended.', sub: [] });
   }
+  items.push(
+    { title: 'Composite Repair (PCC-2 Part 2):', body: 'Engineered non-metallic wraps (e.g., carbon fiber/epoxy wraps) can be applied for non-leaking defects to restore pressure containment.', sub: [] },
+    { title: 'Welded Repair (PCC-2 Part 3):', body: '', sub: [
+      'Type B full-encirclement split welded sleeve designed for full pressure rating.',
+      'Weld metal overlay/build-up (requires qualified WPS/PQR, preheat, and post-weld NDE).'
+    ] },
+    { title: 'Mechanical Repair (PCC-2 Part 4):', body: 'Engineered mechanical clamp or leak containment encapsulation box (preferred if hot work or welding is restricted).', sub: [] }
+  );
+  return items;
+}
 
-  listEl.innerHTML = `
-    ${replacementBullet}
-    <li><strong>Composite Repair (PCC-2 Part 2):</strong> Engineered non-metallic wraps (e.g., carbon fiber/epoxy wraps) can be applied for non-leaking defects to restore pressure containment.</li>
-    <li><strong>Welded Repair (PCC-2 Part 3):</strong> 
-      <ul>
-        <li>Type B full-encirclement split welded sleeve designed for full pressure rating.</li>
-        <li>Weld metal overlay/build-up (requires qualified WPS/PQR, preheat, and post-weld NDE).</li>
-      </ul>
-    </li>
-    <li><strong>Mechanical Repair (PCC-2 Part 4):</strong> Engineered mechanical clamp or leak containment encapsulation box (preferred if hot work or welding is restricted).</li>
-  `;
+function updateRepairAdvisor(res) {
+  const listEl = document.getElementById('advisorList');
+  listEl.innerHTML = getAdvisorItems(res).map(item => {
+    const lead = item.title ? `<strong>${item.title}</strong> ` : '';
+    const subList = item.sub.length ? `<ul>${item.sub.map(s => `<li>${s}</li>`).join('')}</ul>` : '';
+    return `<li>${lead}${item.body}${subList}</li>`;
+  }).join('');
 }
 
 /* ASME B31.3 & API 574 Dynamic Equation Values Renderer */
@@ -2805,11 +3384,25 @@ function recalc() {
     document.getElementById('vGaugeFill').style.height = '0%';
     document.getElementById('vGaugeIndicatorReqTotal').style.bottom = '0%';
     document.getElementById('vGaugeIndicatorStruct').style.bottom = '0%';
-    
+    document.getElementById('erlCaveat').style.display = 'none';
+
     document.getElementById('zoneSafe').style.width = '0%';
     document.getElementById('zoneWarning').style.width = '0%';
     document.getElementById('pressurePointer').style.left = '0%';
     
+    // Mobile status strip mirrors the banner
+    document.getElementById('mStatusStrip').className = '';
+    document.getElementById('mStatusVal').textContent = 'ERROR';
+    document.getElementById('mErfVal').textContent = 'ERF —';
+
+    // Code compliance verdicts
+    ['compB313', 'comp574'].forEach(id => {
+      const el = document.getElementById(id);
+      el.textContent = '—';
+      el.className = 'compliance-badge';
+    });
+    document.getElementById('ffsNote').style.display = 'none';
+
     drawSvgPipe(null);
     updateRepairAdvisor(null);
     updateDynamicEquations(null);
@@ -2840,7 +3433,7 @@ function recalc() {
   document.getElementById('resTreq').textContent = `${fmt(res.t_req_noCA, 3)} mm`;
   document.getElementById('resTreqCa').textContent = `${fmt(res.t_req_total, 3)} mm`;
   
-  const tStructText = `${fmt(res.t_struct)} mm${res.isCsRef ? ' (CS Ref)' : ''}`;
+  const tStructText = `${fmt(res.t_struct)} mm${res.isCsRef ? ' (CS-only ref, unverified for this material)' : ''}`;
   document.getElementById('resTstruct').textContent = tStructText;
 
   const erf_with = res.mawp_with > 0 ? (res.P_input / res.mawp_with) : 9.99;
@@ -2874,19 +3467,27 @@ function recalc() {
   document.querySelectorAll('.p-unit-lbl').forEach(el => el.textContent = res.pUnit);
   document.getElementById('gaugeErfVal').textContent = fmt(erf_with, 2);
 
-  // Set ERF scale (fixed max at 1.5)
-  const pointerPct = Math.min(100, Math.max(0, (erf_with / 1.5) * 100));
+  // Set ERF scale (fixed max at 1.5); pin & flag the pointer if ERF exceeds the visible scale
+  const ERF_GAUGE_MAX = 1.5;
+  const isOffScale = isFinite(erf_with) && erf_with > ERF_GAUGE_MAX;
+  const pointerPct = Math.min(100, Math.max(0, (erf_with / ERF_GAUGE_MAX) * 100));
 
   document.getElementById('zoneSafe').style.width = '53.3%';
   document.getElementById('zoneWarning').style.width = '13.3%';
-  document.getElementById('pressurePointer').style.left = pointerPct.toFixed(1) + '%';
+  const pointerEl = document.getElementById('pressurePointer');
+  pointerEl.style.left = pointerPct.toFixed(1) + '%';
+  pointerEl.classList.toggle('pinned', isOffScale);
+  pointerEl.title = isOffScale ? `ERF ${fmt(erf_with, 2)} — exceeds gauge scale (${ERF_GAUGE_MAX})` : 'Current ERF';
+  document.getElementById('gaugeErfOvershoot').style.display = isOffScale ? 'inline' : 'none';
 
   if (res.remainingLife !== null) {
-    document.getElementById('resLife').textContent = res.remainingLife >= 0 
-      ? `${fmt(res.remainingLife, 2)} years` 
+    document.getElementById('resLife').textContent = res.remainingLife >= 0
+      ? `${fmt(res.remainingLife, 2)} years`
       : '0.00 years (exceeded design limit)';
+    document.getElementById('erlCaveat').style.display = 'block';
   } else {
     document.getElementById('resLife').textContent = '—';
+    document.getElementById('erlCaveat').style.display = 'none';
   }
 
   // Update Status banner class and values
@@ -2900,6 +3501,24 @@ function recalc() {
   document.getElementById('statusVal').textContent = res.status;
   document.getElementById('statusNotes').textContent = res.desc;
 
+  // Mobile status strip mirrors the banner
+  const mStrip = document.getElementById('mStatusStrip');
+  mStrip.className = res.status === 'OK' ? 's-ok' : res.status === 'MONITOR' ? 's-mon' : 's-rep';
+  document.getElementById('mStatusVal').textContent = res.status;
+  document.getElementById('mErfVal').textContent = `ERF ${fmt(erf_with, 2)}`;
+
+  // Code compliance verdicts: B31.3 pressure design + API 574 structural minimum;
+  // when either fails, recommend an FFS route (API 579-1 / B31G) for the localized-flaw decision
+  const b313Pass = res.margin >= 0;
+  const api574Pass = res.t_meas >= res.t_struct;
+  const compB = document.getElementById('compB313');
+  compB.textContent = b313Pass ? 'PASS' : 'FAIL';
+  compB.className = 'compliance-badge ' + (b313Pass ? 'pass' : 'fail');
+  const comp5 = document.getElementById('comp574');
+  comp5.textContent = api574Pass ? 'PASS' : 'FAIL';
+  comp5.className = 'compliance-badge ' + (api574Pass ? 'pass' : 'fail');
+  document.getElementById('ffsNote').style.display = (b313Pass && api574Pass) ? 'none' : 'block';
+
   // Print units groups sync
   document.getElementById('printPGroup').setAttribute('data-unit', res.pUnit);
 
@@ -2909,19 +3528,500 @@ function recalc() {
   updateDynamicEquations(res);
 }
 
-/* Save PDF with tag in file name (via title) */
-let _origTitle = document.title;
-function savePDF() {
-  const tag = (document.getElementById('metaTag').value || 'Pipe Assessor Report');
-  const title = `Pipe_Assessor_Report_${tag.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-  _origTitle = document.title;
-  document.title = title;
-  window.print();
+/* ================= Generated PDF engineering report (jsPDF + AutoTable) ================= */
+
+/* Single source of truth for the Scope & Limitations text: renders the on-screen notice AND the PDF section */
+const SCOPE_HTML = '<strong>Scope &amp; Limitations:</strong> This assessment applies ASME B31.3 thickness/MAWP equations to a single uniform wall-loss reading and is intended for general (non-localized) corrosion screening only. It is <strong>not</strong> a Level 1/2 fitness-for-service evaluation (API 579-1/ASME FFS-1) or a B31G/RSTRENG remaining-strength calculation, and is not valid for assessing isolated pits, gouges, or other localized flaws &mdash; a separate FFS assessment is required for those. Results reflect one manually entered reading; they do not represent a full CML survey grid or a multi-survey corrosion-rate trend. Confirm all material- and temperature-dependent inputs (S, E, W, Y) before relying on this output for a repair/replace decision.';
+const SCOPE_TEXT = SCOPE_HTML.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&mdash;/g, '—');
+
+/* Full-color OR logo (asset/RGB_OR_Full color.png, downscaled to 600px wide), embedded as base64
+   so the PDF header works offline and on file:// with no CORS dependency. */
+const OR_LOGO_DATAURL = 'data:image/png;base64,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';
+const PDF_NAVY = '#103C5C';
+
+/* Rasterize the live cross-section SVG to a PNG dataURL.
+   Two fixes are mandatory: CSS variables don't resolve inside a standalone serialized SVG,
+   and the Inter webfont isn't available in the isolated SVG image context. */
+function svgToPngDataUrl(scale = 3) {
+  return new Promise((resolve, reject) => {
+    const src = document.getElementById('pipeSvg');
+    const clone = src.cloneNode(true);
+    const drag = clone.querySelector('#svgDragHandle');
+    if (drag) drag.remove();
+
+    // Fixed light palette so the PDF diagram is always print-appropriate, even from dark mode
+    const styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+    styleEl.textContent = ':root{--svg-bg:#f8fafc;--svg-metal:#156B95;--svg-loss:#fee2e2;--svg-loss-border:#ef4444;--text-color:#0f172a;--text-light:#64748b;--text-muted:#475569;}';
+    clone.insertBefore(styleEl, clone.firstChild);
+    clone.style.background = '#f8fafc';
+    clone.querySelectorAll('text').forEach(t => t.setAttribute('font-family', 'Arial, Helvetica, sans-serif'));
+
+    const w = 450 * scale, h = 270 * scale;
+    clone.setAttribute('width', w);
+    clone.setAttribute('height', h);
+
+    const svgBlob = new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/png'));
+      } catch (e) {
+        reject(e);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    };
+    img.onerror = (e) => { URL.revokeObjectURL(url); reject(new Error('SVG rasterization failed')); };
+    img.src = url;
+  });
 }
 
-window.addEventListener('afterprint', () => { 
-  document.title = _origTitle; 
+/* Company logo for the PDF header — embedded base64, always available */
+function fetchLogoDataUrl() {
+  return Promise.resolve(OR_LOGO_DATAURL.startsWith('data:image') ? OR_LOGO_DATAURL : null);
+}
+
+async function buildPdfReport(res) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const PW = doc.internal.pageSize.getWidth();   // 210
+  const PH = doc.internal.pageSize.getHeight();  // 297
+  const M = 14;                                   // side margin
+  const HEADER_H = 18, FOOTER_H = 12;
+  const stamp = new Date();
+
+  const tag = document.getElementById('metaTag').value || '—';
+  const loc = document.getElementById('metaLoc').value || '—';
+  const pid = document.getElementById('metaPid').value || '—';
+  const assessor = document.getElementById('enteredBy').value || '—';
+  const remarks = document.getElementById('remarks').value || '';
+  const designTemp = document.getElementById('designTemp').value || '—';
+  const material = document.getElementById('material').selectedOptions[0] ? document.getElementById('material').selectedOptions[0].textContent : '—';
+  const nps = document.getElementById('nps').value;
+  const sch = document.getElementById('sch').selectedOptions[0] ? document.getElementById('sch').selectedOptions[0].textContent : document.getElementById('sch').value;
+  const mode = document.querySelector('#modeSeg .active').dataset.mode;
+
+  const [png, logo] = await Promise.all([svgToPngDataUrl(2), fetchLogoDataUrl()]);
+
+  const erf_with = res.mawp_with > 0 ? (res.P_input / res.mawp_with) : 9.99;
+  const erf_no = res.mawp_no > 0 ? (res.P_input / res.mawp_no) : 9.99;
+
+  const statusColor = res.status === 'OK' ? '#059669' : res.status === 'MONITOR' ? '#d97706' : '#dc2626';
+
+  function drawPageChrome() {
+    // White header strip with the full-color OR logo, navy title, and a navy rule beneath
+    if (logo) {
+      try { doc.addImage(logo, 'PNG', M, 3, 26, 26 / 1.902); } catch (_) { /* typographic fallback below */ }
+    }
+    if (!logo) {
+      doc.setTextColor(PDF_NAVY);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(15);
+      doc.text('OR', M, 12);
+    }
+    doc.setTextColor(PDF_NAVY);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('PIPE WALL THICKNESS ASSESSMENT REPORT', PW - M, 8.5, { align: 'right' });
+    doc.setTextColor('#64748b');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.text(`TAG: ${tag}   •   ${stamp.toLocaleDateString()}`, PW - M, 13.5, { align: 'right' });
+    doc.setDrawColor(PDF_NAVY);
+    doc.setLineWidth(0.8);
+    doc.line(M, HEADER_H - 1, PW - M, HEADER_H - 1);
+
+    // Footer
+    doc.setDrawColor('#cbd5e1');
+    doc.setLineWidth(0.2);
+    doc.line(M, PH - FOOTER_H, PW - M, PH - FOOTER_H);
+    doc.setTextColor('#64748b');
+    doc.setFontSize(6.5);
+    doc.text('ASME B31.3 / ASME PCC-2 / API 574 — screening assessment only', M, PH - FOOTER_H + 4);
+    doc.text(`Page ${doc.internal.getNumberOfPages()} of {tp}`, PW / 2, PH - FOOTER_H + 4, { align: 'center' });
+    doc.text(`Generated ${stamp.toLocaleString()}`, PW - M, PH - FOOTER_H + 4, { align: 'right' });
+    doc.setTextColor('#0f172a');
+  }
+
+  let y = HEADER_H + 8;
+  drawPageChrome();
+
+  function ensureSpace(need) {
+    if (y + need > PH - FOOTER_H - 4) {
+      doc.addPage();
+      drawPageChrome();
+      y = HEADER_H + 8;
+    }
+  }
+
+  function sectionTitle(txt) {
+    ensureSpace(26); // keep titles attached to at least a few lines of their content
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(PDF_NAVY);
+    doc.text(txt, M, y);
+    doc.setDrawColor('#cbd5e1');
+    doc.setLineWidth(0.2);
+    doc.line(M, y + 1.5, PW - M, y + 1.5);
+    doc.setTextColor('#0f172a');
+    y += 6;
+  }
+
+  const tableBase = {
+    margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
+    styles: { fontSize: 8, cellPadding: 1.6, lineColor: '#cbd5e1', lineWidth: 0.15 },
+    headStyles: { fillColor: PDF_NAVY, textColor: '#ffffff', fontStyle: 'bold', fontSize: 7.5 },
+    didDrawPage: () => { if (doc.internal.getNumberOfPages() > 1) drawPageChrome(); }
+  };
+
+  // 1. Document metadata
+  sectionTitle('1. DOCUMENT INFORMATION');
+  doc.autoTable({
+    ...tableBase,
+    startY: y,
+    theme: 'grid',
+    body: [
+      ['Pipe Tag / Line Ident.', tag, 'Location / System', loc],
+      ['P&ID Drawing No.', pid, 'Design Temperature', `${designTemp} °C`],
+      ['Assessment Date', stamp.toLocaleDateString(), 'Assessor', assessor],
+      ['Governing Codes', 'ASME B31.3 / ASME PCC-2 / API RP 574', 'Method', 'Uniform wall-loss screening'],
+    ],
+    columnStyles: {
+      0: { fontStyle: 'bold', cellWidth: 38, fillColor: '#f1f5f9' },
+      2: { fontStyle: 'bold', cellWidth: 38, fillColor: '#f1f5f9' },
+    },
+  });
+  y = doc.lastAutoTable.finalY + 7;
+
+  // 2. Status summary band
+  ensureSpace(26);
+  doc.setFillColor(statusColor);
+  doc.roundedRect(M, y, PW - 2 * M, 12, 1.5, 1.5, 'F');
+  doc.setTextColor('#ffffff');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text(`INTEGRITY STATUS: ${res.status}`, M + 4, y + 8);
+  doc.setFontSize(8);
+  doc.setFont('courier', 'bold');
+  doc.text(`ERF ${fmt(erf_with, 3)}   MAWP ${fmt(res.mawp_with, 1)} ${res.pUnit}   MARGIN ${fmt(res.margin, 2)} mm`, PW - M - 4, y + 8, { align: 'right' });
+  y += 16;
+  doc.setTextColor('#334155');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  const descLines = doc.splitTextToSize(res.desc, PW - 2 * M);
+  ensureSpace(descLines.length * 3.6 + 4);
+  doc.text(descLines, M, y);
+  y += descLines.length * 3.6 + 6;
+
+  // 3. Input parameters
+  sectionTitle('2. INPUT PARAMETERS');
+  const ovrT = (typeof ovrChk !== 'undefined' && ovrChk.checked) ? ' (override)' : '';
+  const ovrD = (typeof ovrOdChk !== 'undefined' && ovrOdChk.checked) ? ' (override)' : '';
+  const inputRows = [
+    ['Nominal pipe size / schedule', 'NPS', `${nps} / ${sch}`, '—', 'ASME B36.10M'],
+    ['Outside diameter', 'D', fmt(res.D, 2) + ovrD, 'mm', ovrD ? 'As-found' : 'B36.10M table'],
+    ['Nominal wall thickness', 't_nom', fmt(res.t_nom, 2) + ovrT, 'mm', ovrT ? 'As-specified' : 'B36.10M table'],
+    ['Measurement mode', '—', mode === 'depth' ? 'Wall-loss depth' : 'Measured minimum', '—', 'Field input'],
+    ['Wall loss depth', 'd', fmt(res.depth, 2), 'mm', mode === 'depth' ? 'Measured' : 'Derived'],
+    ['Measured minimum thickness', 't_meas', fmt(res.t_meas, 2), 'mm', mode === 'depth' ? 'Derived' : 'UT measurement'],
+    ['Corrosion type', '—', res.isInternal ? 'Internal wall loss' : 'External wall loss', '—', 'Field input'],
+    ['Corrosion allowance', 'CA', fmt(res.ca, 2), 'mm', 'Design'],
+    ['Corrosion rate (optional)', 'CR', res.CR > 0 ? fmt(res.CR, 3) : '—', 'mm/yr', 'Historical/estimated'],
+    ['Design pressure', 'P', `${fmt(res.P_input, 2)}`, res.pUnit, 'Design'],
+    ['Material', '—', material, '—', 'Specification'],
+    ['Allowable stress', 'S', fmt(res.S, 1), 'MPa', 'B31.3 Table A-1'],
+    ['Longitudinal joint factor', 'E', fmt(res.E, 2), '—', 'B31.3 Table A-1B'],
+    ['Weld strength reduction factor', 'W', fmt(res.W, 2), '—', 'B31.3 Table 302.3.5'],
+    ['Wall thickness coefficient', 'Y', fmt(res.Y, 2), '—', 'B31.3 Table 304.1.1'],
+  ];
+  doc.autoTable({
+    ...tableBase,
+    startY: y,
+    theme: 'grid',
+    head: [['Parameter', 'Symbol', 'Value', 'Unit', 'Source']],
+    body: inputRows,
+    columnStyles: {
+      1: { font: 'courier', halign: 'center', cellWidth: 18 },
+      2: { font: 'courier', fontStyle: 'bold', halign: 'right', cellWidth: 40 },
+      3: { halign: 'center', cellWidth: 16 },
+    },
+  });
+  y = doc.lastAutoTable.finalY + 7;
+
+  // 4. Cross-section figure
+  const figW = 150, figH = figW * 270 / 450;
+  ensureSpace(figH + 14);
+  sectionTitle('3. WALL THICKNESS CROSS-SECTION');
+  doc.addImage(png, 'PNG', (PW - figW) / 2, y, figW, figH);
+  y += figH + 4;
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(7.5);
+  doc.setTextColor('#64748b');
+  doc.text('Figure 1 — Wall thickness cross-section (localized loss pocket; boundaries: t_req, t_req + CA, API 574 structural minimum)', PW / 2, y, { align: 'center' });
+  doc.setTextColor('#0f172a');
+  y += 8;
+
+  // 5. Results table
+  sectionTitle('4. CALCULATION RESULTS');
+  const life = res.remainingLife !== null ? (res.remainingLife >= 0 ? `${fmt(res.remainingLife, 2)} years` : '0.00 years (exceeded)') : '—';
+  const resultRows = [
+    [{ content: 'THICKNESS', colSpan: 4, styles: { fillColor: '#e2e8f0', fontStyle: 'bold', fontSize: 7 } }],
+    ['Nominal wall thickness t_nom', `${fmt(res.t_nom, 2)} mm`, '—', ''],
+    ['Remaining wall percentage', `${fmt(res.pctRemainNom, 1)} %`, '>= 50 %', res.pctRemainNom >= 50 ? 'PASS' : 'CHECK'],
+    ['Required thickness t_req', `${fmt(res.t_req_noCA, 3)} mm`, '—', ''],
+    ['Required incl. CA (t_req + CA)', `${fmt(res.t_req_total, 3)} mm`, 't_meas >= t_req + CA', res.margin >= 0 ? 'PASS' : 'CHECK'],
+    [`API 574 structural min t_struct${res.isCsRef ? ' *' : ''}`, `${fmt(res.t_struct, 2)} mm`, 't_meas >= t_struct', res.t_meas >= res.t_struct ? 'PASS' : 'CHECK'],
+    ['Remaining margin', `${fmt(res.margin, 3)} mm`, '>= 0', res.margin >= 0 ? 'PASS' : 'CHECK'],
+    [{ content: 'PRESSURE & ERF', colSpan: 4, styles: { fillColor: '#e2e8f0', fontStyle: 'bold', fontSize: 7 } }],
+    ['Design pressure P', `${fmt(res.P_input, 2)} ${res.pUnit}`, '—', ''],
+    ['MAWP (with CA)', `${fmt(res.mawp_with, 2)} ${res.pUnit}`, '>= P', res.mawp_with >= res.P_input ? 'PASS' : 'CHECK'],
+    ['MAWP (no CA)', `${fmt(res.mawp_no, 2)} ${res.pUnit}`, '>= P', res.mawp_no >= res.P_input ? 'PASS' : 'CHECK'],
+    ['ERF (with CA)', fmt(erf_with, 3), '<= 1.0', erf_with <= 1.0 ? 'PASS' : 'CHECK'],
+    ['ERF (no CA)', fmt(erf_no, 3), '<= 1.0', erf_no <= 1.0 ? 'PASS' : 'CHECK'],
+    [{ content: 'REMAINING LIFE', colSpan: 4, styles: { fillColor: '#e2e8f0', fontStyle: 'bold', fontSize: 7 } }],
+    ['Corrosion allowance CA', `${fmt(res.ca, 2)} mm`, '—', ''],
+    ['Corrosion rate CR', res.CR > 0 ? `${fmt(res.CR, 3)} mm/yr` : '—', '—', ''],
+    ['Estimated remaining life', life, '—', ''],
+  ];
+  doc.autoTable({
+    ...tableBase,
+    startY: y,
+    theme: 'grid',
+    head: [['Quantity', 'Value', 'Criterion', 'Verdict']],
+    body: resultRows,
+    columnStyles: {
+      1: { font: 'courier', fontStyle: 'bold', halign: 'right', cellWidth: 42 },
+      2: { font: 'courier', halign: 'center', cellWidth: 38 },
+      3: { fontStyle: 'bold', halign: 'center', cellWidth: 18 },
+    },
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.column.index === 3) {
+        if (data.cell.raw === 'PASS') data.cell.styles.textColor = '#059669';
+        if (data.cell.raw === 'CHECK') data.cell.styles.textColor = '#dc2626';
+      }
+    },
+  });
+  y = doc.lastAutoTable.finalY + 3;
+  if (res.isCsRef) {
+    ensureSpace(6);
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(7);
+    doc.setTextColor('#92400e');
+    doc.text('* API 574 structural minimum is a carbon/low-alloy steel reference table; not validated for the selected material.', M, y);
+    doc.setTextColor('#0f172a');
+    y += 6;
+  } else {
+    y += 4;
+  }
+  if (res.margin < 0 || res.t_meas < res.t_struct) {
+    const ffsText = 'RECOMMENDATION: One or more code checks did not pass. Consider a Level 1/2 fitness-for-service assessment per API 579-1/ASME FFS-1 or a B31G/RSTRENG remaining-strength evaluation before the repair/replace decision.';
+    const ffsLines = doc.splitTextToSize(ffsText, PW - 2 * M);
+    ensureSpace(ffsLines.length * 3.4 + 4);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor('#b45309');
+    doc.text(ffsLines, M, y);
+    doc.setTextColor('#0f172a');
+    y += ffsLines.length * 3.4 + 4;
+  }
+
+  // 6. Governing equations with substitution (computed from res, mirrors runCalculations unit handling)
+  sectionTitle('5. GOVERNING EQUATIONS (SUBSTITUTED)');
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(8);
+  const eqLines = [
+    `t_req      = P*D / (2*(S*E*W + P*Y))                              [B31.3 304.1.2]`,
+    `           = ${fmt(res.P, 4)}*${fmt(res.D, 2)} / (2*(${fmt(res.S, 1)}*${fmt(res.E, 2)}*${fmt(res.W, 2)} + ${fmt(res.P, 4)}*${fmt(res.Y, 2)}))  = ${fmt(res.t_req_noCA, 3)} mm`,
+    ``,
+    `t_req+CA   = ${fmt(res.t_req_noCA, 3)} + ${fmt(res.ca, 2)}  = ${fmt(res.t_req_total, 3)} mm`,
+    ``,
+    `MAWP(w/CA) = 2*S*E*W*t / (D - 2*Y*t),  t = max(0, t_meas - CA) = ${fmt(Math.max(0, res.t_meas - res.ca), 2)} mm`,
+    `           = ${fmt(res.mawp_with, 2)} ${res.pUnit}`,
+    `MAWP(noCA) = t = t_meas = ${fmt(res.t_meas, 2)} mm  ->  ${fmt(res.mawp_no, 2)} ${res.pUnit}`,
+    ``,
+    `ERF(w/CA)  = P / MAWP = ${fmt(res.P_input, 2)} / ${fmt(res.mawp_with, 2)}  = ${fmt(erf_with, 3)}`,
+  ];
+  if (res.CR > 0 && res.remainingLife !== null) {
+    eqLines.push('', `Rem. life  = (t_meas - t_req_total) / CR = (${fmt(res.t_meas, 2)} - ${fmt(res.t_req_total, 3)}) / ${fmt(res.CR, 3)}  = ${fmt(res.remainingLife, 2)} years`);
+  }
+  ensureSpace(eqLines.length * 3.8 + 4);
+  eqLines.forEach(line => {
+    doc.text(line, M, y);
+    y += 3.8;
+  });
+  y += 4;
+
+  // 7-8. PCC-2 recommendation
+  sectionTitle('6. ASME PCC-2 REPAIR RECOMMENDATION');
+  doc.setFontSize(8);
+  getAdvisorItems(res).forEach(item => {
+    const leadText = item.title ? `${item.title} ` : '';
+    const bodyLines = doc.splitTextToSize(`• ${leadText}${item.body}`, PW - 2 * M - 2);
+    ensureSpace(bodyLines.length * 3.6 + item.sub.length * 3.6 + 2);
+    doc.setFont('helvetica', 'normal');
+    doc.text(bodyLines, M, y);
+    y += bodyLines.length * 3.6;
+    item.sub.forEach(s => {
+      const subLines = doc.splitTextToSize(`    - ${s}`, PW - 2 * M - 6);
+      ensureSpace(subLines.length * 3.6);
+      doc.text(subLines, M + 2, y);
+      y += subLines.length * 3.6;
+    });
+    y += 1.5;
+  });
+  y += 3;
+
+  // 9. Scope & limitations
+  sectionTitle('7. SCOPE & LIMITATIONS');
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(7.5);
+  doc.setTextColor('#475569');
+  const scopeLines = doc.splitTextToSize(SCOPE_TEXT, PW - 2 * M);
+  ensureSpace(scopeLines.length * 3.3 + 4);
+  doc.text(scopeLines, M, y);
+  doc.setTextColor('#0f172a');
+  y += scopeLines.length * 3.3 + 8;
+
+  // 10. Signature block (+ remarks)
+  if (remarks) {
+    ensureSpace(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text('Remarks:', M, y);
+    doc.setFont('helvetica', 'normal');
+    const remarkLines = doc.splitTextToSize(remarks, PW - 2 * M - 20);
+    doc.text(remarkLines, M + 20, y);
+    y += Math.max(6, remarkLines.length * 3.6) + 6;
+  }
+  ensureSpace(30);
+  const colW = (PW - 2 * M - 16) / 3;
+  const sigLabels = [`Assessed by${assessor !== '—' ? `: ${assessor}` : ''}`, 'Reviewed by', 'Approved by'];
+  sigLabels.forEach((lbl, i) => {
+    const x = M + i * (colW + 8);
+    doc.setDrawColor('#334155');
+    doc.setLineWidth(0.3);
+    doc.line(x, y + 14, x + colW, y + 14);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.text(lbl, x, y + 18);
+    doc.text('Date:', x, y + 23);
+  });
+  y += 28;
+
+  // Resolve total page count placeholders
+  doc.putTotalPages('{tp}');
+
+  const dateStr = stamp.toISOString().slice(0, 10).replace(/-/g, '');
+  const safeTag = (tag === '—' ? 'Untagged' : tag).replace(/[^a-zA-Z0-9_-]/g, '_');
+  return { blob: doc.output('blob'), filename: `Pipe_Assessor_Report_${safeTag}_${dateStr}.pdf` };
+}
+
+/* In-app preview: user saves/exports from the viewer — never a forced download */
+function openPdfPreview(blob, filename) {
+  const dlg = document.getElementById('pdfPreviewDialog');
+  const frame = document.getElementById('pdfFrame');
+  const fallback = document.getElementById('pdfMobileFallback');
+  const saveLink = document.getElementById('pdfSaveLink');
+  const url = URL.createObjectURL(blob);
+
+  document.getElementById('pdfDialogTitle').textContent = filename;
+  saveLink.href = url;
+  saveLink.download = filename;
+
+  if (isMobileViewport()) {
+    frame.style.display = 'none';
+    frame.src = '';
+    fallback.style.display = 'flex';
+    const shareBtn = document.getElementById('pdfShareBtn');
+    const file = new File([blob], filename, { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      shareBtn.style.display = '';
+      shareBtn.onclick = () => navigator.share({ files: [file], title: filename }).catch(() => {});
+    } else {
+      shareBtn.style.display = 'none';
+    }
+    document.getElementById('pdfOpenTabBtn').onclick = () => window.open(url, '_blank');
+  } else {
+    fallback.style.display = 'none';
+    frame.style.display = 'block';
+    frame.src = url;
+  }
+
+  const printBtn = document.getElementById('pdfPrintBtn');
+  printBtn.style.display = isMobileViewport() ? 'none' : '';
+  printBtn.onclick = () => { try { frame.contentWindow.print(); } catch (_) {} };
+
+  dlg.addEventListener('close', () => {
+    URL.revokeObjectURL(url);
+    frame.src = '';
+  }, { once: true });
+
+  dlg.showModal();
+}
+
+/* Save PDF: generated engineering report with preview (falls back to browser print if the CDN never loaded) */
+let _origTitle = document.title;
+async function savePDF() {
+  recalc();
+  const res = window.lastRes;
+  if (!res || res.hasErrors) {
+    alert('Fix the highlighted input errors before generating the report.');
+    return;
+  }
+
+  if (!window.jspdf) {
+    // Offline first run before the CDN was ever cached — browser print still works
+    alert('PDF engine unavailable (offline). Using browser print instead.');
+    const tag = (document.getElementById('metaTag').value || 'Pipe Assessor Report');
+    _origTitle = document.title;
+    document.title = `Pipe_Assessor_Report_${tag.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+    window.print();
+    return;
+  }
+
+  const btn = document.querySelector('button[onclick="savePDF()"]');
+  const oldLabel = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+  try {
+    const { blob, filename } = await buildPdfReport(res);
+    openPdfPreview(blob, filename);
+  } catch (e) {
+    console.error('PDF generation failed:', e);
+    alert('PDF generation failed — see console. Falling back to browser print.');
+    window.print();
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = oldLabel; }
+  }
+}
+
+/* Closed <details> content is not shown by the browser even with CSS overrides, so force every
+   collapsible card open for the printed report and restore the on-screen state afterward. */
+let _collapsedBeforePrint = [];
+window.addEventListener('beforeprint', () => {
+  _collapsedBeforePrint = [...document.querySelectorAll('details.collapsible-card:not([open])')];
+  _collapsedBeforePrint.forEach(d => d.open = true);
 });
+
+window.addEventListener('afterprint', () => {
+  document.title = _origTitle;
+  _collapsedBeforePrint.forEach(d => d.open = false);
+  _collapsedBeforePrint = [];
+});
+
+/* Confirm before wiping entered field data via the Reset button */
+function confirmReset() {
+  if (window.confirm('Reset all fields to default values? Any entered readings and metadata will be lost.')) {
+    resetDefaults();
+  }
+}
 
 /* Reset default setup */
 function resetDefaults() {
@@ -2946,6 +4046,10 @@ function resetDefaults() {
   document.getElementById('overrideTnom').value = '';
   document.getElementById('ovrRow').style.display = 'none';
   ovrChk.checked = false;
+  document.getElementById('overrideOd').value = '';
+  document.getElementById('ovrOdRow').style.display = 'none';
+  ovrOdChk.checked = false;
+  document.getElementById('designTemp').value = '';
   document.getElementById('enteredBy').value = '';
   document.getElementById('remarks').value = '';
 
@@ -2962,22 +4066,52 @@ function resetDefaults() {
 }
 
 /* Initial start */
+/* Mobile tabbed layout (<768px): Inputs / Results panes switched via body[data-mtab] */
+function isMobileViewport() {
+  return window.matchMedia('(max-width: 767px)').matches;
+}
+
+function initMobileTabs() {
+  document.body.dataset.mtab = 'inputs';
+  document.querySelectorAll('#mTabBar button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.body.dataset.mtab = btn.dataset.tab;
+      document.querySelectorAll('#mTabBar button').forEach(b =>
+        b.setAttribute('aria-selected', b === btn ? 'true' : 'false'));
+      window.scrollTo({ top: 0 });
+    });
+  });
+}
+
+/* On mobile, Calculate should land the user on the results pane */
+function switchToResultsTabIfMobile() {
+  if (!isMobileViewport()) return;
+  document.body.dataset.mtab = 'results';
+  document.querySelectorAll('#mTabBar button').forEach(b =>
+    b.setAttribute('aria-selected', b.dataset.tab === 'results' ? 'true' : 'false'));
+  window.scrollTo({ top: 0 });
+}
+
 function initApp() {
   // Load local storage theme
   const savedTheme = localStorage.getItem('theme');
   if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     document.body.classList.add('dark');
+    document.documentElement.classList.add('dark');
   }
   updateThemeIcon();
 
+
+  document.getElementById('scopeNotice').innerHTML = SCOPE_HTML;
 
   initSelections();
   resetDefaults();
   initHoverHighlighting();
   initDragHandle();
-  
+  initMobileTabs();
+
   // Attach input event listeners for live recalculations
-  ['depth', 'tmeas', 'ca', 'P', 'S', 'E', 'W', 'Y', 'CR', 'overrideTnom', 'metaTag', 'metaLoc', 'metaPid', 'enteredBy', 'remarks', 'corrType']
+  ['depth', 'tmeas', 'ca', 'P', 'S', 'E', 'W', 'Y', 'CR', 'overrideTnom', 'overrideOd', 'designTemp', 'metaTag', 'metaLoc', 'metaPid', 'enteredBy', 'remarks', 'corrType']
     .forEach(id => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('input', recalc);
