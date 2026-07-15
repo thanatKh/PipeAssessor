@@ -68,9 +68,12 @@
       --input-focus: #14b8a6;
       
       --header-bg: #103C5C;
+      --header-bg-2: #0c2e47;
+      --header-accent: #1d5a80;
+      --header-accent-text: #7dd3fc;
       --header-text: #ffffff;
       --subhead-text: #93c5fd;
-      
+
       --button-primary: #156B95;
       --button-primary-hover: #0d4f6e;
       --button-ghost: #ffffff;
@@ -122,9 +125,12 @@
       --input-focus: #2dd4bf;
       
       --header-bg: #020617;
+      --header-bg-2: #0a1628;
+      --header-accent: #1e3a52;
+      --header-accent-text: #38bdf8;
       --header-text: #f8fafc;
       --subhead-text: #38bdf8;
-      
+
       --button-primary: #0284c7;
       --button-primary-hover: #0369a1;
       --button-ghost: #1e293b;
@@ -181,32 +187,46 @@
       padding: 20px;
     }
 
-    header {
-      background: var(--header-bg);
+    /* Scoped to the top-level app header (a direct child of body), not `header` alone — every
+       .card-header in this app is also a semantic <header> element nested inside .card, and an
+       unscoped `header {}` rule bleeds its background/shadow onto every card title bar. */
+    body > header {
+      background: linear-gradient(135deg, var(--header-bg) 0%, var(--header-bg-2) 100%);
       color: var(--header-text);
       position: sticky;
       top: 0;
       z-index: 100;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 4px 16px -4px rgba(0, 0, 0, 0.25);
+      border-bottom: 1px solid var(--header-accent);
     }
 
-    header .wrap {
+    body > header .wrap {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 20px;
+      padding: 14px 20px;
       flex-wrap: wrap;
       gap: 10px;
     }
 
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
     @media (max-width: 480px) {
-      header .wrap {
+      body > header .wrap {
+        justify-content: center;
+      }
+
+      .header-brand {
+        flex: 1 0 100%;
         justify-content: center;
       }
 
       .header-info {
-        flex: 1 0 100%;
-        text-align: center;
+        text-align: left;
       }
 
       .header-actions {
@@ -216,23 +236,39 @@
     }
 
     .header-info h1 {
-      font-size: 20px;
+      font-size: 19px;
       font-weight: 800;
       margin: 0;
-      letter-spacing: -0.5px;
+      letter-spacing: -0.3px;
+      line-height: 1.2;
     }
 
     .subhead {
-      font-size: 12px;
+      font-size: 11.5px;
       color: var(--subhead-text);
-      margin-top: 4px;
+      margin-top: 2px;
       font-weight: 500;
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: -0.2px;
     }
 
     .header-actions {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
+    }
+
+    .header-divider {
+      width: 1px;
+      height: 26px;
+      background: rgba(255, 255, 255, 0.14);
+      flex: none;
+    }
+
+    @media (max-width: 480px) {
+      .header-divider {
+        display: none;
+      }
     }
 
     .hdr-btn-group {
@@ -242,24 +278,31 @@
 
     .hdr-btn {
       flex: none;
-      padding: 8px 14px;
+      padding: 8px 16px;
       font-size: 12px;
+      font-weight: 600;
       white-space: nowrap;
+      border-radius: 7px;
     }
 
     .hdr-btn[data-variant="outline"] {
-      background: transparent;
-      border-color: var(--button-ghost-border);
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.18);
       color: var(--header-text);
     }
 
     .hdr-btn[data-variant="outline"]:hover {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .hdr-btn:not([data-variant="outline"]) {
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     }
 
     @media (max-width: 700px) {
       .hdr-logo {
-        display: none;
+        height: 30px;
       }
 
       .hdr-btn {
@@ -1112,6 +1155,21 @@
       outline-offset: 2px;
     }
 
+    /* The header bar is always dark navy/near-black regardless of app theme, so the toggle button
+       can't use the theme-aware --text-color/--button-ghost-border vars (those flip to dark-on-dark
+       in light mode and near-invisible slate-on-black in dark mode) — it needs fixed light-on-dark
+       styling matching the other header controls instead. */
+    body > header .theme-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.18);
+      color: var(--header-text);
+    }
+
+    body > header .theme-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
     /* Freshly-inserted icon (innerHTML is swapped on every toggle) animates in for clear feedback */
     .theme-btn svg {
       animation: theme-icon-in 0.32s ease;
@@ -1492,9 +1550,13 @@
 
 <header>
   <div class="wrap">
-    <div class="header-info">
-      <h1>Pipe Assessor</h1>
-      <div class="subhead" id="hdrMeta">Tag: — • Location: — • P&ID: —</div>
+    <div class="header-brand">
+      <img class="hdr-logo" src="https://img2.pic.in.th/pic/RGB_OR_invert_logo-on-BlueOR-Trans.png" alt="OR Logo"/>
+      <div class="header-divider"></div>
+      <div class="header-info">
+        <h1>Pipe Assessor</h1>
+        <div class="subhead" id="hdrMeta">Tag: — • Location: — • P&ID: —</div>
+      </div>
     </div>
     <div class="header-actions">
       <div class="hdr-btn-group">
@@ -1505,7 +1567,6 @@
         <!-- Default Moon icon -->
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
-      <img class="hdr-logo" src="https://img2.pic.in.th/pic/RGB_OR_invert_logo-on-BlueOR-Trans.png" alt="OR Logo"/>
     </div>
   </div>
 </header>
@@ -3323,6 +3384,9 @@ async function buildPdfReport(res) {
   const M = 14;                                   // side margin
   const HEADER_H = 18, FOOTER_H = 12;
   const stamp = new Date();
+  const PDF_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const fmtDate = (d) => `${String(d.getDate()).padStart(2, '0')}/${PDF_MONTHS[d.getMonth()]}/${d.getFullYear()}`;
+  const fmtDateTime = (d) => `${fmtDate(d)} ${d.toLocaleTimeString()}`;
 
   const tag = document.getElementById('metaTag').value || '—';
   const loc = document.getElementById('metaLoc').value || '—';
@@ -3360,7 +3424,7 @@ async function buildPdfReport(res) {
     doc.setTextColor('#64748b');
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
-    doc.text(`TAG: ${tag}   •   ${stamp.toLocaleDateString()}`, PW - M, 13.5, { align: 'right' });
+    doc.text(`TAG: ${tag}   •   ${fmtDate(stamp)}`, PW - M, 13.5, { align: 'right' });
     doc.setDrawColor(PDF_NAVY);
     doc.setLineWidth(0.8);
     doc.line(M, HEADER_H - 1, PW - M, HEADER_H - 1);
@@ -3373,7 +3437,7 @@ async function buildPdfReport(res) {
     doc.setFontSize(7.5);
     doc.text('ASME B31.3 / ASME PCC-2 / API 574 — screening assessment only', M, PH - FOOTER_H + 4);
     doc.text(`Page ${doc.internal.getNumberOfPages()} of {tp}`, PW / 2, PH - FOOTER_H + 4, { align: 'center' });
-    doc.text(`Generated ${stamp.toLocaleString()}`, PW - M, PH - FOOTER_H + 4, { align: 'right' });
+    doc.text(`Generated ${fmtDateTime(stamp)}`, PW - M, PH - FOOTER_H + 4, { align: 'right' });
     doc.setTextColor('#0f172a');
   }
 
@@ -3401,6 +3465,43 @@ async function buildPdfReport(res) {
     y += 6;
   }
 
+  // Draws one "label = [stacked fraction] = result" row, mirroring the on-screen .eq-box/.fraction
+  // layout (real numerator-over-bar-over-denominator) instead of a flat "num / denom" text line.
+  // segs: array of either a plain string (baseline text, e.g. "t_req  = ", " = ", " mm") or
+  // { num, den } for a stacked fraction. Returns the vertical space consumed.
+  function drawFractionRow(segs, x0, yTop, opts) {
+    const fs = (opts && opts.fontSize) || 8;
+    const font = (opts && opts.font) || 'courier';
+    const hasFraction = segs.some(s => typeof s !== 'string');
+    const numOffset = 3.4;   // numerator baseline, measured down from yTop
+    const barOffset = 4.6;   // bar y, measured down from yTop
+    const denOffset = 8.4;   // denominator baseline, measured down from yTop
+    const flatBaseline = yTop + 3; // baseline text (no fraction present) sits mid-row
+    const barBaseline = yTop + barOffset; // inline plain-text segments align with the bar
+    let x = x0;
+    segs.forEach(seg => {
+      doc.setFont(font, 'normal');
+      doc.setFontSize(fs);
+      doc.setTextColor('#0f172a');
+      if (typeof seg === 'string') {
+        doc.text(seg, x, hasFraction ? barBaseline : flatBaseline);
+        x += doc.getTextWidth(seg);
+      } else {
+        const numW = doc.getTextWidth(seg.num);
+        const denW = doc.getTextWidth(seg.den);
+        const w = Math.max(numW, denW) + 2;
+        doc.text(seg.num, x + w / 2, yTop + numOffset, { align: 'center' });
+        doc.setDrawColor('#0f172a');
+        doc.setLineWidth(0.25);
+        doc.line(x, yTop + barOffset, x + w, yTop + barOffset);
+        doc.text(seg.den, x + w / 2, yTop + denOffset, { align: 'center' });
+        x += w;
+      }
+    });
+    doc.setTextColor('#0f172a');
+    return hasFraction ? denOffset + 2 : 6;
+  }
+
   const tableBase = {
     margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
     styles: { fontSize: 8, cellPadding: 1.6, lineColor: '#cbd5e1', lineWidth: 0.15 },
@@ -3417,7 +3518,7 @@ async function buildPdfReport(res) {
     body: [
       ['Pipe Tag / Line Ident.', tag, 'Location / System', loc],
       ['P&ID Drawing No.', pid, 'Design Temperature', `${designTemp} °C`],
-      ['Assessment Date', stamp.toLocaleDateString(), 'Assessor', assessor],
+      ['Assessment Date', fmtDate(stamp), 'Assessor', assessor],
       ['Governing Codes', 'ASME B31.3 / ASME PCC-2 / API RP 574', 'Method', 'Uniform wall-loss screening'],
     ],
     columnStyles: {
@@ -3559,31 +3660,61 @@ async function buildPdfReport(res) {
     y += ffsLines.length * 3.4 + 4;
   }
 
-  // 6. Governing equations with substitution (computed from res, mirrors runCalculations unit handling)
-  sectionTitle('5. GOVERNING EQUATIONS (SUBSTITUTED)');
-  doc.setFont('courier', 'normal');
-  doc.setFontSize(8);
-  const eqLines = [
-    `t_req      = P*D / (2*(S*E*W + P*Y))                              [B31.3 304.1.2]`,
-    `           = ${fmt(res.P, 4)}*${fmt(res.D, 2)} / (2*(${fmt(res.S, 1)}*${fmt(res.E, 2)}*${fmt(res.W, 2)} + ${fmt(res.P, 4)}*${fmt(res.Y, 2)}))  = ${fmt(res.t_req_noCA, 3)} mm`,
-    ``,
-    `t_req+CA   = ${fmt(res.t_req_noCA, 3)} + ${fmt(res.ca, 2)}  = ${fmt(res.t_req_total, 3)} mm`,
-    ``,
-    `MAWP(w/CA) = 2*S*E*W*t / (D - 2*Y*t),  t = max(0, t_meas - CA) = ${fmt(Math.max(0, res.t_meas - res.ca), 2)} mm`,
-    `           = ${fmt(res.mawp_with, 2)} ${res.pUnit}`,
-    `MAWP(noCA) = t = t_meas = ${fmt(res.t_meas, 2)} mm  ->  ${fmt(res.mawp_no, 2)} ${res.pUnit}`,
-    ``,
-    `ERF(w/CA)  = P / MAWP = ${fmt(res.P_input, 2)} / ${fmt(res.mawp_with, 2)}  = ${fmt(erf_with, 3)}`,
+  // 6. Governing equations with substitution — real stacked fractions (num over bar over denom),
+  // mirroring the on-screen .eq-box layout, not a flat "num / denom" text line.
+  const t_use_with = Math.max(0, res.t_meas - res.ca);
+  // Each row: a label line (Courier, code ref right-aligned) followed by a drawFractionRow.
+  // Row height budget: label line (~4mm) + fraction row (~9-10mm) + spacing (~3mm) per equation.
+  const eqRows = [
+    {
+      label: 't_req = P · D / (2 · (S · E · W + P · Y))', ref: '[B31.3 304.1.2]',
+      segs: ['t_req = ', { num: `${fmt(res.P, 4)} · ${fmt(res.D, 2)}`, den: `2(${fmt(res.S, 1)}·${fmt(res.E, 2)}·${fmt(res.W, 2)} + ${fmt(res.P, 4)}·${fmt(res.Y, 2)})` }, ` = ${fmt(res.t_req_noCA, 3)} mm`],
+    },
+    {
+      label: 't_req_total = t_req + CA', ref: '',
+      segs: [`t_req_total = ${fmt(res.t_req_noCA, 3)} + ${fmt(res.ca, 2)} = ${fmt(res.t_req_total, 3)} mm`],
+    },
+    {
+      label: 'MAWP (with CA) = 2 · S · E · W · t / (D - 2 · Y · t),  t = max(0, t_meas - CA)', ref: '[B31.3 304.1.2]',
+      segs: [`t = ${t_use_with.toFixed(2)} mm,  MAWP = `, { num: `2 · ${fmt(res.S, 1)}·${fmt(res.E, 2)}·${fmt(res.W, 2)}·${fmt(t_use_with, 2)}`, den: `${fmt(res.D, 2)} - 2·${fmt(res.Y, 2)}·${fmt(t_use_with, 2)}` }, ` = ${fmt(res.mawp_with, 2)} ${res.pUnit}`],
+    },
+    {
+      label: 'MAWP (no CA) = 2 · S · E · W · t_meas / (D - 2 · Y · t_meas)', ref: '',
+      segs: ['MAWP = ', { num: `2 · ${fmt(res.S, 1)}·${fmt(res.E, 2)}·${fmt(res.W, 2)}·${fmt(res.t_meas, 2)}`, den: `${fmt(res.D, 2)} - 2·${fmt(res.Y, 2)}·${fmt(res.t_meas, 2)}` }, ` = ${fmt(res.mawp_no, 2)} ${res.pUnit}`],
+    },
+    {
+      label: 'ERF (with CA) = P / MAWP', ref: '',
+      segs: ['ERF = ', { num: `${fmt(res.P_input, 2)}`, den: `${fmt(res.mawp_with, 2)}` }, ` = ${fmt(erf_with, 3)}`],
+    },
   ];
   if (res.CR > 0 && res.remainingLife !== null) {
-    eqLines.push('', `Rem. life  = (t_meas - t_req_total) / CR = (${fmt(res.t_meas, 2)} - ${fmt(res.t_req_total, 3)}) / ${fmt(res.CR, 3)}  = ${fmt(res.remainingLife, 2)} years`);
+    eqRows.push({
+      label: 'Remaining life = (t_meas - t_req_total) / CR', ref: '',
+      segs: ['Life = ', { num: `${fmt(res.t_meas, 2)} - ${fmt(res.t_req_total, 3)}`, den: `${fmt(res.CR, 3)}` }, ` = ${fmt(res.remainingLife, 2)} years`],
+    });
   }
-  ensureSpace(eqLines.length * 3.8 + 4);
-  eqLines.forEach(line => {
-    doc.text(line, M, y);
-    y += 3.8;
+  const rowHeight = (row) => 4 + (row.segs.some(s => typeof s !== 'string') ? 12.4 : 6) + 3;
+  const totalEqH = eqRows.reduce((sum, row) => sum + rowHeight(row), 0);
+  // Ensure the title AND its full equation block fit together, so "5. GOVERNING EQUATIONS"
+  // never gets orphaned at the bottom of one page while its data lands on the next.
+  ensureSpace(26 + totalEqH);
+  sectionTitle('5. GOVERNING EQUATIONS (SUBSTITUTED)');
+  eqRows.forEach(row => {
+    ensureSpace(rowHeight(row));
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor('#475569');
+    doc.text(row.label, M, y);
+    if (row.ref) {
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor('#94a3b8');
+      doc.text(row.ref, PW - M, y, { align: 'right' });
+    }
+    y += 4;
+    const consumed = drawFractionRow(row.segs, M, y, { fontSize: 8.5, font: 'courier' });
+    y += consumed + 3;
   });
-  y += 4;
+  y += 1;
 
   // 7-8. PCC-2 recommendation
   sectionTitle('6. ASME PCC-2 REPAIR RECOMMENDATION');
@@ -3630,6 +3761,7 @@ async function buildPdfReport(res) {
   ensureSpace(30);
   const colW = (PW - 2 * M - 16) / 3;
   const sigLabels = [`Assessed by${assessor !== '—' ? `: ${assessor}` : ''}`, 'Reviewed by', 'Approved by'];
+  const sigDates = [fmtDate(stamp), '', ''];
   sigLabels.forEach((lbl, i) => {
     const x = M + i * (colW + 8);
     doc.setDrawColor('#334155');
@@ -3639,6 +3771,7 @@ async function buildPdfReport(res) {
     doc.setFontSize(7.5);
     doc.text(lbl, x, y + 18);
     doc.text('Date:', x, y + 23);
+    if (sigDates[i]) doc.text(sigDates[i], x + 10, y + 23);
   });
   y += 28;
 
