@@ -242,22 +242,14 @@ body > header .wrap {
   gap: 14px;
 }
 
-/* Light mode: the full-color logo sits on a plain white patch (no border/shadow) — its navy
-   'OR' needs a light ground. Dark mode: no white chip — asset/RGB_OR_invert_logo swaps in (a
-   white/transparent variant made for dark surfaces) and sits directly on the dark header, so
-   the logo reads as part of the header instead of a pasted-on light patch. */
+/* Both logo assets have a transparent background, so the chip is just a hit-area/spacing
+   wrapper now — no backing patch needed in either theme (light: RGB_OR_Full color.png sits
+   fine on the white header; dark: RGB_OR_invert_logo sits fine on the dark header). */
 .hdr-logo-chip {
   display: inline-flex;
   align-items: center;
-  background: #ffffff;
-  border-radius: 8px;
-  padding: 7px 12px;
-  flex: none;
-}
-
-body.dark .hdr-logo-chip {
-  background: transparent;
   padding: 0 12px;
+  flex: none;
 }
 
 .header-accent-bar {
