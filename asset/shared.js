@@ -320,6 +320,7 @@ const PA_PIPE_DATABASE = {
 
 const PA_MATERIALS = [
   { name: 'Carbon Steel: ASTM A106 Gr. B / A53 Gr. B', stress: 137.9, code: 'A106B' },
+  { name: 'Low-Temp Carbon Steel: ASTM A333 Gr. 6', stress: 137.9, code: 'A333' },
   { name: 'Carbon Steel: API 5L Gr. B', stress: 137.9, code: 'API5LB' },
   { name: 'High Yield Carbon Steel: API 5L X42', stress: 144.8, code: 'X42' },
   { name: 'High Yield Carbon Steel: API 5L X52', stress: 179.3, code: 'X52' },

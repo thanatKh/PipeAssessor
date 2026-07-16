@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Pipe Assessor – ASME B31.3 / PCC-2</title>
+  <title>Calculator – Pipe Assessor</title>
   <!-- Google Fonts Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1343,9 +1343,13 @@
   <div class="header-accent-bar"></div>
   <div class="wrap">
     <div class="header-brand">
-      <a class="hdr-logo-chip" href="index.html" title="Go to dashboard"><img class="hdr-logo" id="hdrLogo" alt="OR Logo"/></a>
+      <a class="hdr-logo-chip" href="index.html" title="Go to dashboard">
+        <img class="hdr-logo hdr-logo-light" id="hdrLogo" alt="OR Logo"/>
+        <img class="hdr-logo hdr-logo-dark" src="asset/RGB_OR_invert_logo%20on%20BlueOR%20Trans.png" alt="OR Logo"/>
+      </a>
       <div class="header-info">
-        <h1>Pipe Assessor</h1>
+        <h1>Calculator</h1>
+        <div class="hdr-sub">ASME B31.3 wall-thickness &amp; PCC-2 repair assessment</div>
       </div>
     </div>
     <div class="header-actions">
@@ -1730,6 +1734,16 @@
                   <line id="svgReqNoCaLine" x1="0" y1="0" x2="0" y2="0" stroke="var(--limit-req)" stroke-width="1.5" />
                   <line id="svgStructLine" x1="0" y1="0" x2="0" y2="0" stroke="var(--limit-struct)" stroke-width="1.5" stroke-dasharray="4 2" />
                 </g>
+
+                <!-- Empty-state placeholder: shown until a valid result exists, so the bare grey
+                     wall rect doesn't look like a broken/unfinished diagram on first load. Text
+                     content is empty here and filled in by drawSvgPipe() — a static var(--text-light)
+                     fill on a statically-parsed <text> node was observed not to paint in Chromium
+                     (computed style resolves correctly, but nothing rasterizes); setting it via JS
+                     alongside the other dynamic SVG labels avoids the same issue. -->
+                <text id="svgEmptyState" x="157" y="118" text-anchor="middle" font-size="11" font-family="Inter, sans-serif" font-weight="600"></text>
+                <text id="svgEmptyState2" x="157" y="134" text-anchor="middle" font-size="11" font-family="Inter, sans-serif" font-weight="600"></text>
+                <text id="svgEmptyState3" x="157" y="150" text-anchor="middle" font-size="11" font-family="Inter, sans-serif" font-weight="600"></text>
 
                 <!-- Interactive Drag Handle for defect depth -->
                 <circle id="svgDragHandle" class="drag-handle" cx="0" cy="0" r="6" style="display:none;" />
@@ -2178,9 +2192,11 @@ function runCalculations() {
     ['tmeas', 'errTmeas', document.getElementById('tmeas')],
     ['ca', 'errCa', document.getElementById('ca')]
   ];
+  // Same cold-load rule as the status banner (see `formTouched`): don't paint a field red
+  // before the user has interacted with the form — a pristine P=0 shouldn't look invalid.
   errMap.forEach(([key, elId, input]) => {
     const el = document.getElementById(elId);
-    const val = errs[key];
+    const val = formTouched ? errs[key] : false;
     if (val) {
       if (typeof val === 'string' && el) el.textContent = val; // dynamic CA message
       if (el) el.style.display = 'block';
@@ -2216,8 +2232,25 @@ function drawSvgPipe(res) {
     });
     const dragHandle = document.getElementById('svgDragHandle');
     if (dragHandle) dragHandle.style.display = 'none';
+    // fill is a literal hex, not var(--text-light): a CSS custom property used as a static SVG
+    // fill was observed to compute correctly (getComputedStyle reports the right RGB) but not
+    // actually paint in Chromium here — a real, reproducible quirk, not a fallback-safety thing.
+    // The diagram is always shown in the fixed light palette anyway (see svgToPngDataUrl), so a
+    // literal color is not a regression.
+    const emptyLines = ['Enter pipe geometry', '& design pressure to', 'see the wall profile'];
+    ['svgEmptyState', 'svgEmptyState2', 'svgEmptyState3'].forEach((id, i) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.setAttribute('fill', '#f1f5f9');
+      el.textContent = emptyLines[i];
+    });
     return;
   }
+
+  ['svgEmptyState', 'svgEmptyState2', 'svgEmptyState3'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = '';
+  });
 
   const { left: PLOT_L, right: PLOT_R, yOd: Y_OD, yId: Y_ID, pocketL: POCKET_L, pocketR: POCKET_R, pocketC: POCKET_C, pocketHalfW: POCKET_HW } = WALL_PLOT;
   const t_nom_px = Y_ID - Y_OD;

@@ -242,9 +242,10 @@ body > header .wrap {
   gap: 14px;
 }
 
-/* Full-color OR logo sits on a plain white patch (no border/shadow) so it reads on both the
-   light and dark header surfaces (the logo's navy 'OR' would vanish on a dark background
-   otherwise) — one asset, no theme swap. */
+/* Light mode: the full-color logo sits on a plain white patch (no border/shadow) — its navy
+   'OR' needs a light ground. Dark mode: no white chip — asset/RGB_OR_invert_logo swaps in (a
+   white/transparent variant made for dark surfaces) and sits directly on the dark header, so
+   the logo reads as part of the header instead of a pasted-on light patch. */
 .hdr-logo-chip {
   display: inline-flex;
   align-items: center;
@@ -252,6 +253,11 @@ body > header .wrap {
   border-radius: 8px;
   padding: 7px 12px;
   flex: none;
+}
+
+body.dark .hdr-logo-chip {
+  background: transparent;
+  padding: 0 12px;
 }
 
 .header-accent-bar {
@@ -295,6 +301,16 @@ body > header .wrap {
   letter-spacing: -0.3px;
   line-height: 1.2;
   color: var(--header-text);
+}
+
+.header-info .hdr-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+@media (max-width: 640px) {
+  .header-info .hdr-sub { display: none; }
 }
 
 .header-actions {
@@ -364,6 +380,11 @@ body > header .wrap {
   object-fit: contain;
   display: block;
 }
+
+/* Two stacked <img>s per theme (see .hdr-logo-chip comment above) — only one is ever shown. */
+.hdr-logo-dark { display: none; }
+body.dark .hdr-logo-light { display: none; }
+body.dark .hdr-logo-dark { display: block; }
 
 /* ============================================================================
    Theme toggle button

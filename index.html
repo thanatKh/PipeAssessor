@@ -38,12 +38,6 @@
     /* match the calculator's page width (theme.css default 1500px) */
 
     /* Header additions specific to this page */
-    .header-info .hdr-sub {
-      font-size: 11px;
-      color: var(--text-muted);
-      margin-top: 1px;
-    }
-
     .header-actions { gap: 10px; }
 
     .hdr-user {
@@ -57,7 +51,6 @@
 
     @media (max-width: 640px) {
       .header-info h1 { font-size: 16px; }
-      .header-info .hdr-sub { display: none; }
       .hdr-logo { height: 26px; }
       .hdr-logo-chip { padding: 6px 10px; }
       .hdr-user { display: none; }
@@ -199,6 +192,15 @@
     }
 
     .kpi.k-overdue .k-num { color: var(--danger-color); }
+
+    /* Below ~460px, "1 1 100px" flex-wrap packs 3 chips per row unevenly (3+2+1) and lets long
+       labels like "REPAIR PLANNED" wrap to two lines, making that chip taller than its row-mates.
+       A fixed 3-column grid keeps all six chips the same size in two even rows. */
+    @media (max-width: 640px) {
+      .kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); }
+      .kpi { min-width: 0; }
+      .kpi .k-label { font-size: 9px; }
+    }
 
     /* ============ Dashboard map ============ */
     #dashMap { height: 340px; z-index: 1; }
@@ -352,15 +354,31 @@
     table.list tbody tr:last-child td { border-bottom: none; }
 
     /* Tag cell: tag on top, finding-type as muted subtext, optional photo-count chip */
-    .c-tag .t-tag { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; }
-    .c-tag .t-type { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+    .c-tag .t-tag-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .c-tag .t-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+    .c-tag .t-type {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 1px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .c-tag .t-photos {
       display: inline-flex;
       align-items: center;
       gap: 3px;
       font-size: 10.5px;
       color: var(--text-light);
-      margin-left: 6px;
+      flex: none;
     }
 
     /* Age badge — days since inspection; escalates to warn/danger as an open finding ages */
@@ -382,6 +400,24 @@
       30% { background: var(--plan-bg); }
     }
     tr.row-flash { animation: row-flash 1.1s ease; }
+
+    /* Below ~640px there isn't room for Status/Tag/Terminal/Age/Due at their natural widths, and
+       an auto-layout table lets a long pipe tag wrap across lines instead of shrinking. Pin a
+       fixed layout with per-column widths so the tag cell is bounded and truncates (title attr
+       carries the full value) instead of blowing up row height. */
+    @media (max-width: 640px) {
+      table.list { table-layout: fixed; }
+      table.list th:nth-child(1), table.list td:nth-child(1) { width: 84px; }
+      /* Terminal is redundant with the KBY/SRC/BRP segmented filter right above the table, and
+         the tag itself usually encodes it — drop the column here so Pipe Tag gets breathing room. */
+      table.list th:nth-child(3), table.list td:nth-child(3) { display: none; }
+      table.list th:nth-child(4), table.list td:nth-child(4) { width: 34px; }
+      table.list th:nth-child(5), table.list td:nth-child(5) { width: 80px; }
+      table.list th, table.list td { padding: 8px 4px; }
+      table.list th:first-child, table.list td:first-child { padding-left: 0; }
+      .pill { font-size: 9.5px; padding: 3px 6px; letter-spacing: 0.2px; }
+      table.list .ov-badge { font-size: 9.5px; }
+    }
 
     .empty-row td {
       text-align: center;
@@ -761,6 +797,15 @@
     .status-actions .btn { font-size: 12px; }
 
     /* ============ Assessment list ============ */
+    .assess-history-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin: 14px 0 4px;
+    }
+
     .assess-item {
       display: flex;
       flex-wrap: wrap;
@@ -813,12 +858,21 @@
 
     /* ============ Dialog ============ */
     dialog.app-dlg {
+      position: fixed;
+      inset-block-start: 50%;
+      inset-inline-start: 50%;
+      top: 50%;
+      left: 50%;
+      translate: -50% -50%;
+      margin: 0;
       border: 1px solid var(--card-border);
       border-radius: 8px;
       background: var(--card-bg);
       color: var(--text-color);
       padding: 0;
       width: min(420px, calc(100vw - 32px));
+      max-height: calc(100vh - 32px);
+      overflow: auto;
     }
 
     dialog.app-dlg::backdrop { background: rgba(15, 23, 42, 0.5); }
@@ -906,7 +960,10 @@
   <div class="header-accent-bar"></div>
   <div class="wrap">
     <div class="header-brand">
-      <a class="hdr-logo-chip" href="#/list" title="Go to dashboard"><img class="hdr-logo" src="asset/RGB_OR_Full%20color.png" alt="OR Logo"/></a>
+      <a class="hdr-logo-chip" href="#/list" title="Go to dashboard">
+        <img class="hdr-logo hdr-logo-light" src="asset/RGB_OR_Full%20color.png" alt="OR Logo"/>
+        <img class="hdr-logo hdr-logo-dark" src="asset/RGB_OR_invert_logo%20on%20BlueOR%20Trans.png" alt="OR Logo"/>
+      </a>
       <div class="header-info">
         <h1>Findings Tracker</h1>
         <div class="hdr-sub">Piping abnormal findings — recorded until repaired</div>
@@ -1040,7 +1097,7 @@
           </div>
           <div>
             <label class="f-label" for="fService">Service / Fluid</label>
-            <input id="fService" class="input" type="text" placeholder="e.g., Diesel B7">
+            <input id="fService" class="input" type="text" placeholder="e.g., LPG, HSD, FO">
           </div>
           <div class="full">
             <label class="f-label" for="fLocationDesc">Location Description</label>
@@ -1457,7 +1514,7 @@ const PHOTO_BUCKET = 'finding-photos';
 
 const FINDING_TYPES = [
   'External Corrosion',
-  'Internal Corrosion / Wall Loss',
+  'Internal Corrosion',
   'CUI (Corrosion Under Insulation)',
   'CUS (Corrosion Under Support)',
   'Coating / Painting Damage',
@@ -1873,8 +1930,8 @@ function renderTable(rows) {
     return `<tr data-id="${esc(f.id)}" class="${dim.trim()}">
       <td>${pillHtml(f.status)}</td>
       <td class="c-tag">
-        <div><span class="t-tag">${esc(f.pipe_tag)}</span>${photoChip}</div>
-        <div class="t-type">${esc(f.finding_type)}</div>
+        <div class="t-tag-row"><span class="t-tag" title="${esc(f.pipe_tag)}">${esc(f.pipe_tag)}</span>${photoChip}</div>
+        <div class="t-type" title="${esc(f.finding_type)}">${esc(f.finding_type)}</div>
       </td>
       <td style="font-size:12px;">${esc(f.terminal)}</td>
       <td>${ageHtml(f)}</td>
@@ -2223,13 +2280,13 @@ async function onPastePhoto(e) {
 /* ---------------- inline ASME B31.3 assessment (combined into the finding form) ---------------- */
 
 // Finding types that auto-enable the assessment (a UT reading is expected for these).
-const WALL_LOSS_TYPES = ['External Corrosion', 'Internal Corrosion / Wall Loss', 'CUI (Corrosion Under Insulation)', 'CUS (Corrosion Under Support)'];
+const WALL_LOSS_TYPES = ['External Corrosion', 'Internal Corrosion', 'CUI (Corrosion Under Insulation)', 'CUS (Corrosion Under Support)'];
 
 // The finding type dictates whether the wall loss is internal or external, so the assessment's
 // Corrosion Type follows it automatically (CUI/CUS are external-surface mechanisms).
 const CORR_TYPE_BY_FINDING = {
   'External Corrosion': 'external',
-  'Internal Corrosion / Wall Loss': 'internal',
+  'Internal Corrosion': 'internal',
   'CUI (Corrosion Under Insulation)': 'external',
   'CUS (Corrosion Under Support)': 'external'
 };
@@ -2748,9 +2805,8 @@ function renderDetail() {
   d.push(dItem('Location', esc(f.location_desc || '—')));
   d.push(dItem('Vendor', esc(f.vendor || '—')));
   d.push(dItem('Report No.', esc(f.report_no || '—')));
-  d.push(dItem('Report Link', f.report_link
-    ? `<a href="${esc(f.report_link)}" target="_blank" rel="noopener" style="color:var(--button-primary);font-weight:600;">Open source report &#8599;</a>`
-    : '—'));
+  if (f.report_link) d.push(dItem('Report Link',
+    `<a href="${esc(f.report_link)}" target="_blank" rel="noopener" style="color:var(--button-primary);font-weight:600;">Open source report &#8599;</a>`));
   d.push(dItem('Inspection Date', `<span class="mono">${fmtDate(f.inspection_date)}</span>`));
   d.push(dItem('Method', esc(f.method || '—')));
   d.push(dItem('Severity', esc(f.severity || '—')));
@@ -2814,25 +2870,73 @@ function assessPill(status) {
   return `<span class="pill ${cls}">${esc(status || '—')}</span>`;
 }
 
+function materialName(code) {
+  const m = PA_MATERIALS.find(x => x.code === code);
+  return m ? m.name.replace(/^[^:]+:\s*/, '') : (code || '—');
+}
+
+const CORR_TYPE_LABEL = { external: 'External', internal: 'Internal' };
+
+function assessSetupLine(inputs) {
+  if (!inputs) return '';
+  const parts = [
+    inputs.nps,
+    inputs.schedule ? `Sch ${inputs.schedule}` : null,
+    materialName(inputs.material),
+    inputs.corr_type ? `${CORR_TYPE_LABEL[inputs.corr_type] || inputs.corr_type} corrosion` : null,
+    (inputs.P != null && inputs.P !== '') ? `Design P ${inputs.P} ${inputs.p_unit || ''}`.trim() : null
+  ].filter(Boolean);
+  return esc(parts.join(' · '));
+}
+
 function renderAssessments() {
   const body = $('assessBody');
   if (!currentAssessments.length) {
     body.innerHTML = '<div class="photo-empty">No assessment yet — "Run assessment" opens the calculator pre-filled with this pipe\'s data; saving there attaches the result here.</div>';
     return;
   }
-  body.innerHTML = currentAssessments.map((a, i) => {
-    const r = a.results || {};
-    return `<div class="assess-item">
+  const [latest, ...older] = currentAssessments;
+  const r = latest.results || {};
+  const rsCls = r.status === 'OK' ? 'rs-ok' : r.status === 'MONITOR' ? 'rs-mon' : 'rs-rep';
+  const setupLine = assessSetupLine(latest.inputs);
+
+  let html = `<div class="a-result-body ${rsCls}">
+    <div class="a-result-eyebrow">
+      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      LATEST ASSESSMENT — ${fmtDateTime(latest.created_at)}
+    </div>
+    <div class="a-result-head">
       ${assessPill(r.status)}
-      <span class="kv mono"><b>ERF</b> ${fmtN(r.erf_with, 3)}</span>
-      <span class="kv mono"><b>t req+CA</b> ${fmtN(r.t_req_total, 3)} mm</span>
-      <span class="kv mono"><b>t meas</b> ${fmtN(r.t_meas, 2)} mm</span>
-      <span class="kv mono"><b>Margin</b> ${fmtN(r.margin, 3)} mm</span>
-      <span class="kv mono"><b>MAWP</b> ${fmtN(r.mawp_with, 2)} ${esc(r.pUnit || '')}</span>
-      ${r.remainingLife != null ? `<span class="kv mono"><b>Life</b> ${fmtN(r.remainingLife, 1)} y</span>` : ''}
-      <span class="assess-meta">${i === 0 && currentAssessments.length > 1 ? 'Latest — ' : ''}${fmtDateTime(a.created_at)} — ${esc(a.created_by_email || '')}</span>
-    </div>`;
-  }).join('');
+      ${setupLine ? `<span class="a-result-note">${setupLine}</span>` : ''}
+    </div>
+    <div class="a-metrics">
+      <div class="a-metric"><span class="am-label">ERF</span><span class="am-val mono">${fmtN(r.erf_with, 3)}</span></div>
+      <div class="a-metric"><span class="am-label">t req+CA</span><span class="am-val mono">${fmtN(r.t_req_total, 3)} mm</span></div>
+      <div class="a-metric"><span class="am-label">t meas</span><span class="am-val mono">${fmtN(r.t_meas, 2)} mm</span></div>
+      <div class="a-metric"><span class="am-label">Margin</span><span class="am-val mono">${fmtN(r.margin, 3)} mm</span></div>
+      <div class="a-metric"><span class="am-label">MAWP</span><span class="am-val mono">${fmtN(r.mawp_with, 2)} ${esc(r.pUnit || '')}</span></div>
+      ${r.remainingLife != null ? `<div class="a-metric"><span class="am-label">Remaining life</span><span class="am-val mono">${fmtN(r.remainingLife, 1)} yr</span></div>` : ''}
+    </div>
+    <div class="a-result-note" style="margin-top:10px;">Recorded by ${esc(latest.created_by_email || '—')}</div>
+  </div>`;
+
+  if (older.length) {
+    html += `<div class="assess-history-label">Previous assessments (${older.length})</div>`;
+    html += older.map(a => {
+      const or = a.results || {};
+      const setup = assessSetupLine(a.inputs);
+      return `<div class="assess-item">
+        ${assessPill(or.status)}
+        <span class="kv mono"><b>ERF</b> ${fmtN(or.erf_with, 3)}</span>
+        <span class="kv mono"><b>t meas</b> ${fmtN(or.t_meas, 2)} mm</span>
+        <span class="kv mono"><b>Margin</b> ${fmtN(or.margin, 3)} mm</span>
+        ${or.remainingLife != null ? `<span class="kv mono"><b>Life</b> ${fmtN(or.remainingLife, 1)} y</span>` : ''}
+        <span class="assess-meta">${setup ? setup + ' — ' : ''}${fmtDateTime(a.created_at)} — ${esc(a.created_by_email || '')}</span>
+      </div>`;
+    }).join('');
+  }
+
+  body.innerHTML = html;
 }
 
 function photoThumb(p) {
