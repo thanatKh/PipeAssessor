@@ -1,0 +1,2009 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Findings Tracker – Pipe Assessor</title>
+
+  <!-- Google Fonts Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <!-- Basecoat CSS: same pinned version as index.html -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/basecoat-css@1.0.1/dist/basecoat.cdn.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/basecoat-css@1.0.1/dist/js/basecoat.min.js" defer></script>
+
+  <!-- Leaflet: satellite map picker for the finding's position -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" defer></script>
+
+  <!-- Supabase JS client (pinned; exposes window.supabase) — this page is online-only -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js" defer></script>
+
+  <!-- Basecoat token aliases — same block as index.html (see comments there for the
+       @layer / html.dark+body.dark cascade rationale; keep the two files in sync). -->
+  <style>
+    :root, html.dark, body.dark {
+      --background: var(--bg-color);
+      --foreground: var(--text-color);
+      --card: var(--card-bg);
+      --card-foreground: var(--text-color);
+      --border: var(--card-border);
+      --input: var(--input-border);
+      --ring: var(--input-focus);
+      --primary: var(--button-primary);
+      --primary-foreground: #ffffff;
+      --muted-foreground: var(--text-muted);
+      --destructive: var(--danger-color);
+      --destructive-foreground: #ffffff;
+      --radius: 0.5rem;
+    }
+  </style>
+
+  <style>
+    :root {
+      --bg-color: #f8fafc;
+      --text-color: #0f172a;
+      --text-muted: #475569;
+      --text-light: #64748b;
+
+      --card-bg: #ffffff;
+      --card-border: #e2e8f0;
+
+      --input-bg: #ffffff;
+      --input-border: #cbd5e1;
+      --input-focus: #14b8a6;
+
+      --header-bg: #ffffff;
+      --header-border: #e2e8f0;
+      --header-accent: #156B95;
+      --header-text: #0f172a;
+
+      --button-primary: #156B95;
+      --button-primary-hover: #0d4f6e;
+      --button-ghost: #ffffff;
+      --button-ghost-border: #cbd5e1;
+      --button-ghost-hover: #f1f5f9;
+
+      --ok-color: #059669;
+      --ok-bg: #dcfce7;
+      --ok-border: #bbf7d0;
+      --ok-text: #166534;
+
+      --warn-color: #d97706;
+      --warn-bg: #fef3c7;
+      --warn-border: #fde68a;
+      --warn-text: #92400e;
+
+      --danger-color: #dc2626;
+      --danger-bg: #fee2e2;
+      --danger-border: #fecaca;
+      --danger-text: #991b1b;
+
+      /* "Repair Planned" pill — a planned state is informational, not semaphore-colored */
+      --plan-bg: #dbeafe;
+      --plan-border: #bfdbfe;
+      --plan-text: #1e40af;
+
+      /* "Closed" pill — resolved, visually retired */
+      --closed-bg: #f1f5f9;
+      --closed-border: #e2e8f0;
+      --closed-text: #64748b;
+    }
+
+    html.dark, body.dark {
+      --bg-color: #0f172a;
+      --text-color: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-light: #64748b;
+
+      --card-bg: #1e293b;
+      --card-border: #334155;
+
+      --input-bg: #1e293b;
+      --input-border: #475569;
+      --input-focus: #2dd4bf;
+
+      --header-bg: #0f172a;
+      --header-border: #334155;
+      --header-accent: #38bdf8;
+      --header-text: #f8fafc;
+
+      --button-primary: #0284c7;
+      --button-primary-hover: #0369a1;
+      --button-ghost: #1e293b;
+      --button-ghost-border: #475569;
+      --button-ghost-hover: #334155;
+
+      --ok-color: #10b981;
+      --ok-bg: #064e3b;
+      --ok-border: #047857;
+      --ok-text: #a7f3d0;
+
+      --warn-color: #f59e0b;
+      --warn-bg: #78350f;
+      --warn-border: #b45309;
+      --warn-text: #fde68a;
+
+      --danger-color: #f43f5e;
+      --danger-bg: #7f1d1d;
+      --danger-border: #991b1b;
+      --danger-text: #fecaca;
+
+      --plan-bg: #1e3a8a;
+      --plan-border: #1d4ed8;
+      --plan-text: #bfdbfe;
+
+      --closed-bg: #1e293b;
+      --closed-border: #475569;
+      --closed-text: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s;
+    }
+
+    html, body {
+      background: var(--bg-color);
+      color: var(--text-color);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    .wrap {
+      max-width: 1200px;
+      width: 100%;
+      margin: auto;
+      padding: 20px;
+    }
+
+    .mono { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+
+    /* ============ Header (same pattern as index.html, scoped to body > header) ============ */
+    body > header {
+      background: var(--header-bg);
+      color: var(--header-text);
+      position: sticky;
+      top: 0;
+      z-index: 500;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+      border-bottom: 1px solid var(--header-border);
+    }
+
+    body > header .wrap {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      flex-wrap: wrap;
+      gap: 10px;
+      max-width: 1200px;
+    }
+
+    .header-accent-bar {
+      height: 3px;
+      background: linear-gradient(90deg, var(--header-accent) 0%, #38bdf8 100%);
+    }
+
+    .header-brand { display: flex; align-items: center; gap: 14px; }
+
+    .hdr-logo-chip {
+      display: inline-flex;
+      align-items: center;
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 7px 12px;
+      flex: none;
+    }
+
+    .hdr-logo { height: 34px; width: auto; object-fit: contain; display: block; }
+
+    .header-info h1 {
+      font-size: 19px;
+      font-weight: 800;
+      margin: 0;
+      letter-spacing: -0.3px;
+      line-height: 1.2;
+      color: var(--header-text);
+    }
+
+    .header-info .hdr-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+
+    .header-actions { display: flex; align-items: center; gap: 10px; }
+
+    .hdr-user {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .hdr-btn {
+      flex: none;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      border-radius: 6px;
+      text-decoration: none;
+    }
+
+    .hdr-btn[data-variant="outline"] {
+      background: var(--button-ghost);
+      border-color: var(--button-ghost-border);
+      color: var(--header-text);
+    }
+
+    .hdr-btn[data-variant="outline"]:hover {
+      background: var(--button-ghost-hover);
+      border-color: var(--button-primary);
+    }
+
+    .theme-btn {
+      background: transparent;
+      border: 1px solid var(--button-ghost-border);
+      border-radius: 8px;
+      width: 38px;
+      height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-color);
+      cursor: pointer;
+      transition: transform 0.1s ease;
+    }
+    .theme-btn:hover { background: var(--button-ghost-hover); border-color: var(--button-primary); }
+    .theme-btn:active { transform: scale(0.90); }
+    .theme-btn:focus-visible { outline: 2px solid var(--button-primary); outline-offset: 2px; }
+    .theme-btn svg { animation: theme-icon-in 0.32s ease; }
+    @keyframes theme-icon-in {
+      from { transform: rotate(-90deg) scale(0.5); opacity: 0; }
+      to { transform: rotate(0deg) scale(1); opacity: 1; }
+    }
+
+    @media (max-width: 640px) {
+      .header-info h1 { font-size: 16px; }
+      .header-info .hdr-sub { display: none; }
+      .hdr-logo { height: 26px; }
+      .hdr-logo-chip { padding: 6px 10px; }
+      .hdr-user { display: none; }
+      .hdr-btn { padding: 7px 10px; font-size: 11.5px; }
+    }
+
+    body:not(.authed) .authed-only { display: none !important; }
+
+    /* ============ Views ============ */
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* ============ Panels (this page's card unit) ============ */
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      margin-bottom: 14px;
+      overflow: hidden;
+    }
+
+    .panel-h {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .panel-h h2 {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-color);
+    }
+
+    .panel-b { padding: 14px; }
+
+    /* ============ Login ============ */
+    .login-wrap {
+      max-width: 380px;
+      margin: 8vh auto 0;
+    }
+
+    .login-wrap .panel-b { display: flex; flex-direction: column; gap: 12px; }
+
+    .login-title { font-size: 16px; font-weight: 800; margin: 0; }
+    .login-sub { font-size: 11.5px; color: var(--text-muted); margin: 2px 0 0; }
+
+    .login-err {
+      display: none;
+      font-size: 11.5px;
+      color: var(--danger-text);
+      background: var(--danger-bg);
+      border: 1px solid var(--danger-border);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+
+    /* ============ Labels / fields ============ */
+    label.f-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .req::after { content: " *"; color: var(--danger-color); }
+
+    .hint { font-size: 11px; color: var(--text-light); margin-top: 6px; }
+
+    .validation-alert {
+      display: none;
+      font-size: 11px;
+      color: var(--danger-text);
+      margin-top: 6px;
+    }
+
+    input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+    /* ============ KPI chips ============ */
+    .kpi-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .kpi {
+      flex: 1 1 100px;
+      min-width: 100px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+      color: var(--text-color);
+    }
+
+    .kpi:hover { border-color: var(--button-primary); }
+
+    .kpi.active {
+      border-color: var(--button-primary);
+      box-shadow: 0 0 0 1px var(--button-primary);
+    }
+
+    .kpi .k-num {
+      display: block;
+      font-family: 'JetBrains Mono', monospace;
+      font-variant-numeric: tabular-nums;
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .kpi .k-label {
+      display: block;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    .kpi.k-overdue .k-num { color: var(--danger-color); }
+
+    /* ============ Filters ============ */
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .filters .select, .filters .input { height: 34px; font-size: 12px; }
+    .filters .select { width: auto; min-width: 120px; }
+    .filters .input { flex: 1 1 160px; min-width: 140px; }
+
+    /* ============ Findings table ============ */
+    .tbl-scroll { overflow-x: auto; }
+
+    table.list {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+
+    table.list th {
+      text-align: left;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--card-border);
+      white-space: nowrap;
+    }
+
+    table.list td {
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--card-border);
+      vertical-align: middle;
+    }
+
+    table.list tbody tr { cursor: pointer; }
+    table.list tbody tr:hover { background: var(--button-ghost-hover); }
+    table.list tbody tr:last-child td { border-bottom: none; }
+
+    td.c-desc {
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text-muted);
+    }
+
+    .empty-row td {
+      text-align: center;
+      color: var(--text-light);
+      padding: 28px 10px;
+      font-size: 12px;
+      cursor: default;
+    }
+    tr.empty-row:hover { background: transparent !important; }
+
+    @media (max-width: 767px) {
+      .col-md { display: none; }
+    }
+
+    /* ============ Status pills ============ */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      padding: 3px 9px;
+      border-radius: 999px; /* pill: radius = height/2 by design */
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .st-open     { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-text); }
+    .st-mon      { background: var(--warn-bg);   border-color: var(--warn-border);   color: var(--warn-text); }
+    .st-plan     { background: var(--plan-bg);   border-color: var(--plan-border);   color: var(--plan-text); }
+    .st-rep      { background: var(--ok-bg);     border-color: var(--ok-border);     color: var(--ok-text); }
+    .st-closed   { background: var(--closed-bg); border-color: var(--closed-border); color: var(--closed-text); }
+
+    .ov-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      color: var(--danger-color);
+      white-space: nowrap;
+    }
+
+    .ov-badge::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--danger-color);
+    }
+
+    /* ============ Toolbar rows ============ */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--button-primary);
+      text-decoration: none;
+    }
+    .back-link:hover { text-decoration: underline; }
+
+    /* ============ Form ============ */
+    .fgrid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .fgrid .full { grid-column: 1 / -1; }
+
+    @media (max-width: 700px) {
+      .fgrid { grid-template-columns: 1fr; }
+    }
+
+    #fMap {
+      height: 260px;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      z-index: 1;
+    }
+
+    .coord-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+    .coord-row > div { flex: 1 1 130px; }
+
+    .form-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+
+    .form-actions .grp { display: flex; gap: 8px; }
+
+    .btn-danger-outline {
+      background: transparent;
+      border: 1px solid var(--danger-border);
+      color: var(--danger-color);
+    }
+    .btn-danger-outline:hover { background: var(--danger-bg); }
+
+    /* ============ Photos ============ */
+    .photo-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px;
+    }
+
+    .photo-thumb {
+      position: relative;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      overflow: hidden;
+      aspect-ratio: 4 / 3;
+      background: var(--bg-color);
+    }
+
+    .photo-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      cursor: pointer;
+    }
+
+    .photo-remove {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(15, 23, 42, 0.65);
+      color: #fff;
+      font-size: 13px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .photo-remove:hover { background: var(--danger-color); }
+
+    .photo-kind-tag {
+      position: absolute;
+      left: 4px;
+      bottom: 4px;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(15, 23, 42, 0.65);
+      color: #fff;
+    }
+
+    .photo-empty { font-size: 11.5px; color: var(--text-light); }
+
+    .photo-group-h {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 0 0 8px;
+    }
+
+    .photo-group-h h3 {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+    }
+
+    .photo-group + .photo-group { margin-top: 16px; }
+
+    /* ============ Detail ============ */
+    .detail-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .detail-head h2 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .dgrid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px 16px;
+    }
+
+    .dgrid .d-item .d-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+    }
+
+    .dgrid .d-item .d-val {
+      font-size: 13px;
+      margin-top: 2px;
+      overflow-wrap: anywhere;
+    }
+
+    .d-desc {
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      margin: 0;
+    }
+
+    .status-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .status-actions .btn { font-size: 12px; }
+
+    /* ============ Timeline ============ */
+    .timeline { list-style: none; margin: 0; padding: 0; }
+
+    .timeline li {
+      position: relative;
+      padding: 0 0 14px 22px;
+      border-left: 2px solid var(--card-border);
+      margin-left: 6px;
+    }
+
+    .timeline li:last-child { padding-bottom: 2px; border-left-color: transparent; }
+
+    .timeline li::before {
+      content: "";
+      position: absolute;
+      left: -6px;
+      top: 2px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--button-primary);
+      border: 2px solid var(--card-bg);
+    }
+
+    .tl-title { font-size: 12.5px; font-weight: 600; }
+    .tl-meta { font-size: 11px; color: var(--text-light); margin-top: 1px; }
+    .tl-note { font-size: 12px; color: var(--text-muted); margin-top: 3px; white-space: pre-wrap; }
+
+    /* ============ Dialog ============ */
+    dialog.app-dlg {
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      background: var(--card-bg);
+      color: var(--text-color);
+      padding: 0;
+      width: min(420px, calc(100vw - 32px));
+    }
+
+    dialog.app-dlg::backdrop { background: rgba(15, 23, 42, 0.5); }
+
+    .dlg-h {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--card-border);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .dlg-b { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+    .dlg-f {
+      padding: 12px 16px;
+      border-top: 1px solid var(--card-border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    /* ============ Toast ============ */
+    #toast {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%) translateY(8px);
+      background: #0f172a;
+      color: #f8fafc;
+      font-size: 12.5px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.3);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s, transform 0.25s;
+      z-index: 1000;
+      max-width: calc(100vw - 32px);
+    }
+
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #toast.err { background: var(--danger-color); }
+
+    /* ============ Photo lightbox ============ */
+    dialog#lightbox {
+      border: none;
+      background: transparent;
+      padding: 0;
+      max-width: 92vw;
+      max-height: 92vh;
+    }
+    dialog#lightbox::backdrop { background: rgba(15, 23, 42, 0.8); }
+    dialog#lightbox img {
+      max-width: 92vw;
+      max-height: 92vh;
+      display: block;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .footer {
+      text-align: center;
+      font-size: 10.5px;
+      color: var(--text-light);
+      padding: 18px 20px 26px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-accent-bar"></div>
+  <div class="wrap">
+    <div class="header-brand">
+      <span class="hdr-logo-chip"><img class="hdr-logo" src="asset/RGB_OR_Full%20color.png" alt="OR Logo"/></span>
+      <div class="header-info">
+        <h1>Findings Tracker</h1>
+        <div class="hdr-sub">Piping abnormal findings — recorded until repaired</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span class="hdr-user authed-only" id="hdrUser"></span>
+      <a class="btn hdr-btn" data-variant="outline" href="index.html">Calculator</a>
+      <button class="btn hdr-btn authed-only" data-variant="outline" id="btnSignOut" type="button">Sign out</button>
+      <button class="theme-btn" id="themeToggle" title="Toggle Dark/Light Mode" type="button">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ================= LOGIN ================= -->
+  <section id="viewLogin" class="view">
+    <div class="login-wrap">
+      <div class="panel">
+        <div class="panel-b">
+          <div>
+            <h2 class="login-title">Sign in</h2>
+            <p class="login-sub">Accounts are created by the maintenance engineer. Contact them if you need access.</p>
+          </div>
+          <div id="loginErr" class="login-err"></div>
+          <div>
+            <label class="f-label" for="loginEmail">Email</label>
+            <input id="loginEmail" class="input" type="email" autocomplete="username" placeholder="name@example.com">
+          </div>
+          <div>
+            <label class="f-label" for="loginPass">Password</label>
+            <input id="loginPass" class="input" type="password" autocomplete="current-password">
+          </div>
+          <button class="btn" id="btnSignIn" type="button">Sign in</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= LIST ================= -->
+  <section id="viewList" class="view">
+    <div class="kpi-row" id="kpiRow"></div>
+
+    <div class="panel">
+      <div class="panel-h">
+        <h2>Findings Register</h2>
+        <button class="btn" id="btnNew" type="button">+ New Finding</button>
+      </div>
+      <div class="panel-b" style="padding-bottom: 10px;">
+        <div class="filters">
+          <select id="filTerminal" class="select">
+            <option value="">All terminals</option>
+            <option>KBY</option><option>SRC</option><option>BRP</option>
+          </select>
+          <select id="filStatus" class="select">
+            <option value="">All statuses</option>
+            <option>Open</option><option>Monitoring</option><option>Repair Planned</option>
+            <option>Repaired</option><option>Closed</option>
+            <option value="__overdue">Overdue only</option>
+          </select>
+          <select id="filType" class="select"><option value="">All types</option></select>
+          <input id="filSearch" class="input" type="search" placeholder="Search tag, description, report no., SAP…">
+        </div>
+      </div>
+      <div class="tbl-scroll">
+        <table class="list">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Terminal</th>
+              <th>Pipe Tag</th>
+              <th>Type</th>
+              <th class="col-md">Description</th>
+              <th class="col-md">Inspected</th>
+              <th>Due</th>
+              <th class="col-md">SAP Notif.</th>
+            </tr>
+          </thead>
+          <tbody id="listBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= FORM (new / edit) ================= -->
+  <section id="viewForm" class="view">
+    <div class="toolbar">
+      <a class="back-link" href="#/list">&#8592; All findings</a>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><h2 id="formTitle">New Finding</h2></div>
+      <div class="panel-b">
+        <div class="fgrid">
+          <div>
+            <label class="f-label req" for="fTerminal">Terminal</label>
+            <select id="fTerminal" class="select">
+              <option value="" selected disabled>Select terminal…</option>
+              <option>KBY</option><option>SRC</option><option>BRP</option>
+            </select>
+            <div class="validation-alert" id="errTerminal">Terminal is required.</div>
+          </div>
+          <div>
+            <label class="f-label req" for="fTag">Pipe Tag / Line No.</label>
+            <input id="fTag" class="input" type="text" list="tagList" placeholder='e.g., 953-P-0001-10"-D1101-N'>
+            <datalist id="tagList"></datalist>
+            <div class="validation-alert" id="errTag">Pipe tag is required.</div>
+          </div>
+          <div>
+            <label class="f-label" for="fPid">P&amp;ID No.</label>
+            <input id="fPid" class="input" type="text" placeholder="e.g., 15-3-KBY-906-0117_Rev.Z2">
+          </div>
+          <div>
+            <label class="f-label" for="fService">Service / Fluid</label>
+            <input id="fService" class="input" type="text" placeholder="e.g., Diesel B7">
+          </div>
+          <div class="full">
+            <label class="f-label" for="fLocationDesc">Location Description</label>
+            <input id="fLocationDesc" class="input" type="text" placeholder="e.g., Elbow downstream of P-101, pipe rack column 5">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><h2>Source Inspection</h2></div>
+      <div class="panel-b">
+        <div class="fgrid">
+          <div>
+            <label class="f-label" for="fVendor">Inspection Vendor</label>
+            <input id="fVendor" class="input" type="text" placeholder="Company name">
+          </div>
+          <div>
+            <label class="f-label" for="fReportNo">Report No.</label>
+            <input id="fReportNo" class="input" type="text" placeholder="Vendor report reference">
+          </div>
+          <div>
+            <label class="f-label" for="fInspDate">Inspection Date</label>
+            <input id="fInspDate" class="input" type="date">
+          </div>
+          <div>
+            <label class="f-label" for="fMethod">Method</label>
+            <select id="fMethod" class="select">
+              <option value="">—</option>
+              <option>Visual</option><option>UT</option><option>RT</option>
+              <option>PT</option><option>MT</option><option>Other</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><h2>Anomaly</h2></div>
+      <div class="panel-b">
+        <div class="fgrid">
+          <div>
+            <label class="f-label req" for="fType">Finding Type</label>
+            <select id="fType" class="select"></select>
+            <div class="validation-alert" id="errType">Finding type is required.</div>
+          </div>
+          <div>
+            <label class="f-label" for="fSeverity">Severity</label>
+            <select id="fSeverity" class="select">
+              <option value="">—</option>
+              <option>Low</option><option>Medium</option><option>High</option>
+            </select>
+          </div>
+          <div class="full">
+            <label class="f-label" for="fDescription">Description</label>
+            <textarea id="fDescription" class="textarea" rows="3" placeholder="What was found, extent, reference to report section…"></textarea>
+          </div>
+          <div>
+            <label class="f-label" for="fTnom">Nominal Thickness (mm)</label>
+            <input id="fTnom" class="input mono" type="number" step="0.01" placeholder="optional">
+          </div>
+          <div>
+            <label class="f-label" for="fTmeas">Measured Min. Thickness (mm)</label>
+            <input id="fTmeas" class="input mono" type="number" step="0.01" placeholder="optional">
+          </div>
+          <div>
+            <label class="f-label" for="fDefLen">Defect Length (mm)</label>
+            <input id="fDefLen" class="input mono" type="number" step="1" placeholder="optional">
+          </div>
+          <div>
+            <label class="f-label" for="fDefWid">Defect Width (mm)</label>
+            <input id="fDefWid" class="input mono" type="number" step="1" placeholder="optional">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><h2>Position</h2></div>
+      <div class="panel-b">
+        <div class="coord-row" style="margin-bottom: 10px;">
+          <div>
+            <label class="f-label" for="fLat">Latitude</label>
+            <input id="fLat" class="input mono" type="number" step="0.000001" placeholder="13.097720">
+          </div>
+          <div>
+            <label class="f-label" for="fLng">Longitude</label>
+            <input id="fLng" class="input mono" type="number" step="0.000001" placeholder="100.887211">
+          </div>
+          <button class="btn" data-variant="outline" id="btnClearLoc" type="button" style="height: 36px;">Clear</button>
+        </div>
+        <div id="fMap"></div>
+        <div class="hint">Click the map to drop the pin, or type coordinates. Optional — used for the dashboard map.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><h2>Planning &amp; SAP (optional)</h2></div>
+      <div class="panel-b">
+        <div class="fgrid">
+          <div>
+            <label class="f-label" for="fTargetDate">Target Repair Date</label>
+            <input id="fTargetDate" class="input" type="date">
+          </div>
+          <div>
+            <label class="f-label" for="fSapNotif">SAP Notification No.</label>
+            <input id="fSapNotif" class="input mono" type="text" placeholder="e.g., 10012345">
+          </div>
+          <div>
+            <label class="f-label" for="fSapOrder">SAP Order No.</label>
+            <input id="fSapOrder" class="input mono" type="text" placeholder="e.g., 40012345">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="pendingPhotoPanel">
+      <div class="panel-h">
+        <h2>Photos (as found)</h2>
+        <button class="btn" data-variant="outline" id="btnAddPendingPhoto" type="button">+ Add photos</button>
+      </div>
+      <div class="panel-b">
+        <div class="photo-grid" id="pendingPhotoGrid"></div>
+        <div class="photo-empty" id="pendingPhotoEmpty">No photos yet. Photos are downscaled automatically before upload.</div>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <div class="grp">
+        <button class="btn btn-danger-outline" id="btnDelete" type="button" style="display:none;">Delete finding</button>
+      </div>
+      <div class="grp">
+        <a class="btn" data-variant="outline" href="#/list">Cancel</a>
+        <button class="btn" id="btnSave" type="button">Save finding</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= DETAIL ================= -->
+  <section id="viewDetail" class="view">
+    <div class="toolbar">
+      <a class="back-link" href="#/list">&#8592; All findings</a>
+      <button class="btn" data-variant="outline" id="btnEdit" type="button">Edit details</button>
+    </div>
+
+    <div class="panel">
+      <div class="panel-b">
+        <div class="detail-head" id="detailHead"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><h2>Status</h2></div>
+      <div class="panel-b">
+        <div class="dgrid" id="lifecycleGrid" style="margin-bottom: 12px;"></div>
+        <div class="status-actions" id="statusActions"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><h2>Details</h2></div>
+      <div class="panel-b">
+        <div class="dgrid" id="detailGrid"></div>
+        <div id="detailDesc" style="margin-top: 12px;"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><h2>Photographic Record</h2></div>
+      <div class="panel-b">
+        <div class="photo-group">
+          <div class="photo-group-h">
+            <h3>As Found</h3>
+            <button class="btn" data-variant="outline" id="btnAddFound" type="button">+ Add</button>
+          </div>
+          <div class="photo-grid" id="gridFound"></div>
+          <div class="photo-empty" id="emptyFound">No as-found photos.</div>
+        </div>
+        <div class="photo-group">
+          <div class="photo-group-h">
+            <h3>After Repair (confirmation)</h3>
+            <button class="btn" data-variant="outline" id="btnAddRepaired" type="button">+ Add</button>
+          </div>
+          <div class="photo-grid" id="gridRepaired"></div>
+          <div class="photo-empty" id="emptyRepaired">No after-repair photos yet — add one when the repair is completed.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><h2>History</h2></div>
+      <div class="panel-b">
+        <ul class="timeline" id="timeline"></ul>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Status-change dialog -->
+<dialog class="app-dlg" id="statusDlg">
+  <div class="dlg-h" id="dlgTitle">Change status</div>
+  <div class="dlg-b">
+    <div id="dlgExtra"></div>
+    <div>
+      <label class="f-label" for="dlgNote">Note</label>
+      <textarea id="dlgNote" class="textarea" rows="3" placeholder="What happened / reference…"></textarea>
+      <div class="validation-alert" id="errDlg"></div>
+    </div>
+  </div>
+  <div class="dlg-f">
+    <button class="btn" data-variant="outline" id="dlgCancel" type="button">Cancel</button>
+    <button class="btn" id="dlgConfirm" type="button">Confirm</button>
+  </div>
+</dialog>
+
+<!-- Photo lightbox -->
+<dialog id="lightbox"><img id="lightboxImg" alt="Photo"/></dialog>
+
+<!-- Hidden file inputs (camera opens on mobile) -->
+<input type="file" id="fileFound" accept="image/*" capture="environment" multiple hidden>
+<input type="file" id="fileRepaired" accept="image/*" capture="environment" multiple hidden>
+<input type="file" id="filePending" accept="image/*" capture="environment" multiple hidden>
+
+<div id="toast"></div>
+
+<div class="footer">
+  Central and Eastern Engineering and Maintenance Division — PTT Oil and Retail Business Public Company Limited
+</div>
+
+<script>
+/* =====================================================================
+   Findings Tracker — Phase 1
+   Data lives in Supabase (PostgreSQL + Storage), auth via email/password.
+   The anon (publishable) key below is safe to expose: Row Level Security
+   only grants access to signed-in users. See db/schema.sql.
+   ===================================================================== */
+
+const SUPABASE_URL = 'https://uuwcftjduphtngmhwvrb.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_-wA0hWoW-SIOpdlSpNrXkw_-YsUQYMH';
+const PHOTO_BUCKET = 'finding-photos';
+
+const FINDING_TYPES = [
+  'External Corrosion',
+  'Internal Corrosion / Wall Loss',
+  'CUI (Corrosion Under Insulation)',
+  'Coating / Painting Damage',
+  'Pipe Support Defect',
+  'Leak',
+  'Dent / Mechanical Damage',
+  'Other'
+];
+
+const STATUSES = ['Open', 'Monitoring', 'Repair Planned', 'Repaired', 'Closed'];
+
+const STATUS_META = {
+  'Open':           { cls: 'st-open' },
+  'Monitoring':     { cls: 'st-mon' },
+  'Repair Planned': { cls: 'st-plan' },
+  'Repaired':       { cls: 'st-rep' },
+  'Closed':         { cls: 'st-closed' }
+};
+
+// Same default view as the calculator's site-location map.
+const DEFAULT_MAP_VIEW = { center: [13.097720, 100.887211], zoom: 14 };
+const SAT_TILES = {
+  url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  attribution: 'Imagery (c) Esri, Maxar, Earthstar Geographics',
+  maxZoom: 19
+};
+
+let sb = null;              // Supabase client
+let session = null;
+let findings = [];          // list cache
+let current = null;         // finding shown in detail view
+let currentPhotos = [];
+let currentHistory = [];
+let editingId = null;       // null = creating
+let pendingPhotos = [];     // [{file, previewUrl}] queued on the NEW form
+let pickMap = null, pickMarker = null;
+
+/* ---------------- helpers ---------------- */
+
+const $ = (id) => document.getElementById(id);
+const val = (id) => $(id).value;
+
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function fmtDate(v) {
+  if (!v) return '—';
+  const d = new Date(v);
+  if (isNaN(d)) return '—';
+  return `${String(d.getDate()).padStart(2, '0')}/${MONTHS[d.getMonth()]}/${d.getFullYear()}`;
+}
+
+function fmtDateTime(v) {
+  if (!v) return '—';
+  const d = new Date(v);
+  if (isNaN(d)) return '—';
+  return `${fmtDate(v)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function isOverdue(f) {
+  const today = todayISO();
+  if ((f.status === 'Open' || f.status === 'Repair Planned') && f.target_date && f.target_date < today) return true;
+  if (f.status === 'Monitoring' && f.next_check_date && f.next_check_date < today) return true;
+  return false;
+}
+
+function dueDateOf(f) {
+  if (f.status === 'Monitoring') return f.next_check_date;
+  if (f.status === 'Open' || f.status === 'Repair Planned') return f.target_date;
+  return null;
+}
+
+function pillHtml(status) {
+  const m = STATUS_META[status] || { cls: 'st-closed' };
+  return `<span class="pill ${m.cls}">${esc(status)}</span>`;
+}
+
+let toastTimer = null;
+function notify(msg, isError) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.toggle('err', !!isError);
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), isError ? 5000 : 2800);
+}
+
+function setBusy(btn, busy, busyText) {
+  if (!btn) return;
+  if (busy) {
+    btn.dataset.label = btn.textContent;
+    btn.textContent = busyText || 'Working…';
+    btn.disabled = true;
+  } else {
+    if (btn.dataset.label) btn.textContent = btn.dataset.label;
+    btn.disabled = false;
+  }
+}
+
+// Same mandatory downscale as the calculator: raw phone photos are 3–12 MP.
+function downscaleImage(fileOrBlob, maxDim, quality) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(fileOrBlob);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        let w = img.naturalWidth, h = img.naturalHeight;
+        const scale = Math.min(1, maxDim / Math.max(w, h));
+        w = Math.max(1, Math.round(w * scale));
+        h = Math.max(1, Math.round(h * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      } catch (e) { reject(e); }
+      finally { URL.revokeObjectURL(url); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image load failed')); };
+    img.src = url;
+  });
+}
+
+/* ---------------- theme ---------------- */
+
+function applyThemeIcon() {
+  const isDark = document.body.classList.contains('dark');
+  $('themeToggle').innerHTML = isDark
+    ? '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
+    : '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+}
+
+function initTheme() {
+  // Shares the same localStorage key as index.html, so theme follows across pages.
+  const dark = localStorage.getItem('theme') === 'dark';
+  document.body.classList.toggle('dark', dark);
+  document.documentElement.classList.toggle('dark', dark);
+  applyThemeIcon();
+  $('themeToggle').addEventListener('click', () => {
+    document.body.classList.toggle('dark');
+    const isDark = document.body.classList.contains('dark');
+    document.documentElement.classList.toggle('dark', isDark);
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    applyThemeIcon();
+  });
+}
+
+/* ---------------- auth ---------------- */
+
+function updateAuthUI() {
+  document.body.classList.toggle('authed', !!session);
+  $('hdrUser').textContent = session ? (session.user.email || '') : '';
+}
+
+async function signIn() {
+  const errBox = $('loginErr');
+  errBox.style.display = 'none';
+  const email = val('loginEmail').trim();
+  const pass = val('loginPass');
+  if (!email || !pass) {
+    errBox.textContent = 'Enter both email and password.';
+    errBox.style.display = 'block';
+    return;
+  }
+  setBusy($('btnSignIn'), true, 'Signing in…');
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  setBusy($('btnSignIn'), false);
+  if (error) {
+    errBox.textContent = error.message === 'Invalid login credentials'
+      ? 'Email or password is incorrect.' : error.message;
+    errBox.style.display = 'block';
+    return;
+  }
+  $('loginPass').value = '';
+}
+
+/* ---------------- routing ---------------- */
+
+function show(viewId) {
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === viewId));
+  window.scrollTo(0, 0);
+}
+
+async function route() {
+  if (!session) { show('viewLogin'); return; }
+  const h = location.hash || '#/list';
+
+  if (h.startsWith('#/f/')) {
+    const ok = await loadDetail(h.slice(4));
+    if (ok) { renderDetail(); show('viewDetail'); }
+    else location.hash = '#/list';
+    return;
+  }
+  if (h === '#/new') {
+    openForm(null);
+    show('viewForm');
+    return;
+  }
+  if (h.startsWith('#/edit/')) {
+    const id = h.slice(7);
+    let f = findings.find(x => x.id === id) || (current && current.id === id ? current : null);
+    if (!f) {
+      const { data, error } = await sb.from('findings').select('*').eq('id', id).single();
+      if (error) { notify('Finding not found.', true); location.hash = '#/list'; return; }
+      f = data;
+    }
+    openForm(f);
+    show('viewForm');
+    return;
+  }
+  // default: list
+  await loadFindings();
+  renderList();
+  show('viewList');
+}
+
+/* ---------------- data ---------------- */
+
+async function loadFindings() {
+  const { data, error } = await sb.from('findings').select('*').order('created_at', { ascending: false });
+  if (error) { notify('Load failed: ' + error.message, true); return; }
+  findings = data || [];
+}
+
+async function loadDetail(id) {
+  const [f, ph, hi] = await Promise.all([
+    sb.from('findings').select('*').eq('id', id).single(),
+    sb.from('finding_photos').select('*').eq('finding_id', id).order('created_at', { ascending: true }),
+    sb.from('status_history').select('*').eq('finding_id', id).order('changed_at', { ascending: false })
+  ]);
+  if (f.error) { notify('Finding not found.', true); return false; }
+  current = f.data;
+  currentPhotos = ph.data || [];
+  currentHistory = hi.data || [];
+  return true;
+}
+
+function photoUrl(path) {
+  return sb.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
+/* ---------------- list view ---------------- */
+
+const filters = { terminal: '', status: '', type: '', q: '' };
+
+function applyFilters(rows) {
+  const q = filters.q.trim().toLowerCase();
+  return rows.filter(f => {
+    if (filters.terminal && f.terminal !== filters.terminal) return false;
+    if (filters.status === '__overdue') { if (!isOverdue(f)) return false; }
+    else if (filters.status && f.status !== filters.status) return false;
+    if (filters.type && f.finding_type !== filters.type) return false;
+    if (q) {
+      const hay = [f.pipe_tag, f.description, f.location_desc, f.report_no, f.sap_notification, f.sap_order, f.pid_no, f.service]
+        .map(x => (x || '').toLowerCase()).join(' ');
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderKpis() {
+  const count = (st) => findings.filter(f => f.status === st).length;
+  const overdue = findings.filter(isOverdue).length;
+  const items = [
+    { label: 'Open', num: count('Open'), filter: 'Open' },
+    { label: 'Monitoring', num: count('Monitoring'), filter: 'Monitoring' },
+    { label: 'Repair Planned', num: count('Repair Planned'), filter: 'Repair Planned' },
+    { label: 'Overdue', num: overdue, filter: '__overdue', cls: 'k-overdue' },
+    { label: 'Repaired', num: count('Repaired'), filter: 'Repaired' },
+    { label: 'All', num: findings.length, filter: '' }
+  ];
+  $('kpiRow').innerHTML = items.map(it =>
+    `<button type="button" class="kpi ${it.cls || ''} ${filters.status === it.filter && (it.filter !== '' || filters.status === '') ? '' : ''}" data-filter="${esc(it.filter)}">
+       <span class="k-num">${it.num}</span><span class="k-label">${esc(it.label)}</span>
+     </button>`).join('');
+  $('kpiRow').querySelectorAll('.kpi').forEach(btn => {
+    if (btn.dataset.filter === filters.status) btn.classList.add('active');
+    btn.addEventListener('click', () => {
+      filters.status = btn.dataset.filter;
+      $('filStatus').value = filters.status;
+      renderList();
+    });
+  });
+}
+
+function renderTable() {
+  const rows = applyFilters(findings);
+  const body = $('listBody');
+  if (!rows.length) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="8">${findings.length ? 'No findings match the current filters.' : 'No findings recorded yet — use “+ New Finding” to add the first one.'}</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map(f => {
+    const due = dueDateOf(f);
+    const dueHtml = isOverdue(f)
+      ? `<span class="ov-badge">${fmtDate(due)}</span>`
+      : `<span class="mono" style="font-size:12px;">${fmtDate(due)}</span>`;
+    return `<tr data-id="${esc(f.id)}">
+      <td>${pillHtml(f.status)}</td>
+      <td>${esc(f.terminal)}</td>
+      <td class="mono" style="font-size:12px; font-weight:600;">${esc(f.pipe_tag)}</td>
+      <td style="font-size:12px;">${esc(f.finding_type)}</td>
+      <td class="col-md c-desc">${esc(f.description || '')}</td>
+      <td class="col-md mono" style="font-size:12px;">${fmtDate(f.inspection_date)}</td>
+      <td>${dueHtml}</td>
+      <td class="col-md mono" style="font-size:12px;">${esc(f.sap_notification || '—')}</td>
+    </tr>`;
+  }).join('');
+  body.querySelectorAll('tr[data-id]').forEach(tr => {
+    tr.addEventListener('click', () => { location.hash = '#/f/' + tr.dataset.id; });
+  });
+}
+
+function renderList() {
+  renderKpis();
+  renderTable();
+  // refresh the tag autocomplete from everything recorded so far
+  const tags = [...new Set(findings.map(f => f.pipe_tag).filter(Boolean))];
+  $('tagList').innerHTML = tags.map(t => `<option value="${esc(t)}"></option>`).join('');
+}
+
+/* ---------------- form (new / edit) ---------------- */
+
+function clearValidation() {
+  ['fTerminal', 'fTag', 'fType'].forEach(id => $(id).removeAttribute('aria-invalid'));
+  ['errTerminal', 'errTag', 'errType'].forEach(id => $(id).style.display = 'none');
+}
+
+function setPin(lat, lng, recenter) {
+  $('fLat').value = lat.toFixed(6);
+  $('fLng').value = lng.toFixed(6);
+  if (pickMap && typeof L !== 'undefined') {
+    if (!pickMarker) pickMarker = L.marker([lat, lng]).addTo(pickMap);
+    else pickMarker.setLatLng([lat, lng]);
+    if (recenter) pickMap.setView([lat, lng], Math.max(pickMap.getZoom(), 16));
+  }
+}
+
+function clearPin() {
+  $('fLat').value = '';
+  $('fLng').value = '';
+  if (pickMarker && pickMap) { pickMap.removeLayer(pickMarker); pickMarker = null; }
+}
+
+function ensurePickMap() {
+  const el = $('fMap');
+  if (typeof L === 'undefined') {
+    el.style.display = 'flex';
+    el.style.alignItems = 'center';
+    el.style.justifyContent = 'center';
+    el.style.fontSize = '11px';
+    el.style.color = 'var(--text-light)';
+    el.textContent = 'Map unavailable — enter coordinates manually.';
+    return;
+  }
+  if (pickMap) { setTimeout(() => pickMap.invalidateSize(), 80); return; }
+  pickMap = L.map(el, { center: DEFAULT_MAP_VIEW.center, zoom: DEFAULT_MAP_VIEW.zoom, scrollWheelZoom: true });
+  L.tileLayer(SAT_TILES.url, { maxZoom: SAT_TILES.maxZoom, attribution: SAT_TILES.attribution }).addTo(pickMap);
+  pickMap.on('click', (e) => setPin(e.latlng.lat, e.latlng.lng, false));
+  setTimeout(() => pickMap.invalidateSize(), 150);
+}
+
+function renderPendingGrid() {
+  const grid = $('pendingPhotoGrid');
+  grid.innerHTML = pendingPhotos.map((p, i) =>
+    `<div class="photo-thumb">
+       <img src="${p.previewUrl}" alt="Pending photo">
+       <button type="button" class="photo-remove" data-i="${i}" title="Remove">&#215;</button>
+     </div>`).join('');
+  $('pendingPhotoEmpty').style.display = pendingPhotos.length ? 'none' : 'block';
+  grid.querySelectorAll('.photo-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      pendingPhotos.splice(Number(btn.dataset.i), 1);
+      renderPendingGrid();
+    });
+  });
+}
+
+function openForm(f) {
+  editingId = f ? f.id : null;
+  clearValidation();
+  pendingPhotos = [];
+  renderPendingGrid();
+
+  $('formTitle').textContent = f ? 'Edit Finding' : 'New Finding';
+  $('btnDelete').style.display = f ? 'inline-flex' : 'none';
+  // photos of an existing finding are managed from its detail page
+  $('pendingPhotoPanel').style.display = f ? 'none' : 'block';
+
+  $('fTerminal').value = f ? f.terminal : '';
+  $('fTag').value = f ? f.pipe_tag : '';
+  $('fPid').value = f ? (f.pid_no || '') : '';
+  $('fService').value = f ? (f.service || '') : '';
+  $('fLocationDesc').value = f ? (f.location_desc || '') : '';
+  $('fVendor').value = f ? (f.vendor || '') : '';
+  $('fReportNo').value = f ? (f.report_no || '') : '';
+  $('fInspDate').value = f ? (f.inspection_date || '') : '';
+  $('fMethod').value = f ? (f.method || '') : '';
+  $('fType').value = f ? f.finding_type : '';
+  $('fSeverity').value = f ? (f.severity || '') : '';
+  $('fDescription').value = f ? (f.description || '') : '';
+  $('fTnom').value = f && f.t_nominal != null ? f.t_nominal : '';
+  $('fTmeas').value = f && f.t_measured != null ? f.t_measured : '';
+  $('fDefLen').value = f && f.defect_length_mm != null ? f.defect_length_mm : '';
+  $('fDefWid').value = f && f.defect_width_mm != null ? f.defect_width_mm : '';
+  $('fTargetDate').value = f ? (f.target_date || '') : '';
+  $('fSapNotif').value = f ? (f.sap_notification || '') : '';
+  $('fSapOrder').value = f ? (f.sap_order || '') : '';
+
+  // map: view is display:none until show() runs, so defer sizing to next tick
+  setTimeout(() => {
+    ensurePickMap();
+    if (pickMarker && pickMap) { pickMap.removeLayer(pickMarker); pickMarker = null; }
+    if (f && f.lat != null && f.lng != null) {
+      $('fLat').value = f.lat; $('fLng').value = f.lng;
+      if (pickMap) {
+        pickMarker = L.marker([f.lat, f.lng]).addTo(pickMap);
+        pickMap.setView([f.lat, f.lng], 16);
+      }
+    } else {
+      $('fLat').value = ''; $('fLng').value = '';
+      if (pickMap) pickMap.setView(DEFAULT_MAP_VIEW.center, DEFAULT_MAP_VIEW.zoom);
+    }
+  }, 60);
+}
+
+function collectForm() {
+  const sOrNull = (id) => { const v = val(id).trim(); return v === '' ? null : v; };
+  const nOrNull = (id) => { const v = val(id); return v === '' ? null : Number(v); };
+  const dOrNull = (id) => val(id) || null;
+
+  let bad = false;
+  const need = (id, errId, cond) => {
+    if (cond) {
+      $(id).setAttribute('aria-invalid', 'true');
+      $(errId).style.display = 'block';
+      bad = true;
+    } else {
+      $(id).removeAttribute('aria-invalid');
+      $(errId).style.display = 'none';
+    }
+  };
+  need('fTerminal', 'errTerminal', !val('fTerminal'));
+  need('fTag', 'errTag', !val('fTag').trim());
+  need('fType', 'errType', !val('fType'));
+  if (bad) return null;
+
+  return {
+    terminal: val('fTerminal'),
+    pipe_tag: val('fTag').trim(),
+    pid_no: sOrNull('fPid'),
+    service: sOrNull('fService'),
+    location_desc: sOrNull('fLocationDesc'),
+    vendor: sOrNull('fVendor'),
+    report_no: sOrNull('fReportNo'),
+    inspection_date: dOrNull('fInspDate'),
+    method: sOrNull('fMethod'),
+    finding_type: val('fType'),
+    severity: sOrNull('fSeverity'),
+    description: sOrNull('fDescription'),
+    t_nominal: nOrNull('fTnom'),
+    t_measured: nOrNull('fTmeas'),
+    defect_length_mm: nOrNull('fDefLen'),
+    defect_width_mm: nOrNull('fDefWid'),
+    lat: nOrNull('fLat'),
+    lng: nOrNull('fLng'),
+    target_date: dOrNull('fTargetDate'),
+    sap_notification: sOrNull('fSapNotif'),
+    sap_order: sOrNull('fSapOrder')
+  };
+}
+
+async function uploadPhoto(findingId, file, kind) {
+  const dataUrl = await downscaleImage(file, 1600, 0.8);
+  const blob = await (await fetch(dataUrl)).blob();
+  const path = `${findingId}/${crypto.randomUUID()}.jpg`;
+  const up = await sb.storage.from(PHOTO_BUCKET).upload(path, blob, { contentType: 'image/jpeg' });
+  if (up.error) throw up.error;
+  const ins = await sb.from('finding_photos').insert({ finding_id: findingId, kind, storage_path: path });
+  if (ins.error) throw ins.error;
+}
+
+async function saveForm() {
+  const payload = collectForm();
+  if (!payload) { notify('Please fill the required fields.', true); return; }
+  const btn = $('btnSave');
+  setBusy(btn, true, 'Saving…');
+  try {
+    let id = editingId;
+    if (editingId) {
+      const { error } = await sb.from('findings').update(payload).eq('id', editingId);
+      if (error) throw error;
+    } else {
+      const { data, error } = await sb.from('findings').insert(payload).select('id').single();
+      if (error) throw error;
+      id = data.id;
+      // opening entry of the handover trail
+      await sb.from('status_history').insert({
+        finding_id: id, old_status: null, new_status: 'Open', note: 'Finding recorded'
+      });
+      let failed = 0;
+      for (const p of pendingPhotos) {
+        try { await uploadPhoto(id, p.file, 'found'); } catch (e) { failed++; console.warn('photo upload failed', e); }
+      }
+      if (failed) notify(`${failed} photo(s) failed to upload — you can retry from the finding page.`, true);
+    }
+    notify(editingId ? 'Finding updated.' : 'Finding recorded.');
+    location.hash = '#/f/' + id;
+  } catch (e) {
+    notify('Save failed: ' + e.message, true);
+  } finally {
+    setBusy(btn, false);
+  }
+}
+
+async function deleteFinding() {
+  if (!editingId) return;
+  const f = findings.find(x => x.id === editingId) || current;
+  const tag = f ? f.pipe_tag : '';
+  if (!window.confirm(`Delete this finding (${tag})? Its photos and history are removed permanently.`)) return;
+  const btn = $('btnDelete');
+  setBusy(btn, true, 'Deleting…');
+  try {
+    const { data: ph } = await sb.from('finding_photos').select('storage_path').eq('finding_id', editingId);
+    if (ph && ph.length) await sb.storage.from(PHOTO_BUCKET).remove(ph.map(p => p.storage_path));
+    const { error } = await sb.from('findings').delete().eq('id', editingId);
+    if (error) throw error;
+    notify('Finding deleted.');
+    location.hash = '#/list';
+  } catch (e) {
+    notify('Delete failed: ' + e.message, true);
+  } finally {
+    setBusy(btn, false);
+  }
+}
+
+/* ---------------- detail view ---------------- */
+
+function dItem(label, valueHtml) {
+  return `<div class="d-item"><div class="d-label">${esc(label)}</div><div class="d-val">${valueHtml}</div></div>`;
+}
+
+function renderDetail() {
+  const f = current;
+
+  $('detailHead').innerHTML =
+    `<h2>${esc(f.pipe_tag)}</h2>${pillHtml(f.status)}${isOverdue(f) ? '<span class="ov-badge">OVERDUE</span>' : ''}` +
+    `<span style="font-size:12px;color:var(--text-muted);">${esc(f.terminal)} Terminal — ${esc(f.finding_type)}</span>`;
+
+  const life = [];
+  life.push(dItem('Current Status', pillHtml(f.status)));
+  if (f.target_date) life.push(dItem('Target Repair Date', `<span class="mono">${fmtDate(f.target_date)}</span>`));
+  if (f.next_check_date) life.push(dItem('Re-inspect By', `<span class="mono">${fmtDate(f.next_check_date)}</span>`));
+  if (f.sap_notification) life.push(dItem('SAP Notification', `<span class="mono">${esc(f.sap_notification)}</span>`));
+  if (f.sap_order) life.push(dItem('SAP Order', `<span class="mono">${esc(f.sap_order)}</span>`));
+  if (f.repair_method) life.push(dItem('Repair Method', esc(f.repair_method)));
+  if (f.repaired_date) life.push(dItem('Repaired Date', `<span class="mono">${fmtDate(f.repaired_date)}</span>`));
+  if (f.closing_note) life.push(dItem('Closing Note', esc(f.closing_note)));
+  $('lifecycleGrid').innerHTML = life.join('');
+
+  // status actions: every other status is reachable (single-team tool — flexibility beats ceremony)
+  $('statusActions').innerHTML = STATUSES.filter(s => s !== f.status)
+    .map(s => `<button type="button" class="btn" data-variant="outline" data-st="${esc(s)}">&#8594; ${esc(s)}</button>`)
+    .join('');
+  $('statusActions').querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => openStatusDialog(btn.dataset.st));
+  });
+
+  const d = [];
+  d.push(dItem('Terminal', esc(f.terminal)));
+  d.push(dItem('P&ID', esc(f.pid_no || '—')));
+  d.push(dItem('Service', esc(f.service || '—')));
+  d.push(dItem('Location', esc(f.location_desc || '—')));
+  d.push(dItem('Vendor', esc(f.vendor || '—')));
+  d.push(dItem('Report No.', esc(f.report_no || '—')));
+  d.push(dItem('Inspection Date', `<span class="mono">${fmtDate(f.inspection_date)}</span>`));
+  d.push(dItem('Method', esc(f.method || '—')));
+  d.push(dItem('Severity', esc(f.severity || '—')));
+  if (f.t_nominal != null) d.push(dItem('Nominal Thk.', `<span class="mono">${f.t_nominal} mm</span>`));
+  if (f.t_measured != null) d.push(dItem('Measured Min.', `<span class="mono">${f.t_measured} mm</span>`));
+  if (f.defect_length_mm != null || f.defect_width_mm != null)
+    d.push(dItem('Defect L × W', `<span class="mono">${f.defect_length_mm != null ? f.defect_length_mm : '—'} × ${f.defect_width_mm != null ? f.defect_width_mm : '—'} mm</span>`));
+  if (f.lat != null && f.lng != null)
+    d.push(dItem('Coordinates', `<a class="mono" style="color:var(--button-primary);" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${f.lat},${f.lng}">${Number(f.lat).toFixed(6)}, ${Number(f.lng).toFixed(6)}</a>`));
+  d.push(dItem('Recorded By', esc(f.created_by_email || '—')));
+  d.push(dItem('Recorded At', `<span class="mono">${fmtDateTime(f.created_at)}</span>`));
+  $('detailGrid').innerHTML = d.join('');
+
+  $('detailDesc').innerHTML = f.description
+    ? `<div class="d-label" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:4px;">Description</div><p class="d-desc">${esc(f.description)}</p>`
+    : '';
+
+  renderPhotoGroups();
+  renderTimeline();
+}
+
+function photoThumb(p) {
+  const url = photoUrl(p.storage_path);
+  return `<div class="photo-thumb">
+    <img src="${esc(url)}" alt="Finding photo" data-url="${esc(url)}">
+    <button type="button" class="photo-remove" data-id="${esc(p.id)}" data-path="${esc(p.storage_path)}" title="Delete photo">&#215;</button>
+  </div>`;
+}
+
+function renderPhotoGroups() {
+  const found = currentPhotos.filter(p => p.kind === 'found');
+  const rep = currentPhotos.filter(p => p.kind === 'repaired');
+  $('gridFound').innerHTML = found.map(photoThumb).join('');
+  $('gridRepaired').innerHTML = rep.map(photoThumb).join('');
+  $('emptyFound').style.display = found.length ? 'none' : 'block';
+  $('emptyRepaired').style.display = rep.length ? 'none' : 'block';
+
+  document.querySelectorAll('#viewDetail .photo-thumb img').forEach(img => {
+    img.addEventListener('click', () => {
+      $('lightboxImg').src = img.dataset.url;
+      $('lightbox').showModal();
+    });
+  });
+  document.querySelectorAll('#viewDetail .photo-remove').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!window.confirm('Delete this photo?')) return;
+      try {
+        await sb.storage.from(PHOTO_BUCKET).remove([btn.dataset.path]);
+        const { error } = await sb.from('finding_photos').delete().eq('id', btn.dataset.id);
+        if (error) throw error;
+        currentPhotos = currentPhotos.filter(p => p.id !== btn.dataset.id);
+        renderPhotoGroups();
+        notify('Photo deleted.');
+      } catch (e) { notify('Delete failed: ' + e.message, true); }
+    });
+  });
+}
+
+async function addDetailPhotos(files, kind) {
+  if (!files || !files.length) return;
+  notify('Uploading ' + files.length + ' photo(s)…');
+  let ok = 0, failed = 0;
+  for (const f of files) {
+    if (!f.type || !f.type.startsWith('image/')) continue;
+    try { await uploadPhoto(current.id, f, kind); ok++; }
+    catch (e) { failed++; console.warn('upload failed', e); }
+  }
+  const { data } = await sb.from('finding_photos').select('*').eq('finding_id', current.id).order('created_at', { ascending: true });
+  currentPhotos = data || [];
+  renderPhotoGroups();
+  if (failed) notify(`${ok} uploaded, ${failed} failed.`, true);
+  else notify(`${ok} photo(s) added.`);
+}
+
+function renderTimeline() {
+  const tl = $('timeline');
+  if (!currentHistory.length) {
+    tl.innerHTML = '<li><div class="tl-title">No history yet</div></li>';
+    return;
+  }
+  tl.innerHTML = currentHistory.map(h => `
+    <li>
+      <div class="tl-title">${h.old_status ? `${esc(h.old_status)} &#8594; ` : ''}${esc(h.new_status)}</div>
+      <div class="tl-meta">${fmtDateTime(h.changed_at)} — ${esc(h.changed_by_email || '')}</div>
+      ${h.note ? `<div class="tl-note">${esc(h.note)}</div>` : ''}
+    </li>`).join('');
+}
+
+/* ---------------- status-change dialog ---------------- */
+
+let dlgTarget = null;
+
+function openStatusDialog(target) {
+  dlgTarget = target;
+  $('dlgTitle').textContent = `${current.status} → ${target}`;
+  $('dlgNote').value = '';
+  $('errDlg').style.display = 'none';
+
+  let extra = '';
+  if (target === 'Monitoring') {
+    extra = `<label class="f-label req" for="dlgDate">Re-inspect by</label>
+             <input id="dlgDate" class="input" type="date" value="${esc(current.next_check_date || '')}">`;
+  } else if (target === 'Repair Planned') {
+    extra = `<label class="f-label req" for="dlgDate">Target repair date</label>
+             <input id="dlgDate" class="input" type="date" value="${esc(current.target_date || '')}">`;
+  } else if (target === 'Repaired') {
+    extra = `<label class="f-label req" for="dlgDate">Repaired date</label>
+             <input id="dlgDate" class="input" type="date" value="${todayISO()}">
+             <label class="f-label" for="dlgRepairMethod" style="margin-top:12px;">Repair method (PCC-2 / description)</label>
+             <input id="dlgRepairMethod" class="input" type="text" value="${esc(current.repair_method || '')}" placeholder="e.g., Weld overlay / clamp / replacement spool">`;
+  }
+  $('dlgExtra').innerHTML = extra;
+  $('statusDlg').showModal();
+}
+
+async function confirmStatusChange() {
+  const target = dlgTarget;
+  const note = val('dlgNote').trim();
+  const dateEl = $('dlgDate');
+  const err = $('errDlg');
+  err.style.display = 'none';
+
+  const patch = { status: target };
+  if (target === 'Monitoring') {
+    if (!dateEl.value) { err.textContent = 'Re-inspect date is required for Monitoring.'; err.style.display = 'block'; return; }
+    patch.next_check_date = dateEl.value;
+  } else if (target === 'Repair Planned') {
+    if (!dateEl.value) { err.textContent = 'Target repair date is required.'; err.style.display = 'block'; return; }
+    patch.target_date = dateEl.value;
+  } else if (target === 'Repaired') {
+    if (!dateEl.value) { err.textContent = 'Repaired date is required.'; err.style.display = 'block'; return; }
+    patch.repaired_date = dateEl.value;
+    const rm = val('dlgRepairMethod').trim();
+    if (rm) patch.repair_method = rm;
+    const hasRepairedPhoto = currentPhotos.some(p => p.kind === 'repaired');
+    if (!hasRepairedPhoto &&
+        !window.confirm('No after-repair photo is attached yet. Mark as Repaired anyway? You can add the confirmation photo later.')) {
+      return;
+    }
+  } else if (target === 'Closed') {
+    if (!note) { err.textContent = 'A closing note is required to close a finding.'; err.style.display = 'block'; return; }
+    patch.closing_note = note;
+  }
+
+  const btn = $('dlgConfirm');
+  setBusy(btn, true, 'Saving…');
+  try {
+    const { error } = await sb.from('findings').update(patch).eq('id', current.id);
+    if (error) throw error;
+    const { error: e2 } = await sb.from('status_history').insert({
+      finding_id: current.id, old_status: current.status, new_status: target, note: note || null
+    });
+    if (e2) throw e2;
+    $('statusDlg').close();
+    notify(`Status changed to ${target}.`);
+    await loadDetail(current.id);
+    renderDetail();
+  } catch (e) {
+    err.textContent = 'Failed: ' + e.message;
+    err.style.display = 'block';
+  } finally {
+    setBusy(btn, false);
+  }
+}
+
+/* ---------------- init ---------------- */
+
+function initApp() {
+  initTheme();
+
+  if (!window.supabase) {
+    show('viewLogin');
+    const errBox = $('loginErr');
+    errBox.textContent = 'Could not load the database library — check your internet connection and reload.';
+    errBox.style.display = 'block';
+    $('btnSignIn').disabled = true;
+    return;
+  }
+
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  $('fType').innerHTML = '<option value="" selected disabled>Select type…</option>' +
+    FINDING_TYPES.map(t => `<option>${t}</option>`).join('');
+  $('filType').innerHTML = '<option value="">All types</option>' +
+    FINDING_TYPES.map(t => `<option>${t}</option>`).join('');
+
+  // auth
+  $('btnSignIn').addEventListener('click', signIn);
+  $('loginPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') signIn(); });
+  $('btnSignOut').addEventListener('click', async () => { await sb.auth.signOut(); location.hash = ''; });
+
+  // Only re-route when signed-in state actually flips — a TOKEN_REFRESHED event mid-form
+  // must not re-render and wipe the user's unsaved input.
+  sb.auth.onAuthStateChange((event, s) => {
+    const wasAuthed = !!session;
+    session = s;
+    updateAuthUI();
+    if (event === 'INITIAL_SESSION' || wasAuthed !== !!s) route();
+  });
+
+  // routing
+  window.addEventListener('hashchange', route);
+
+  // list
+  $('btnNew').addEventListener('click', () => { location.hash = '#/new'; });
+  $('filTerminal').addEventListener('change', () => { filters.terminal = val('filTerminal'); renderList(); });
+  $('filStatus').addEventListener('change', () => { filters.status = val('filStatus'); renderList(); });
+  $('filType').addEventListener('change', () => { filters.type = val('filType'); renderList(); });
+  $('filSearch').addEventListener('input', () => { filters.q = val('filSearch'); renderTable(); });
+
+  // form
+  $('btnSave').addEventListener('click', saveForm);
+  $('btnDelete').addEventListener('click', deleteFinding);
+  $('btnClearLoc').addEventListener('click', clearPin);
+  const coordChanged = () => {
+    const lat = parseFloat(val('fLat')), lng = parseFloat(val('fLng'));
+    if (isFinite(lat) && isFinite(lng)) setPin(lat, lng, true);
+  };
+  $('fLat').addEventListener('change', coordChanged);
+  $('fLng').addEventListener('change', coordChanged);
+
+  $('btnAddPendingPhoto').addEventListener('click', () => $('filePending').click());
+  $('filePending').addEventListener('change', async (e) => {
+    for (const file of e.target.files) {
+      if (!file.type || !file.type.startsWith('image/')) continue;
+      try {
+        const previewUrl = await downscaleImage(file, 480, 0.7);
+        pendingPhotos.push({ file, previewUrl });
+      } catch (err) { console.warn('preview failed', err); }
+    }
+    e.target.value = '';
+    renderPendingGrid();
+  });
+
+  // detail
+  $('btnEdit').addEventListener('click', () => { if (current) location.hash = '#/edit/' + current.id; });
+  $('btnAddFound').addEventListener('click', () => $('fileFound').click());
+  $('btnAddRepaired').addEventListener('click', () => $('fileRepaired').click());
+  $('fileFound').addEventListener('change', (e) => { addDetailPhotos([...e.target.files], 'found'); e.target.value = ''; });
+  $('fileRepaired').addEventListener('change', (e) => { addDetailPhotos([...e.target.files], 'repaired'); e.target.value = ''; });
+
+  // dialogs
+  $('dlgCancel').addEventListener('click', () => $('statusDlg').close());
+  $('dlgConfirm').addEventListener('click', confirmStatusChange);
+  $('lightbox').addEventListener('click', () => $('lightbox').close());
+}
+
+document.addEventListener('DOMContentLoaded', initApp);
+</script>
+
+</body>
+</html>
