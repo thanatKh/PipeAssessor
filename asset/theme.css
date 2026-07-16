@@ -2,7 +2,7 @@
    Pipe Assessor — shared design system
    Single source of truth for brand tokens (light + dark), Basecoat token
    aliases, the app header, the theme toggle button, and small shared
-   utilities. Used by BOTH index.html and findings.html — edit here, never
+   utilities. Used by BOTH index.html (dashboard) and calculator.html — edit here, never
    re-inline these blocks into a page.
 
    Load order matters: Basecoat's CDN CSS must be linked BEFORE this file
@@ -196,7 +196,7 @@ html, body {
   padding: 0;
 }
 
-/* Pages may override max-width in their own <style> (findings.html uses 1200px). */
+/* 1500px keeps both the dashboard and the calculator at the same comfortable page width. */
 .wrap {
   max-width: 1500px;
   width: 100%;

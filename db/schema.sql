@@ -20,6 +20,7 @@ create table if not exists public.findings (
   -- source inspection (vendor report the finding came from)
   vendor text,
   report_no text,
+  report_link text,  -- link to the source report (e.g. a SharePoint URL)
   inspection_date date,
   method text,
 
@@ -57,6 +58,10 @@ create table if not exists public.findings (
 
 create index if not exists idx_findings_status on public.findings (status);
 create index if not exists idx_findings_terminal on public.findings (terminal);
+
+-- Patch existing databases (the create-table above is skipped once the table exists, so new
+-- columns must be added explicitly; re-running this whole file is safe).
+alter table public.findings add column if not exists report_link text;
 
 -- ---------------------------------------------------------------------------
 -- 2. finding_photos — photos live in the 'finding-photos' storage bucket;
