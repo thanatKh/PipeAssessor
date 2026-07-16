@@ -21,202 +21,27 @@
   <!-- Supabase JS client (pinned; exposes window.supabase) — this page is online-only -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js" defer></script>
 
-  <!-- Basecoat token aliases — same block as index.html (see comments there for the
-       @layer / html.dark+body.dark cascade rationale; keep the two files in sync). -->
-  <style>
-    :root, html.dark, body.dark {
-      --background: var(--bg-color);
-      --foreground: var(--text-color);
-      --card: var(--card-bg);
-      --card-foreground: var(--text-color);
-      --border: var(--card-border);
-      --input: var(--input-border);
-      --ring: var(--input-focus);
-      --primary: var(--button-primary);
-      --primary-foreground: #ffffff;
-      --muted-foreground: var(--text-muted);
-      --destructive: var(--danger-color);
-      --destructive-foreground: #ffffff;
-      --radius: 0.5rem;
-    }
-  </style>
+  <!-- jsPDF for the finding PDF report (same pinned version as index.html; no autotable —
+       this report's tables are drawn manually) -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js" defer></script>
+
+  <!-- Shared design system + JS helpers (single source of truth for both pages) — see
+       asset/theme.css header comments for the Basecoat cascade rationale. -->
+  <link rel="stylesheet" href="asset/theme.css" />
+  <script src="asset/shared.js"></script>
 
   <style>
-    :root {
-      --bg-color: #f8fafc;
-      --text-color: #0f172a;
-      --text-muted: #475569;
-      --text-light: #64748b;
+    /* Brand tokens, base styles, .wrap, the header suite and .theme-btn live in asset/theme.css. */
+    .wrap { max-width: 1200px; }
 
-      --card-bg: #ffffff;
-      --card-border: #e2e8f0;
-
-      --input-bg: #ffffff;
-      --input-border: #cbd5e1;
-      --input-focus: #14b8a6;
-
-      --header-bg: #ffffff;
-      --header-border: #e2e8f0;
-      --header-accent: #156B95;
-      --header-text: #0f172a;
-
-      --button-primary: #156B95;
-      --button-primary-hover: #0d4f6e;
-      --button-ghost: #ffffff;
-      --button-ghost-border: #cbd5e1;
-      --button-ghost-hover: #f1f5f9;
-
-      --ok-color: #059669;
-      --ok-bg: #dcfce7;
-      --ok-border: #bbf7d0;
-      --ok-text: #166534;
-
-      --warn-color: #d97706;
-      --warn-bg: #fef3c7;
-      --warn-border: #fde68a;
-      --warn-text: #92400e;
-
-      --danger-color: #dc2626;
-      --danger-bg: #fee2e2;
-      --danger-border: #fecaca;
-      --danger-text: #991b1b;
-
-      /* "Repair Planned" pill — a planned state is informational, not semaphore-colored */
-      --plan-bg: #dbeafe;
-      --plan-border: #bfdbfe;
-      --plan-text: #1e40af;
-
-      /* "Closed" pill — resolved, visually retired */
-      --closed-bg: #f1f5f9;
-      --closed-border: #e2e8f0;
-      --closed-text: #64748b;
-    }
-
-    html.dark, body.dark {
-      --bg-color: #0f172a;
-      --text-color: #f8fafc;
-      --text-muted: #94a3b8;
-      --text-light: #64748b;
-
-      --card-bg: #1e293b;
-      --card-border: #334155;
-
-      --input-bg: #1e293b;
-      --input-border: #475569;
-      --input-focus: #2dd4bf;
-
-      --header-bg: #0f172a;
-      --header-border: #334155;
-      --header-accent: #38bdf8;
-      --header-text: #f8fafc;
-
-      --button-primary: #0284c7;
-      --button-primary-hover: #0369a1;
-      --button-ghost: #1e293b;
-      --button-ghost-border: #475569;
-      --button-ghost-hover: #334155;
-
-      --ok-color: #10b981;
-      --ok-bg: #064e3b;
-      --ok-border: #047857;
-      --ok-text: #a7f3d0;
-
-      --warn-color: #f59e0b;
-      --warn-bg: #78350f;
-      --warn-border: #b45309;
-      --warn-text: #fde68a;
-
-      --danger-color: #f43f5e;
-      --danger-bg: #7f1d1d;
-      --danger-border: #991b1b;
-      --danger-text: #fecaca;
-
-      --plan-bg: #1e3a8a;
-      --plan-border: #1d4ed8;
-      --plan-text: #bfdbfe;
-
-      --closed-bg: #1e293b;
-      --closed-border: #475569;
-      --closed-text: #94a3b8;
-    }
-
-    * {
-      box-sizing: border-box;
-      transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s;
-    }
-
-    html, body {
-      background: var(--bg-color);
-      color: var(--text-color);
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      margin: 0;
-      padding: 0;
-    }
-
-    .wrap {
-      max-width: 1200px;
-      width: 100%;
-      margin: auto;
-      padding: 20px;
-    }
-
-    .mono { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
-
-    /* ============ Header (same pattern as index.html, scoped to body > header) ============ */
-    body > header {
-      background: var(--header-bg);
-      color: var(--header-text);
-      position: sticky;
-      top: 0;
-      z-index: 500;
-      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
-      border-bottom: 1px solid var(--header-border);
-    }
-
-    body > header .wrap {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 20px;
-      flex-wrap: wrap;
-      gap: 10px;
-      max-width: 1200px;
-    }
-
-    .header-accent-bar {
-      height: 3px;
-      background: linear-gradient(90deg, var(--header-accent) 0%, #38bdf8 100%);
-    }
-
-    .header-brand { display: flex; align-items: center; gap: 14px; }
-
-    .hdr-logo-chip {
-      display: inline-flex;
-      align-items: center;
-      background: #ffffff;
-      border-radius: 8px;
-      padding: 7px 12px;
-      flex: none;
-    }
-
-    .hdr-logo { height: 34px; width: auto; object-fit: contain; display: block; }
-
-    .header-info h1 {
-      font-size: 19px;
-      font-weight: 800;
-      margin: 0;
-      letter-spacing: -0.3px;
-      line-height: 1.2;
-      color: var(--header-text);
-    }
-
+    /* Header additions specific to this page */
     .header-info .hdr-sub {
       font-size: 11px;
       color: var(--text-muted);
       margin-top: 1px;
     }
 
-    .header-actions { display: flex; align-items: center; gap: 10px; }
+    .header-actions { gap: 10px; }
 
     .hdr-user {
       font-size: 11.5px;
@@ -225,49 +50,6 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-    }
-
-    .hdr-btn {
-      flex: none;
-      padding: 8px 14px;
-      font-size: 12px;
-      font-weight: 600;
-      white-space: nowrap;
-      border-radius: 6px;
-      text-decoration: none;
-    }
-
-    .hdr-btn[data-variant="outline"] {
-      background: var(--button-ghost);
-      border-color: var(--button-ghost-border);
-      color: var(--header-text);
-    }
-
-    .hdr-btn[data-variant="outline"]:hover {
-      background: var(--button-ghost-hover);
-      border-color: var(--button-primary);
-    }
-
-    .theme-btn {
-      background: transparent;
-      border: 1px solid var(--button-ghost-border);
-      border-radius: 8px;
-      width: 38px;
-      height: 38px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-color);
-      cursor: pointer;
-      transition: transform 0.1s ease;
-    }
-    .theme-btn:hover { background: var(--button-ghost-hover); border-color: var(--button-primary); }
-    .theme-btn:active { transform: scale(0.90); }
-    .theme-btn:focus-visible { outline: 2px solid var(--button-primary); outline-offset: 2px; }
-    .theme-btn svg { animation: theme-icon-in 0.32s ease; }
-    @keyframes theme-icon-in {
-      from { transform: rotate(-90deg) scale(0.5); opacity: 0; }
-      to { transform: rotate(0deg) scale(1); opacity: 1; }
     }
 
     @media (max-width: 640px) {
@@ -355,10 +137,6 @@
       margin-top: 6px;
     }
 
-    input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
-    input[type="number"]::-webkit-outer-spin-button,
-    input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-
     /* ============ KPI chips ============ */
     .kpi-row {
       display: flex;
@@ -407,6 +185,55 @@
     }
 
     .kpi.k-overdue .k-num { color: var(--danger-color); }
+
+    /* ============ Dashboard map ============ */
+    #dashMap { height: 340px; z-index: 1; }
+
+    @media (max-width: 767px) {
+      #dashMap { height: 240px; }
+    }
+
+    .panel-h-btns { display: flex; gap: 8px; }
+
+    .map-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .map-legend .lg-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .map-legend .lg-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.2);
+      flex: none;
+    }
+
+    .map-legend .lg-dot.lg-overdue {
+      background: transparent;
+      border: 2px dashed #dc2626;
+      box-shadow: none;
+    }
+
+    .map-popup { font-family: 'Inter', sans-serif; font-size: 12px; line-height: 1.5; }
+    .map-popup .mp-tag { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 12px; margin-bottom: 4px; }
+    .map-popup .mp-meta { color: #475569; margin: 3px 0 6px; }
+    .map-popup a { color: #156B95; font-weight: 600; }
 
     /* ============ Filters ============ */
     .filters {
@@ -697,6 +524,29 @@
     .status-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .status-actions .btn { font-size: 12px; }
 
+    /* ============ Assessment list ============ */
+    .assess-item {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 16px;
+      align-items: center;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--card-border);
+      font-size: 12.5px;
+    }
+
+    .assess-item:first-child { padding-top: 0; }
+    .assess-item:last-child { border-bottom: none; padding-bottom: 0; }
+
+    .assess-item .kv { white-space: nowrap; }
+    .assess-item .kv b { font-weight: 600; color: var(--text-muted); font-size: 11px; }
+
+    .assess-meta {
+      width: 100%;
+      font-size: 11px;
+      color: var(--text-light);
+    }
+
     /* ============ Timeline ============ */
     .timeline { list-style: none; margin: 0; padding: 0; }
 
@@ -856,8 +706,19 @@
 
     <div class="panel">
       <div class="panel-h">
+        <h2>Map</h2>
+        <div class="map-legend" id="mapLegend"></div>
+      </div>
+      <div id="dashMap"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h">
         <h2>Findings Register</h2>
-        <button class="btn" id="btnNew" type="button">+ New Finding</button>
+        <div class="panel-h-btns">
+          <button class="btn" data-variant="outline" id="btnCsv" type="button">Export CSV</button>
+          <button class="btn" id="btnNew" type="button">+ New Finding</button>
+        </div>
       </div>
       <div class="panel-b" style="padding-bottom: 10px;">
         <div class="filters">
@@ -1068,7 +929,10 @@
   <section id="viewDetail" class="view">
     <div class="toolbar">
       <a class="back-link" href="#/list">&#8592; All findings</a>
-      <button class="btn" data-variant="outline" id="btnEdit" type="button">Edit details</button>
+      <div class="panel-h-btns">
+        <button class="btn" data-variant="outline" id="btnPdf" type="button">Export PDF</button>
+        <button class="btn" data-variant="outline" id="btnEdit" type="button">Edit details</button>
+      </div>
     </div>
 
     <div class="panel">
@@ -1083,6 +947,14 @@
         <div class="dgrid" id="lifecycleGrid" style="margin-bottom: 12px;"></div>
         <div class="status-actions" id="statusActions"></div>
       </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h">
+        <h2>ASME B31.3 Assessment</h2>
+        <button class="btn" data-variant="outline" id="btnAssess" type="button">Run assessment</button>
+      </div>
+      <div class="panel-b" id="assessBody"></div>
     </div>
 
     <div class="panel">
@@ -1164,8 +1036,8 @@
    only grants access to signed-in users. See db/schema.sql.
    ===================================================================== */
 
-const SUPABASE_URL = 'https://uuwcftjduphtngmhwvrb.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_-wA0hWoW-SIOpdlSpNrXkw_-YsUQYMH';
+const SUPABASE_URL = PA_SUPABASE_URL;  // from asset/shared.js — single source for both pages
+const SUPABASE_KEY = PA_SUPABASE_KEY;
 const PHOTO_BUCKET = 'finding-photos';
 
 const FINDING_TYPES = [
@@ -1189,6 +1061,17 @@ const STATUS_META = {
   'Closed':         { cls: 'st-closed' }
 };
 
+// Dashboard-map pin fills — deliberately theme-independent fixed hex (drawn over satellite
+// imagery, whose background never changes with the app theme — same rationale as the PDF_*
+// constants in index.html). Single source: the legend is generated from this object too.
+const STATUS_COLORS = {
+  'Open':           '#dc2626',
+  'Monitoring':     '#d97706',
+  'Repair Planned': '#2563eb',
+  'Repaired':       '#059669',
+  'Closed':         '#64748b'
+};
+
 // Same default view as the calculator's site-location map.
 const DEFAULT_MAP_VIEW = { center: [13.097720, 100.887211], zoom: 14 };
 const SAT_TILES = {
@@ -1203,9 +1086,11 @@ let findings = [];          // list cache
 let current = null;         // finding shown in detail view
 let currentPhotos = [];
 let currentHistory = [];
+let currentAssessments = [];
 let editingId = null;       // null = creating
 let pendingPhotos = [];     // [{file, previewUrl}] queued on the NEW form
 let pickMap = null, pickMarker = null;
+let dashMap = null, dashLayer = null;
 
 /* ---------------- helpers ---------------- */
 
@@ -1218,14 +1103,7 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-function fmtDate(v) {
-  if (!v) return '—';
-  const d = new Date(v);
-  if (isNaN(d)) return '—';
-  return `${String(d.getDate()).padStart(2, '0')}/${MONTHS[d.getMonth()]}/${d.getFullYear()}`;
-}
+const fmtDate = paFmtDate; // shared dd/Mmm/yyyy helper (asset/shared.js)
 
 function fmtDateTime(v) {
   if (!v) return '—';
@@ -1279,51 +1157,15 @@ function setBusy(btn, busy, busyText) {
   }
 }
 
-// Same mandatory downscale as the calculator: raw phone photos are 3–12 MP.
-function downscaleImage(fileOrBlob, maxDim, quality) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(fileOrBlob);
-    const img = new Image();
-    img.onload = () => {
-      try {
-        let w = img.naturalWidth, h = img.naturalHeight;
-        const scale = Math.min(1, maxDim / Math.max(w, h));
-        w = Math.max(1, Math.round(w * scale));
-        h = Math.max(1, Math.round(h * scale));
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      } catch (e) { reject(e); }
-      finally { URL.revokeObjectURL(url); }
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image load failed')); };
-    img.src = url;
-  });
-}
+// downscaleImage() lives in asset/shared.js
 
 /* ---------------- theme ---------------- */
 
-function applyThemeIcon() {
-  const isDark = document.body.classList.contains('dark');
-  $('themeToggle').innerHTML = isDark
-    ? '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
-    : '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
-}
-
 function initTheme() {
-  // Shares the same localStorage key as index.html, so theme follows across pages.
-  const dark = localStorage.getItem('theme') === 'dark';
-  document.body.classList.toggle('dark', dark);
-  document.documentElement.classList.toggle('dark', dark);
-  applyThemeIcon();
-  $('themeToggle').addEventListener('click', () => {
-    document.body.classList.toggle('dark');
-    const isDark = document.body.classList.contains('dark');
-    document.documentElement.classList.toggle('dark', isDark);
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
-    applyThemeIcon();
-  });
+  // Shared helpers (asset/shared.js) use the same localStorage key as index.html,
+  // so the chosen theme follows across pages.
+  paApplyStoredTheme();
+  paWireThemeToggle($('themeToggle'));
 }
 
 /* ---------------- auth ---------------- */
@@ -1389,10 +1231,11 @@ async function route() {
     show('viewForm');
     return;
   }
-  // default: list
+  // default: list — show the view BEFORE rendering so the Leaflet container has
+  // real dimensions (a map initialized inside display:none sizes to 0×0)
   await loadFindings();
-  renderList();
   show('viewList');
+  renderList();
 }
 
 /* ---------------- data ---------------- */
@@ -1404,15 +1247,17 @@ async function loadFindings() {
 }
 
 async function loadDetail(id) {
-  const [f, ph, hi] = await Promise.all([
+  const [f, ph, hi, as] = await Promise.all([
     sb.from('findings').select('*').eq('id', id).single(),
     sb.from('finding_photos').select('*').eq('finding_id', id).order('created_at', { ascending: true }),
-    sb.from('status_history').select('*').eq('finding_id', id).order('changed_at', { ascending: false })
+    sb.from('status_history').select('*').eq('finding_id', id).order('changed_at', { ascending: false }),
+    sb.from('assessments').select('*').eq('finding_id', id).order('created_at', { ascending: false })
   ]);
   if (f.error) { notify('Finding not found.', true); return false; }
   current = f.data;
   currentPhotos = ph.data || [];
   currentHistory = hi.data || [];
+  currentAssessments = as.data || [];
   return true;
 }
 
@@ -1465,8 +1310,69 @@ function renderKpis() {
   });
 }
 
-function renderTable() {
-  const rows = applyFilters(findings);
+/* ---------------- dashboard map ---------------- */
+
+function ensureDashMap() {
+  const el = $('dashMap');
+  if (typeof L === 'undefined') {
+    el.style.display = 'flex';
+    el.style.alignItems = 'center';
+    el.style.justifyContent = 'center';
+    el.style.fontSize = '11px';
+    el.style.color = 'var(--text-light)';
+    el.textContent = 'Map unavailable — check your connection.';
+    return;
+  }
+  if (dashMap) { setTimeout(() => dashMap.invalidateSize(), 80); return; }
+  dashMap = L.map(el, { center: DEFAULT_MAP_VIEW.center, zoom: DEFAULT_MAP_VIEW.zoom, scrollWheelZoom: false });
+  L.tileLayer(SAT_TILES.url, { maxZoom: SAT_TILES.maxZoom, attribution: SAT_TILES.attribution }).addTo(dashMap);
+  dashLayer = L.layerGroup().addTo(dashMap);
+  // scroll-zoom only after the user clicks the map — otherwise page scrolling gets hijacked
+  dashMap.on('focus click', () => dashMap.scrollWheelZoom.enable());
+  dashMap.on('blur', () => dashMap.scrollWheelZoom.disable());
+  setTimeout(() => dashMap.invalidateSize(), 150);
+}
+
+function popupHtml(f) {
+  return `<div class="map-popup">
+    <div class="mp-tag">${esc(f.pipe_tag)}</div>
+    ${pillHtml(f.status)}${isOverdue(f) ? ' <span style="color:#dc2626;font-weight:700;font-size:10px;">OVERDUE</span>' : ''}
+    <div class="mp-meta">${esc(f.terminal)} — ${esc(f.finding_type)}</div>
+    <a href="#/f/${esc(f.id)}">Open finding &#8594;</a>
+  </div>`;
+}
+
+function renderMap(rows) {
+  ensureDashMap();
+  if (!dashMap) return;
+  // The container was display:none while another view was active; Leaflet's cached size is
+  // stale (0×0), and fitBounds against a zero-size map computes a world-level zoom. Re-measure
+  // synchronously — show('viewList') has already run by the time renderMap is called.
+  dashMap.invalidateSize();
+  dashLayer.clearLayers();
+  const pts = rows.filter(f => f.lat != null && f.lng != null);
+  pts.forEach(f => {
+    const color = STATUS_COLORS[f.status] || '#64748b';
+    if (isOverdue(f)) {
+      // dashed red halo reads over any pin fill (a red ring on the red Open pin would vanish)
+      dashLayer.addLayer(L.circleMarker([f.lat, f.lng], {
+        radius: 14, fill: false, color: '#dc2626', weight: 2, dashArray: '4,4', interactive: false
+      }));
+    }
+    const pin = L.circleMarker([f.lat, f.lng], {
+      radius: 8, fillColor: color, fillOpacity: 0.95, color: '#ffffff', weight: 2
+    });
+    pin.bindPopup(popupHtml(f));
+    dashLayer.addLayer(pin);
+  });
+  if (pts.length) {
+    dashMap.fitBounds(L.latLngBounds(pts.map(f => [f.lat, f.lng])).pad(0.25), { maxZoom: 17 });
+  } else {
+    dashMap.setView(DEFAULT_MAP_VIEW.center, DEFAULT_MAP_VIEW.zoom);
+  }
+}
+
+function renderTable(rows) {
   const body = $('listBody');
   if (!rows.length) {
     body.innerHTML = `<tr class="empty-row"><td colspan="8">${findings.length ? 'No findings match the current filters.' : 'No findings recorded yet — use “+ New Finding” to add the first one.'}</td></tr>`;
@@ -1495,10 +1401,46 @@ function renderTable() {
 
 function renderList() {
   renderKpis();
-  renderTable();
+  const rows = applyFilters(findings);
+  renderTable(rows);
+  renderMap(rows);
   // refresh the tag autocomplete from everything recorded so far
   const tags = [...new Set(findings.map(f => f.pipe_tag).filter(Boolean))];
   $('tagList').innerHTML = tags.map(t => `<option value="${esc(t)}"></option>`).join('');
+}
+
+/* ---------------- CSV export (filtered register, Excel-friendly UTF-8 BOM) ---------------- */
+
+const CSV_COLS = [
+  'terminal', 'pipe_tag', 'pid_no', 'service', 'location_desc', 'finding_type', 'severity',
+  'status', 'description', 'vendor', 'report_no', 'inspection_date', 'method',
+  't_nominal', 't_measured', 'defect_length_mm', 'defect_width_mm', 'lat', 'lng',
+  'target_date', 'next_check_date', 'sap_notification', 'sap_order',
+  'repair_method', 'repaired_date', 'closing_note', 'created_by_email', 'created_at'
+];
+
+function exportCsv() {
+  const rows = applyFilters(findings);
+  if (!rows.length) { notify('Nothing to export with the current filters.', true); return; }
+  const cell = (v) => {
+    v = v == null ? '' : String(v);
+    return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  };
+  const lines = [
+    CSV_COLS.join(','),
+    ...rows.map(f => CSV_COLS.map(c => cell(f[c])).join(','))
+  ];
+  // \uFEFF BOM so Excel opens the file as UTF-8 (Thai text in descriptions survives)
+  const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `findings_${todayISO().replace(/-/g, '')}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  notify(`Exported ${rows.length} finding(s).`);
 }
 
 /* ---------------- form (new / edit) ---------------- */
@@ -1772,8 +1714,40 @@ function renderDetail() {
     ? `<div class="d-label" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:4px;">Description</div><p class="d-desc">${esc(f.description)}</p>`
     : '';
 
+  renderAssessments();
   renderPhotoGroups();
   renderTimeline();
+}
+
+/* ---------------- assessments (calculator snapshots) ---------------- */
+
+const fmtN = (v, d) => (v != null && isFinite(v)) ? Number(v).toFixed(d) : '—';
+
+function assessPill(status) {
+  // calculator statuses mapped onto the existing pill palette
+  const cls = status === 'OK' ? 'st-rep' : status === 'MONITOR' ? 'st-mon' : 'st-open';
+  return `<span class="pill ${cls}">${esc(status || '—')}</span>`;
+}
+
+function renderAssessments() {
+  const body = $('assessBody');
+  if (!currentAssessments.length) {
+    body.innerHTML = '<div class="photo-empty">No assessment yet — "Run assessment" opens the calculator pre-filled with this pipe\'s data; saving there attaches the result here.</div>';
+    return;
+  }
+  body.innerHTML = currentAssessments.map((a, i) => {
+    const r = a.results || {};
+    return `<div class="assess-item">
+      ${assessPill(r.status)}
+      <span class="kv mono"><b>ERF</b> ${fmtN(r.erf_with, 3)}</span>
+      <span class="kv mono"><b>t req+CA</b> ${fmtN(r.t_req_total, 3)} mm</span>
+      <span class="kv mono"><b>t meas</b> ${fmtN(r.t_meas, 2)} mm</span>
+      <span class="kv mono"><b>Margin</b> ${fmtN(r.margin, 3)} mm</span>
+      <span class="kv mono"><b>MAWP</b> ${fmtN(r.mawp_with, 2)} ${esc(r.pUnit || '')}</span>
+      ${r.remainingLife != null ? `<span class="kv mono"><b>Life</b> ${fmtN(r.remainingLife, 1)} y</span>` : ''}
+      <span class="assess-meta">${i === 0 && currentAssessments.length > 1 ? 'Latest — ' : ''}${fmtDateTime(a.created_at)} — ${esc(a.created_by_email || '')}</span>
+    </div>`;
+  }).join('');
 }
 
 function photoThumb(p) {
@@ -1920,6 +1894,332 @@ async function confirmStatusChange() {
   }
 }
 
+/* ===================== Finding PDF report =====================
+   Same visual language as the calculator's report (navy headings, hairline
+   #cbd5e1 frames, dd/Mmm/yyyy dates, WinAnsi-safe text only). Tables are drawn
+   manually — no autotable dependency. Opens in the browser's native PDF viewer
+   via a blob anchor (the one approach that also survives file://). */
+
+const PDF_NAVY = '#103C5C';
+const PDF_TEXT = '#0f172a';
+const PDF_MUTED = '#64748b';
+const PDF_BORDER = '#cbd5e1';
+
+function fetchAsDataUrl(url, timeoutMs) {
+  const job = fetch(url)
+    .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.blob(); })
+    .then(b => new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(fr.result);
+      fr.onerror = rej;
+      fr.readAsDataURL(b);
+    }));
+  return Promise.race([job, new Promise(res => setTimeout(() => res(null), timeoutMs))])
+    .catch(() => null);
+}
+
+function loadImg(src) {
+  return new Promise((res) => {
+    const im = new Image();
+    im.onload = () => res(im);
+    im.onerror = () => res(null);
+    im.src = src;
+  });
+}
+
+/* Deterministic satellite figure from clean Esri tiles ({z}/{y}/{x} axis order) with a
+   centre pin + required attribution. Resolves null on any failure so the PDF degrades
+   to coordinates-as-text and never hangs. */
+async function composeMapPng(lat, lng, zoom, W, H) {
+  try {
+    const job = (async () => {
+      const n = Math.pow(2, zoom);
+      const latR = lat * Math.PI / 180;
+      const cx = ((lng + 180) / 360) * n * 256;
+      const cy = ((1 - Math.log(Math.tan(latR) + 1 / Math.cos(latR)) / Math.PI) / 2) * n * 256;
+      const left = cx - W / 2, top = cy - H / 2;
+      const c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      const g = c.getContext('2d');
+      const jobs = [];
+      for (let tx = Math.floor(left / 256); tx <= Math.floor((left + W) / 256); tx++) {
+        for (let ty = Math.floor(top / 256); ty <= Math.floor((top + H) / 256); ty++) {
+          jobs.push(new Promise((res, rej) => {
+            const im = new Image();
+            im.crossOrigin = 'anonymous'; // Esri sends ACAO — canvas stays exportable
+            im.onload = () => { g.drawImage(im, tx * 256 - left, ty * 256 - top); res(); };
+            im.onerror = rej;
+            im.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${ty}/${tx}`;
+          }));
+        }
+      }
+      await Promise.all(jobs);
+      g.beginPath();
+      g.arc(W / 2, H / 2, 10, 0, Math.PI * 2);
+      g.fillStyle = '#dc2626'; g.fill();
+      g.lineWidth = 3; g.strokeStyle = '#ffffff'; g.stroke();
+      g.font = '11px Arial';
+      const attr = 'Imagery (c) Esri, Maxar, Earthstar Geographics';
+      const tw = g.measureText(attr).width;
+      g.fillStyle = 'rgba(255,255,255,0.75)';
+      g.fillRect(W - tw - 10, H - 18, tw + 10, 18);
+      g.fillStyle = '#334155';
+      g.fillText(attr, W - tw - 5, H - 5);
+      return c.toDataURL('image/jpeg', 0.85);
+    })();
+    return await Promise.race([job, new Promise(res => setTimeout(() => res(null), 7000))]);
+  } catch (e) { return null; }
+}
+
+async function buildFindingPdf() {
+  const f = current;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const PW = 210, PH = 297, M = 15, CW = PW - 2 * M;
+  const FOOT = 18;
+  let y = 0, secNum = 0, figNum = 0;
+
+  // preload images (each degrades independently)
+  const logo = await fetchAsDataUrl('asset/RGB_OR_Full color.png', 3000);
+  const logoIm = logo ? await loadImg(logo) : null;
+  const mapImg = (f.lat != null && f.lng != null) ? await composeMapPng(f.lat, f.lng, 17, 1000, 500) : null;
+  const photoData = [];
+  for (const p of currentPhotos) {
+    const d = await fetchAsDataUrl(photoUrl(p.storage_path), 8000);
+    if (!d) continue;
+    const im = await loadImg(d);
+    if (im) photoData.push({ kind: p.kind, src: d, w: im.naturalWidth, h: im.naturalHeight });
+  }
+
+  const now = new Date();
+
+  function chrome() {
+    if (logoIm) {
+      const lh = 12, lw = lh * logoIm.naturalWidth / logoIm.naturalHeight;
+      doc.addImage(logo, 'PNG', M, 9, lw, lh);
+    } else {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(PDF_NAVY);
+      doc.text('OR', M, 18);
+    }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(PDF_NAVY);
+    doc.text('PIPING ABNORMAL FINDING REPORT', PW - M, 15, { align: 'right' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(PDF_MUTED);
+    doc.text(`TAG: ${f.pipe_tag}  •  ${paFmtDate(now)}`, PW - M, 20, { align: 'right' });
+    doc.setDrawColor(PDF_NAVY); doc.setLineWidth(0.5);
+    doc.line(M, 25, PW - M, 25);
+    doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+    doc.line(M, PH - FOOT + 2, PW - M, PH - FOOT + 2);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(PDF_MUTED);
+    doc.text('Pipe Assessor - Findings Tracker', M, PH - FOOT + 6);
+    doc.text(`Page ${doc.internal.getNumberOfPages()} of {tp}`, PW / 2, PH - FOOT + 6, { align: 'center' });
+    doc.text(`Generated ${paFmtDate(now)} ${now.toLocaleTimeString()}`, PW - M, PH - FOOT + 6, { align: 'right' });
+    doc.setFontSize(6.5); doc.setTextColor('#94a3b8');
+    doc.text('Central and Eastern Engineering and Maintenance Division - PTT Oil and Retail Business Public Company Limited', PW / 2, PH - FOOT + 10, { align: 'center' });
+    doc.setTextColor(PDF_TEXT);
+    y = 31;
+  }
+
+  function ensure(h) {
+    if (y + h > PH - FOOT - 4) { doc.addPage(); chrome(); }
+  }
+
+  function section(t) {
+    ensure(14);
+    secNum++;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(PDF_NAVY);
+    doc.text(`${secNum}. ${t.toUpperCase()}`, M, y);
+    doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+    doc.line(M, y + 1.5, PW - M, y + 1.5);
+    y += 7;
+    doc.setTextColor(PDF_TEXT);
+  }
+
+  function row(label, value) {
+    const v = (value == null || value === '') ? '—' : String(value);
+    const lines = doc.splitTextToSize(v, CW - 48);
+    const h = Math.max(6, lines.length * 4.2 + 2);
+    ensure(h);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(PDF_MUTED);
+    doc.text(label, M, y + 3.6);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(PDF_TEXT);
+    doc.text(lines, M + 48, y + 3.7);
+    doc.setDrawColor('#e2e8f0'); doc.setLineWidth(0.15);
+    doc.line(M, y + h, PW - M, y + h);
+    y += h;
+  }
+
+  chrome();
+
+  // colored status band (fixed hex from STATUS_COLORS — satellite/report surface never themes)
+  doc.setFillColor(STATUS_COLORS[f.status] || '#64748b');
+  doc.rect(M, y, CW, 11, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor('#ffffff');
+  doc.text(`STATUS: ${(f.status || '').toUpperCase()}`, M + 4, y + 7.3);
+  if (isOverdue(f)) {
+    doc.setFontSize(9);
+    doc.text(`OVERDUE - due ${paFmtDate(dueDateOf(f))}`, PW - M - 4, y + 7.2, { align: 'right' });
+  }
+  doc.setTextColor(PDF_TEXT);
+  y += 16;
+
+  section('Finding Information');
+  row('Terminal', f.terminal);
+  row('Pipe Tag / Line', f.pipe_tag);
+  row('P&ID No.', f.pid_no);
+  row('Service / Fluid', f.service);
+  row('Location', f.location_desc);
+  row('Recorded By', f.created_by_email);
+  row('Recorded At', fmtDateTime(f.created_at));
+  y += 4;
+
+  section('Source Inspection');
+  row('Vendor', f.vendor);
+  row('Report No.', f.report_no);
+  row('Inspection Date', paFmtDate(f.inspection_date));
+  row('Method', f.method);
+  y += 4;
+
+  section('Anomaly');
+  row('Finding Type', f.finding_type);
+  row('Severity', f.severity);
+  if (f.t_nominal != null) row('Nominal Thickness', `${f.t_nominal} mm`);
+  if (f.t_measured != null) row('Measured Min. Thickness', `${f.t_measured} mm`);
+  if (f.defect_length_mm != null || f.defect_width_mm != null)
+    row('Defect L x W', `${f.defect_length_mm != null ? f.defect_length_mm : '—'} x ${f.defect_width_mm != null ? f.defect_width_mm : '—'} mm`);
+  row('Description', f.description);
+  y += 4;
+
+  section('Lifecycle & SAP References');
+  row('Current Status', f.status + (isOverdue(f) ? '  (OVERDUE)' : ''));
+  if (f.target_date) row('Target Repair Date', paFmtDate(f.target_date));
+  if (f.next_check_date) row('Re-inspect By', paFmtDate(f.next_check_date));
+  if (f.sap_notification) row('SAP Notification', f.sap_notification);
+  if (f.sap_order) row('SAP Order', f.sap_order);
+  if (f.repair_method) row('Repair Method', f.repair_method);
+  if (f.repaired_date) row('Repaired Date', paFmtDate(f.repaired_date));
+  if (f.closing_note) row('Closing Note', f.closing_note);
+  y += 4;
+
+  if (currentAssessments.length) {
+    const a = currentAssessments[0];
+    const r = a.results || {};
+    section('ASME B31.3 Assessment (Latest)');
+    row('Result', r.status);
+    row('ERF (with CA)', fmtN(r.erf_with, 3));
+    row('Required Thk. incl. CA', r.t_req_total != null ? `${fmtN(r.t_req_total, 3)} mm` : null);
+    row('Measured Thickness', r.t_meas != null ? `${fmtN(r.t_meas, 2)} mm` : null);
+    row('Remaining Margin', r.margin != null ? `${fmtN(r.margin, 3)} mm` : null);
+    row('MAWP (with CA)', r.mawp_with != null ? `${fmtN(r.mawp_with, 2)} ${r.pUnit || ''}` : null);
+    if (r.remainingLife != null) row('Est. Remaining Life', `${fmtN(r.remainingLife, 1)} years`);
+    row('Assessed By', a.created_by_email);
+    row('Assessed At', fmtDateTime(a.created_at));
+    if (currentAssessments.length > 1)
+      row('Note', `${currentAssessments.length} assessments recorded; latest shown. Full detail in Pipe Assessor.`);
+    y += 4;
+  }
+
+  if (f.lat != null && f.lng != null) {
+    section('Site Location');
+    row('Coordinates', `${Number(f.lat).toFixed(6)}, ${Number(f.lng).toFixed(6)}`);
+    if (mapImg) {
+      const w = CW, h = w / 2;
+      ensure(h + 12);
+      y += 2;
+      doc.addImage(mapImg, 'JPEG', M, y, w, h);
+      doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+      doc.rect(M, y, w, h);
+      y += h + 4;
+      figNum++;
+      doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(PDF_MUTED);
+      doc.text(`Figure ${figNum}: Satellite view of the finding location (pin marks recorded coordinates)`, PW / 2, y, { align: 'center' });
+      doc.setTextColor(PDF_TEXT);
+      y += 6;
+    }
+    y += 2;
+  }
+
+  if (photoData.length) {
+    section('Photographic Record');
+    for (const [kind, title] of [['found', 'As Found'], ['repaired', 'After Repair (Confirmation)']]) {
+      const items = photoData.filter(p => p.kind === kind);
+      if (!items.length) continue;
+      ensure(10);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(PDF_MUTED);
+      doc.text(title.toUpperCase(), M, y + 3);
+      y += 6;
+      doc.setTextColor(PDF_TEXT);
+      const gap = 6, cellW = (CW - gap) / 2, maxH = 62;
+      for (let i = 0; i < items.length; i += 2) {
+        const rowItems = items.slice(i, i + 2).map(p => {
+          const s = Math.min(cellW / p.w, maxH / p.h);
+          return { src: p.src, w: p.w * s, h: p.h * s };
+        });
+        const rh = Math.max.apply(null, rowItems.map(d => d.h));
+        ensure(rh + 8);
+        rowItems.forEach((d, j) => {
+          const ix = M + j * (cellW + gap) + (cellW - d.w) / 2;
+          doc.addImage(d.src, 'JPEG', ix, y, d.w, d.h);
+          doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+          doc.rect(ix, y, d.w, d.h);
+        });
+        y += rh + 6;
+      }
+      y += 2;
+    }
+  }
+
+  if (currentHistory.length) {
+    section('Status History');
+    // oldest first — a report reads chronologically
+    currentHistory.slice().reverse().forEach(h => {
+      const head = `${fmtDateTime(h.changed_at)}  —  ${h.old_status ? h.old_status + ' > ' : ''}${h.new_status}${h.changed_by_email ? '  (' + h.changed_by_email + ')' : ''}`;
+      const noteLines = h.note ? doc.splitTextToSize(h.note, CW - 8) : [];
+      const hh = 5.5 + (noteLines.length ? noteLines.length * 4 + 2 : 0);
+      ensure(hh);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(PDF_TEXT);
+      doc.text(head, M, y + 3.5);
+      if (noteLines.length) {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(PDF_MUTED);
+        doc.text(noteLines, M + 4, y + 8);
+        doc.setTextColor(PDF_TEXT);
+      }
+      y += hh;
+    });
+  }
+
+  ensure(12);
+  y += 5;
+  doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor('#94a3b8');
+  doc.text('— End of Report —', PW / 2, y, { align: 'center' });
+
+  if (doc.putTotalPages) doc.putTotalPages('{tp}');
+  return doc.output('blob');
+}
+
+async function exportFindingPdf() {
+  if (!current) return;
+  if (!window.jspdf) { notify('PDF engine not loaded - check your connection and reload.', true); return; }
+  const btn = $('btnPdf');
+  setBusy(btn, true, 'Building PDF…');
+  try {
+    const blob = await buildFindingPdf();
+    // blob anchor click = the one native-viewer approach that works everywhere incl. file://
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) {
+    notify('PDF failed: ' + e.message, true);
+  } finally {
+    setBusy(btn, false);
+  }
+}
+
 /* ---------------- init ---------------- */
 
 function initApp() {
@@ -1963,7 +2263,19 @@ function initApp() {
   $('filTerminal').addEventListener('change', () => { filters.terminal = val('filTerminal'); renderList(); });
   $('filStatus').addEventListener('change', () => { filters.status = val('filStatus'); renderList(); });
   $('filType').addEventListener('change', () => { filters.type = val('filType'); renderList(); });
-  $('filSearch').addEventListener('input', () => { filters.q = val('filSearch'); renderTable(); });
+  $('filSearch').addEventListener('input', () => {
+    filters.q = val('filSearch');
+    const rows = applyFilters(findings);
+    renderTable(rows);
+    renderMap(rows);
+  });
+  $('btnCsv').addEventListener('click', exportCsv);
+
+  // map legend generated from STATUS_COLORS so pins and legend can never drift apart
+  $('mapLegend').innerHTML = Object.entries(STATUS_COLORS)
+    .map(([st, c]) => `<span class="lg-item"><span class="lg-dot" style="background:${c};"></span>${esc(st)}</span>`)
+    .join('') +
+    '<span class="lg-item"><span class="lg-dot lg-overdue"></span>Overdue</span>';
 
   // form
   $('btnSave').addEventListener('click', saveForm);
@@ -1991,6 +2303,10 @@ function initApp() {
 
   // detail
   $('btnEdit').addEventListener('click', () => { if (current) location.hash = '#/edit/' + current.id; });
+  $('btnPdf').addEventListener('click', exportFindingPdf);
+  $('btnAssess').addEventListener('click', () => {
+    if (current) location.href = 'index.html?finding=' + encodeURIComponent(current.id);
+  });
   $('btnAddFound').addEventListener('click', () => $('fileFound').click());
   $('btnAddRepaired').addEventListener('click', () => $('fileRepaired').click());
   $('fileFound').addEventListener('change', (e) => { addDetailPhotos([...e.target.files], 'found'); e.target.value = ''; });

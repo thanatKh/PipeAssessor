@@ -1,0 +1,423 @@
+/* ============================================================================
+   Pipe Assessor — shared design system
+   Single source of truth for brand tokens (light + dark), Basecoat token
+   aliases, the app header, the theme toggle button, and small shared
+   utilities. Used by BOTH index.html and findings.html — edit here, never
+   re-inline these blocks into a page.
+
+   Load order matters: Basecoat's CDN CSS must be linked BEFORE this file
+   (the alias block below overrides Basecoat's own token values).
+   Page-specific component styles stay in each page's own <style>.
+   ============================================================================ */
+
+/* ----------------------------------------------------------------------------
+   Basecoat token aliases: map Basecoat's shadcn variable names onto this app's
+   own palette (declared in the token blocks further down this file — custom
+   properties resolve at used-value time, not declaration order, so the forward
+   reference is safe). Single source of truth for each semantic color: never
+   hardcode a hex here — a value tuned only in one of the two systems is
+   exactly how --danger-color and --destructive drifted apart in dark mode
+   before this alias existed.
+
+   Basecoat's own CDN CSS ships a competing bare `.dark { --primary: ...;
+   --destructive: ...; }` block. Both pages add the `dark` class to BOTH
+   <html> and <body> (Basecoat's dark component styles are gated on html.dark;
+   this app's own --bg-color/--danger-color etc. are gated on body.dark) — so
+   Basecoat's `.dark` selector matches `body` directly too, and a *direct*
+   match on body always wins over properties `body` merely inherits from
+   html.dark, regardless of the inherited rule's specificity (inheritance
+   isn't part of the cascade). The alias below must therefore also target
+   `body.dark` directly, not just `html.dark` — do not remove either half or
+   one of the two class targets stops resolving correctly.
+   ---------------------------------------------------------------------------- */
+:root, html.dark, body.dark {
+  --background: var(--bg-color);
+  --foreground: var(--text-color);
+  --card: var(--card-bg);
+  --card-foreground: var(--text-color);
+  --border: var(--card-border);
+  --input: var(--input-border);
+  --ring: var(--input-focus);
+  --primary: var(--button-primary);
+  --primary-foreground: #ffffff;
+  --muted-foreground: var(--text-muted);
+  --destructive: var(--danger-color);
+  --destructive-foreground: #ffffff;
+  --radius: 0.5rem;
+}
+
+:root {
+  /* Theme variables - Light Mode Default */
+  --bg-color: #f8fafc;
+  --text-color: #0f172a;
+  --text-muted: #475569;
+  --text-light: #64748b;
+
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0;
+
+  --input-bg: #ffffff;
+  --input-border: #cbd5e1;
+  --input-focus: #14b8a6;
+
+  --header-bg: #ffffff;
+  --header-bg-2: #f8fafc;
+  --header-border: #e2e8f0;
+  --header-accent: #156B95;
+  --header-text: #0f172a;
+
+  --button-primary: #156B95;
+  --button-primary-hover: #0d4f6e;
+  --button-ghost: #ffffff;
+  --button-ghost-border: #cbd5e1;
+  --button-ghost-hover: #f1f5f9;
+
+  --ok-color: #059669;
+  --ok-bg: #dcfce7;
+  --ok-border: #bbf7d0;
+  --ok-text: #166534;
+
+  --warn-color: #d97706;
+  --warn-bg: #fef3c7;
+  --warn-border: #fde68a;
+  --warn-text: #92400e;
+
+  --danger-color: #dc2626;
+  --danger-bg: #fee2e2;
+  --danger-border: #fecaca;
+  --danger-text: #991b1b;
+
+  /* SVG Colors (calculator cross-section) */
+  --svg-bg: #f8fafc;
+  --svg-metal: #64748b;
+  --svg-loss: #fee2e2;
+  --svg-loss-border: #ef4444;
+
+  /* Cross-section limit-line/label colors — dark, saturated 700/800-tier shades so 11px bold
+     label text clears WCAG AA (4.5:1) against the near-white --svg-bg, including on a
+     projector or in the always-light PDF/print export (see svgToPngDataUrl's injected style). */
+  --limit-reqca: #92400e;
+  --limit-req: #991b1b;
+  --limit-struct: #5b21b6;
+
+  /* Findings-tracker status-pill tokens: "Repair Planned" is informational (not
+     semaphore-colored), "Closed" is resolved/visually retired. */
+  --plan-bg: #dbeafe;
+  --plan-border: #bfdbfe;
+  --plan-text: #1e40af;
+
+  --closed-bg: #f1f5f9;
+  --closed-border: #e2e8f0;
+  --closed-text: #64748b;
+}
+
+/* Also matches html.dark: Basecoat's --color-card (and other --color-* re-exports) are declared
+   once as `var(--card)` on :root only, never redeclared per dark class — so that reference
+   resolves --card using its cascaded value AT :root/<html> itself, not at whatever element
+   ultimately consumes --color-card. If these base tokens (--card-bg, --danger-color, etc.)
+   were only ever set on body.dark, html.dark's --card would still be the light value (a parent
+   element never inherits from its own child), and every Basecoat --color-* token would stay
+   stuck in light mode even after body.dark correctly resolved the app's own --card-bg. Keep
+   both selectors — do not narrow this back to body.dark alone. */
+html.dark, body.dark {
+  /* Dark Mode Variables */
+  --bg-color: #0f172a;
+  --text-color: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-light: #64748b;
+
+  --card-bg: #1e293b;
+  --card-border: #334155;
+
+  --input-bg: #1e293b;
+  --input-border: #475569;
+  --input-focus: #2dd4bf;
+
+  --header-bg: #0f172a;
+  --header-bg-2: #0f172a;
+  --header-border: #334155;
+  --header-accent: #38bdf8;
+  --header-text: #f8fafc;
+
+  --button-primary: #0284c7;
+  --button-primary-hover: #0369a1;
+  --button-ghost: #1e293b;
+  --button-ghost-border: #475569;
+  --button-ghost-hover: #334155;
+
+  --ok-color: #10b981;
+  --ok-bg: #064e3b;
+  --ok-border: #047857;
+  --ok-text: #a7f3d0;
+
+  --warn-color: #f59e0b;
+  --warn-bg: #78350f;
+  --warn-border: #b45309;
+  --warn-text: #fde68a;
+
+  --danger-color: #f43f5e;
+  --danger-bg: #7f1d1d;
+  --danger-border: #991b1b;
+  --danger-text: #fecaca;
+
+  /* SVG Colors */
+  --svg-bg: #1e293b;
+  --svg-metal: #94a3b8;
+  --svg-loss: #450a0a;
+  --svg-loss-border: #f87171;
+
+  /* Cross-section limit-line/label colors — bright 400-tier shades for contrast against the
+     dark --svg-bg (the PDF/print export always uses the light-theme values above instead). */
+  --limit-reqca: #fbbf24;
+  --limit-req: #f87171;
+  --limit-struct: #a78bfa;
+
+  --plan-bg: #1e3a8a;
+  --plan-border: #1d4ed8;
+  --plan-text: #bfdbfe;
+
+  --closed-bg: #1e293b;
+  --closed-border: #475569;
+  --closed-text: #94a3b8;
+}
+
+/* box-shadow included so focus rings and invalid-state rings fade in with the border-color
+   change they always accompany, instead of the border easing in while the ring snaps. */
+* {
+  box-sizing: border-box;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s;
+}
+
+html, body {
+  background: var(--bg-color);
+  color: var(--text-color);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* Pages may override max-width in their own <style> (findings.html uses 1200px). */
+.wrap {
+  max-width: 1500px;
+  width: 100%;
+  margin: auto;
+  padding: 20px;
+}
+
+/* Shared numeric/tabular utility */
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================================
+   App header — shared across pages.
+   Scoped to the top-level app header (a direct child of body), not `header`
+   alone — every .card-header in the calculator is also a semantic <header>
+   element nested inside .card, and an unscoped `header {}` rule bleeds its
+   background/shadow onto every card title bar.
+   ============================================================================ */
+body > header {
+  background: var(--header-bg);
+  color: var(--header-text);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  border-bottom: 1px solid var(--header-border);
+}
+
+body > header .wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Full-color OR logo sits on a plain white patch (no border/shadow) so it reads on both the
+   light and dark header surfaces (the logo's navy 'OR' would vanish on a dark background
+   otherwise) — one asset, no theme swap. */
+.hdr-logo-chip {
+  display: inline-flex;
+  align-items: center;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 7px 12px;
+  flex: none;
+}
+
+.header-accent-bar {
+  height: 3px;
+  background: linear-gradient(90deg, var(--header-accent) 0%, #38bdf8 100%);
+}
+
+/* <480px: everything stays on one row instead of brand/actions stacking as two full-width
+   rows (that pattern was costing ~260px of vertical space before any card content appeared —
+   a real cost on a phone screen). The title text drops (the logo alone carries brand identity
+   at this width; the full name is still in the browser tab), and buttons condense to fit. */
+@media (max-width: 480px) {
+  body > header .wrap {
+    flex-wrap: nowrap;
+    padding: 10px 14px;
+    gap: 8px;
+  }
+
+  .header-info h1 {
+    display: none;
+  }
+
+  .header-actions {
+    gap: 8px;
+  }
+
+  .hdr-btn-group {
+    gap: 6px;
+  }
+
+  .hdr-btn {
+    padding: 7px 10px;
+    font-size: 11.5px;
+  }
+}
+
+.header-info h1 {
+  font-size: 19px;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+  color: var(--header-text);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.hdr-btn-group {
+  display: flex;
+  gap: 8px;
+}
+
+.hdr-btn {
+  flex: none;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  border-radius: 6px;
+  text-decoration: none; /* header buttons may be <a> links (page navigation) */
+}
+
+.hdr-btn[data-variant="outline"] {
+  background: var(--button-ghost);
+  border-color: var(--button-ghost-border);
+  color: var(--header-text);
+}
+
+.hdr-btn[data-variant="outline"]:hover {
+  background: var(--button-ghost-hover);
+  border-color: var(--button-primary);
+}
+
+.hdr-btn:not([data-variant="outline"]) {
+  box-shadow: 0 1px 2px rgba(21, 107, 149, 0.25);
+}
+
+@media (max-width: 700px) {
+  .hdr-logo {
+    height: 26px;
+  }
+
+  .hdr-logo-chip {
+    padding: 6px 10px;
+  }
+
+  .hdr-btn {
+    padding: 8px 10px;
+  }
+}
+
+@media (max-width: 520px) {
+  .hdr-btn-group {
+    gap: 6px;
+  }
+
+  .hdr-btn {
+    padding: 7px 8px;
+    font-size: 11px;
+  }
+}
+
+.hdr-logo {
+  height: 34px;
+  width: auto;
+  object-fit: contain;
+  display: block;
+}
+
+/* ============================================================================
+   Theme toggle button
+   ============================================================================ */
+.theme-btn {
+  background: transparent;
+  border: 1px solid var(--button-ghost-border);
+  border-radius: 8px;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-color);
+  cursor: pointer;
+  /* background-color/border-color already transition via the universal `* {}` rule at a
+     consistent 0.2s — only transform (the :active press effect) needs its own, faster entry. */
+  transition: transform 0.1s ease;
+}
+
+.theme-btn:hover {
+  background: var(--button-ghost-hover);
+  border-color: var(--button-primary);
+}
+
+.theme-btn:active {
+  transform: scale(0.90);
+}
+
+.theme-btn:focus-visible {
+  outline: 2px solid var(--button-primary);
+  outline-offset: 2px;
+}
+
+/* Freshly-inserted icon (innerHTML is swapped on every toggle) animates in for clear feedback */
+.theme-btn svg {
+  animation: theme-icon-in 0.32s ease;
+}
+
+@keyframes theme-icon-in {
+  from { transform: rotate(-90deg) scale(0.5); opacity: 0; }
+  to { transform: rotate(0deg) scale(1); opacity: 1; }
+}
+
+/* Remove the browser's built-in up/down micro-increment spinner on every numeric field — values
+   here (pressures, thicknesses, coordinates) are typed/measured, not stepped, and the arrows
+   invite accidental single-click drift on an engineering input. */
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
