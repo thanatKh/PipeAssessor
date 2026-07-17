@@ -127,6 +127,38 @@ create trigger trg_findings_touch
   for each row execute function public.touch_updated_at();
 
 -- ---------------------------------------------------------------------------
+-- 6a. line_list — master pipe-tag reference (NPS/schedule/material + P&ID/
+--    service/location), imported from Excel/CSV. Used only to pre-fill new
+--    findings; never referenced by a foreign key so importing/replacing it
+--    can never break existing findings. (Kept before section 6's RLS block,
+--    which enables RLS on this table — must exist first.)
+-- ---------------------------------------------------------------------------
+create table if not exists public.line_list (
+  id uuid primary key default gen_random_uuid(),
+
+  pipe_tag text not null,
+  nps text,              -- must match a PA_PIPE_DATABASE key, e.g. 2"
+  schedule text,         -- must match a schedule key under that nps, e.g. 40
+  material text,         -- must match a PA_MATERIALS[].code, e.g. A106B
+  pid_no text,
+  service text,
+  location_desc text,
+
+  created_by uuid not null default auth.uid(),
+  created_by_email text not null default coalesce(auth.jwt() ->> 'email', ''),
+  created_at timestamptz not null default now(),
+  updated_by uuid,
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists idx_line_list_tag on public.line_list (pipe_tag);
+
+drop trigger if exists trg_line_list_touch on public.line_list;
+create trigger trg_line_list_touch
+  before update on public.line_list
+  for each row execute function public.touch_updated_at();
+
+-- ---------------------------------------------------------------------------
 -- 6. Row Level Security — any logged-in user (you + inspectors) has full
 --    read/write; the public anon key alone can see nothing.
 -- ---------------------------------------------------------------------------
@@ -134,6 +166,7 @@ alter table public.findings enable row level security;
 alter table public.finding_photos enable row level security;
 alter table public.status_history enable row level security;
 alter table public.assessments enable row level security;
+alter table public.line_list enable row level security;
 
 drop policy if exists "authenticated full access" on public.findings;
 create policy "authenticated full access" on public.findings
@@ -149,6 +182,10 @@ create policy "authenticated full access" on public.status_history
 
 drop policy if exists "authenticated full access" on public.assessments;
 create policy "authenticated full access" on public.assessments
+  for all to authenticated using (true) with check (true);
+
+drop policy if exists "authenticated full access" on public.line_list;
+create policy "authenticated full access" on public.line_list
   for all to authenticated using (true) with check (true);
 
 -- ---------------------------------------------------------------------------

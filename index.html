@@ -3,14 +3,15 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Findings Tracker – Pipe Assessor</title>
+  <title>Pipe Assessor – Findings Tracker</title>
 
-  <!-- Google Fonts Inter -->
+  <!-- Google Fonts: Google Sans (UI) + JetBrains Mono (numerics/equations). Inter stays loaded
+       as a fallback in case Google Sans fails to load (offline, blocked CDN, etc.) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 
-  <!-- Basecoat CSS: same pinned version as calculator.html -->
+  <!-- Basecoat CSS (pinned) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/basecoat-css@1.0.1/dist/basecoat.cdn.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/basecoat-css@1.0.1/dist/js/basecoat.min.js" defer></script>
 
@@ -21,7 +22,7 @@
   <!-- Supabase JS client (pinned; exposes window.supabase) — this page is online-only -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js" defer></script>
 
-  <!-- jsPDF (+ autotable for the multi-row management-summary table); same pinned pair as calculator.html -->
+  <!-- jsPDF + autotable (pinned pair — 3.8.x pairs with jsPDF 2.x; do not bump without retesting) -->
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js" defer></script>
 
@@ -32,9 +33,10 @@
        asset/theme.css header comments for the Basecoat cascade rationale. -->
   <link rel="stylesheet" href="asset/theme.css" />
   <script src="asset/shared.js"></script>
+  <script src="asset/assess-ui.js"></script>
 
   <style>
-    /* Brand tokens, base styles, .wrap, the header suite and .theme-btn live in asset/theme.css. */
+    /* Brand tokens, base styles, .wrap, and the header suite live in asset/theme.css. */
     /* match the calculator's page width (theme.css default 1500px) */
 
     /* Header additions specific to this page */
@@ -63,34 +65,8 @@
     .view { display: none; }
     .view.active { display: block; }
 
-    /* ============ Panels (this page's card unit) ============ */
-    .panel {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 8px;
-      margin-bottom: 14px;
-      overflow: hidden;
-    }
-
-    .panel-h {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--card-border);
-    }
-
-    .panel-h h2 {
-      margin: 0;
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      color: var(--text-color);
-    }
-
-    .panel-b { padding: 14px; }
+    /* .panel and friends (the app's one card-container system, shared with the assessment
+       workbench) now live in asset/theme.css — single source, not re-inlined per page. */
 
     /* ============ Login ============ */
     .login-wrap {
@@ -144,17 +120,138 @@
       margin-top: 6px;
     }
 
-    /* ============ KPI chips ============ */
-    .kpi-row {
+    /* ============ Dashboard top: map left, KPI chips right ============ */
+    .dash-top {
       display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
+      gap: 14px;
+      align-items: stretch;
       margin-bottom: 14px;
     }
 
+    .dash-top .dash-map-panel {
+      flex: 1 1 auto;
+      min-width: 0;
+      margin-bottom: 0;
+    }
+
+    /* ============ KPI sidebar: completion ring + chip grid, next to the map ============ */
+    .kpi-sidebar {
+      flex: 0 0 260px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 0;
+    }
+
+    .kpi-ring-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+      color: var(--text-color);
+      flex: none;
+      /* Reset first so a plain mouse-click focus never shows the browser's raw default outline
+         (it doesn't reliably respect :focus-visible on <button> across engines) — the deliberate
+         outline below is added back only for :focus-visible (keyboard nav). */
+      outline: none;
+    }
+
+    .kpi-ring-card:hover { border-color: var(--button-primary); }
+
+    .kpi-ring-card.active {
+      border-color: var(--button-primary);
+      box-shadow: 0 0 0 1px var(--button-primary);
+    }
+
+    /* Deliberate focus treatment — keyboard-nav only, see the outline:none reset above. */
+    .kpi-ring-card:focus-visible {
+      outline: 2px solid var(--button-primary);
+      outline-offset: 2px;
+    }
+
+    /* Ring + center label overlap via CSS Grid (both children in the same 1x1 cell) rather than
+       position:absolute — no positioning-context bookkeeping needed for one simple overlay. */
+    .kpi-ring-wrap {
+      display: grid;
+      grid-template-areas: "ring";
+      place-items: center;
+      width: 76px;
+      height: 76px;
+      flex: none;
+    }
+
+    .kpi-ring-wrap > * { grid-area: ring; }
+
+    .kpi-ring {
+      width: 76px;
+      height: 76px;
+      transform: rotate(-90deg); /* start the fill at 12 o'clock */
+    }
+
+    .kpi-ring-track, .kpi-ring-fill {
+      fill: none;
+      stroke-width: 9;
+    }
+
+    .kpi-ring-track { stroke: var(--card-border); }
+
+    .kpi-ring-fill {
+      stroke: var(--ok-color);
+      stroke-linecap: round;
+      /* stroke-dasharray/-dashoffset set inline per render (circumference math needs the JS value) */
+      transition: stroke-dashoffset 0.5s ease;
+    }
+
+    .kpi-ring-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      /* keep the label clear of the ring's stroke on both sides (76px ring - 2*9px stroke) */
+      width: 54px;
+    }
+
+    .kpi-ring-pct {
+      font-family: 'JetBrains Mono', monospace;
+      font-variant-numeric: tabular-nums;
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .kpi-ring-label {
+      font-size: 7.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.2px;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+
+    .kpi-ring-fraction {
+      font-family: 'JetBrains Mono', monospace;
+      font-variant-numeric: tabular-nums;
+      font-size: 12.5px;
+      color: var(--text-muted);
+    }
+
+    /* ============ KPI chips: 2-column grid sidebar next to the map ============ */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      align-content: start;
+    }
+
     .kpi {
-      flex: 1 1 100px;
-      min-width: 100px;
+      min-width: 0;
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 8px;
@@ -163,6 +260,7 @@
       cursor: pointer;
       font: inherit;
       color: var(--text-color);
+      outline: none; /* see .kpi-ring-card's identical reset — real outline added back below, focus-visible only */
     }
 
     .kpi:hover { border-color: var(--button-primary); }
@@ -170,6 +268,11 @@
     .kpi.active {
       border-color: var(--button-primary);
       box-shadow: 0 0 0 1px var(--button-primary);
+    }
+
+    .kpi:focus-visible {
+      outline: 2px solid var(--button-primary);
+      outline-offset: 2px;
     }
 
     .kpi .k-num {
@@ -193,12 +296,16 @@
 
     .kpi.k-overdue .k-num { color: var(--danger-color); }
 
-    /* Below ~460px, "1 1 100px" flex-wrap packs 3 chips per row unevenly (3+2+1) and lets long
-       labels like "REPAIR PLANNED" wrap to two lines, making that chip taller than its row-mates.
-       A fixed 3-column grid keeps all six chips the same size in two even rows. */
-    @media (max-width: 640px) {
-      .kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); }
-      .kpi { min-width: 0; }
+    /* Below ~960px the map and KPI sidebar don't both earn their width — stack, map first. */
+    @media (max-width: 960px) {
+      .dash-top { flex-direction: column; }
+      .kpi-sidebar { flex: none; }
+    }
+
+    /* Below ~460px a 3-column grid keeps all six chips the same size in two even rows instead of
+       2 columns running unnecessarily tall on a narrow phone. */
+    @media (max-width: 460px) {
+      .kpi-row { grid-template-columns: repeat(3, 1fr); }
       .kpi .k-label { font-size: 9px; }
     }
 
@@ -246,41 +353,49 @@
       box-shadow: none;
     }
 
-    .map-popup { font-family: 'Inter', sans-serif; font-size: 12px; line-height: 1.5; }
+    .map-popup { font-size: 12px; line-height: 1.5; }
     .map-popup .mp-tag { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 12px; margin-bottom: 4px; }
-    .map-popup .mp-meta { color: #475569; margin: 3px 0 6px; }
-    .map-popup a { color: #156B95; font-weight: 600; }
+    .map-popup .mp-meta { color: var(--text-muted); margin: 3px 0 6px; }
+    .map-popup a { color: var(--button-primary); font-weight: 600; }
 
-    /* ============ Dashboard split: map left (sticky) / register right ============ */
+    /* Leaflet's own popup chrome isn't theme-aware by default — it stays a plain white card
+       (confirmed the popup box itself, not just its text, renders pure white by default).
+       Theme it to match the app's card surface. */
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+      background: var(--card-bg);
+      color: var(--text-color);
+    }
+
+    /* ============ Dashboard: register full-width below the map+KPI row ============ */
     .dash-split {
-      display: grid;
-      grid-template-columns: minmax(340px, 40%) 1fr;
+      display: flex;
+      flex-direction: column;
       gap: 14px;
-      align-items: start;
     }
 
-    .dash-map-panel {
-      position: sticky;
-      top: 72px; /* clears the sticky app header */
-      margin-bottom: 0;
-    }
-
+    /* Map is short-and-wide (a whole row width minus the KPI sidebar) rather than tall-and-narrow. */
     .dash-map-panel #dashMap {
-      height: calc(100vh - 72px - 120px);
-      min-height: 360px;
+      height: 380px;
     }
 
     .dash-list-panel { margin-bottom: 0; }
 
-    /* Below ~960px the two columns don't both earn their width — stack, map first but shorter. */
-    @media (max-width: 960px) {
-      .dash-split { grid-template-columns: 1fr; }
-      .dash-map-panel { position: static; }
-      .dash-map-panel #dashMap { height: 300px; }
+    @media (max-width: 640px) {
+      .dash-map-panel #dashMap { height: 260px; }
     }
 
-    /* ============ Terminal segmented filter ============ */
+    /* ============ Segmented control (terminal filter + reading-mode toggles) ============
+       Sliding-pill treatment (transitions.dev 16-tabs-sliding), adapted onto this app's
+       existing .seg-btn.active model instead of the snippet's own aria-selected-driven
+       markup — the three .seg-row groups (terminal filter, #aModeSeg, #qModeSeg) already
+       have their own click handlers that toggle .active; positionSegPill() just reads
+       whichever button is .active and slides a shared <span class="seg-pill"> under it. */
+    :root {
+      --tabs-dur: 250ms;
+      --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
     .seg-row {
+      position: relative;
       display: inline-flex;
       gap: 2px;
       padding: 3px;
@@ -290,7 +405,25 @@
       margin-bottom: 10px;
     }
 
+    .seg-pill {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      height: calc(100% - 6px);
+      width: 0;
+      background: var(--card-bg);
+      border-radius: 6px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
+      transform: translateX(0);
+      transition: transform var(--tabs-dur) var(--tabs-ease), width var(--tabs-dur) var(--tabs-ease);
+      will-change: transform, width;
+      pointer-events: none;
+      z-index: 0;
+    }
+
     .seg-btn {
+      position: relative;
+      z-index: 1;
       border: none;
       background: transparent;
       color: var(--text-muted);
@@ -300,14 +433,17 @@
       padding: 5px 14px;
       border-radius: 6px;
       cursor: pointer;
+      transition: color var(--tabs-dur) var(--tabs-ease);
     }
 
     .seg-btn:hover { color: var(--text-color); }
 
     .seg-btn.active {
-      background: var(--card-bg);
       color: var(--button-primary);
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .seg-pill, .seg-btn { transition: none !important; }
     }
 
     /* ============ Filters ============ */
@@ -328,23 +464,23 @@
     table.list {
       width: 100%;
       border-collapse: collapse;
-      font-size: 12.5px;
+      font-size: 13.5px;
     }
 
     table.list th {
       text-align: left;
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       color: var(--text-muted);
-      padding: 8px 10px;
+      padding: 10px 10px;
       border-bottom: 1px solid var(--card-border);
       white-space: nowrap;
     }
 
     table.list td {
-      padding: 9px 10px;
+      padding: 11px 10px;
       border-bottom: 1px solid var(--card-border);
       vertical-align: middle;
     }
@@ -357,7 +493,7 @@
     .c-tag .t-tag-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
     .c-tag .t-tag {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 12px;
+      font-size: 13.5px;
       font-weight: 600;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -365,7 +501,7 @@
       min-width: 0;
     }
     .c-tag .t-type {
-      font-size: 11px;
+      font-size: 11.5px;
       color: var(--text-muted);
       margin-top: 1px;
       overflow: hidden;
@@ -376,15 +512,49 @@
       display: inline-flex;
       align-items: center;
       gap: 3px;
-      font-size: 10.5px;
+      font-size: 11px;
       color: var(--text-light);
       flex: none;
     }
 
+    /* Register thumbnail: the earliest "as found" photo, sized to actually be readable at a
+       glance (not just a presence indicator). Hidden below 640px regardless of the toggle — the
+       mobile table is already tight on width (see the fixed-layout rules above) and the
+       camera-count chip on the tag itself still signals whether photos exist. The "Hide
+       photos" toggle (#btnTogglePhotos) sets body.hide-row-photos, remembered in localStorage. */
+    .c-tag-flex { display: flex; align-items: center; gap: 12px; }
+    .c-tag-text { min-width: 0; }
+    .row-thumb {
+      width: 112px;
+      height: 112px;
+      border-radius: 8px;
+      object-fit: cover;
+      flex: none;
+      border: 1px solid var(--card-border);
+      background: var(--bg-color);
+    }
+    .row-thumb-empty { visibility: hidden; }
+    body.hide-row-photos .row-thumb { display: none; }
+    @media (max-width: 640px) {
+      .row-thumb { display: none; }
+    }
+
+    /* Location/Anomaly description subtext under the finding type — muted, single-line
+       ellipsis each so a long free-text field never blows out the row height. */
+    .t-desc {
+      font-size: 11.5px;
+      color: var(--text-light);
+      margin-top: 1px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .t-desc .t-desc-label { font-weight: 600; }
+
     /* Age badge — days since inspection; escalates to warn/danger as an open finding ages */
     .age {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 12px;
+      font-size: 13px;
       color: var(--text-muted);
     }
     .age.age-warn { color: var(--warn-color); font-weight: 600; }
@@ -407,17 +577,58 @@
        carries the full value) instead of blowing up row height. */
     @media (max-width: 640px) {
       table.list { table-layout: fixed; }
-      table.list th:nth-child(1), table.list td:nth-child(1) { width: 84px; }
+      table.list th:nth-child(1), table.list td:nth-child(1) { width: 26px; }
+      table.list th:nth-child(2), table.list td:nth-child(2) { width: 94px; }
       /* Terminal is redundant with the KBY/SRC/BRP segmented filter right above the table, and
          the tag itself usually encodes it — drop the column here so Pipe Tag gets breathing room. */
-      table.list th:nth-child(3), table.list td:nth-child(3) { display: none; }
-      table.list th:nth-child(4), table.list td:nth-child(4) { width: 34px; }
-      table.list th:nth-child(5), table.list td:nth-child(5) { width: 80px; }
+      table.list th:nth-child(4), table.list td:nth-child(4) { display: none; }
+      table.list th:nth-child(5), table.list td:nth-child(5) { width: 34px; }
+      table.list th:nth-child(6), table.list td:nth-child(6) { width: 80px; }
       table.list th, table.list td { padding: 8px 4px; }
       table.list th:first-child, table.list td:first-child { padding-left: 0; }
-      .pill { font-size: 9.5px; padding: 3px 6px; letter-spacing: 0.2px; }
+      /* Scoped to table.list (not a bare .pill) both to beat the base .pill rule's font-size
+         regardless of source order (equal specificity otherwise means whichever is declared
+         LAST in the stylesheet wins, not whichever is "more specific to mobile" — the base
+         rule sits after this block) and so this doesn't also shrink status pills elsewhere
+         (detail page, assessment card) that happen to render under 640px. */
+      table.list .pill { font-size: 9px; padding: 2px 5px; letter-spacing: 0; }
       table.list .ov-badge { font-size: 9.5px; }
     }
+
+    /* ============ Row selection (Summary PDF) ============ */
+    .c-check { width: 30px; }
+    .row-check {
+      width: 15px;
+      height: 15px;
+      cursor: pointer;
+      accent-color: var(--button-primary);
+      vertical-align: middle;
+    }
+    .sel-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--button-primary);
+      background: var(--plan-bg);
+      border: 1px solid var(--plan-border);
+      border-radius: 6px;
+      padding: 6px 12px;
+      margin: 10px 14px 0;
+    }
+    .link-btn {
+      background: none;
+      border: none;
+      padding: 0;
+      font: inherit;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-decoration: underline;
+      cursor: pointer;
+      margin-left: auto;
+    }
+    .link-btn:hover { color: var(--button-primary); }
 
     .empty-row td {
       text-align: center;
@@ -437,11 +648,11 @@
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      font-size: 10.5px;
+      font-size: 11.5px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.4px;
-      padding: 3px 9px;
+      padding: 3px 10px;
       border-radius: 999px; /* pill: radius = height/2 by design */
       border: 1px solid transparent;
       white-space: nowrap;
@@ -480,6 +691,22 @@
       gap: 10px;
       flex-wrap: wrap;
       margin-bottom: 12px;
+    }
+
+    /* Detail page: keep "All findings" + Export/Edit reachable while scrolling a long
+       two-column detail view instead of having to scroll back up. Stacks directly below the
+       app header (also position:sticky, theme.css) using its real measured height
+       (--app-header-h, kept in sync by syncHeaderHeight()) rather than top:0, which would
+       collide with — not stack under — the header. */
+    #viewDetail .toolbar,
+    #viewForm .toolbar {
+      position: sticky;
+      top: var(--app-header-h, 64px);
+      z-index: 20;
+      background: var(--bg-color);
+      padding: 10px 0;
+      margin: 0 0 12px;
+      border-bottom: 1px solid var(--card-border);
     }
 
     .back-link {
@@ -552,86 +779,36 @@
       padding: 4px 0;
     }
 
-    .a-result { margin-top: 16px; }
-
-    .a-result-empty {
-      font-size: 12px;
-      color: var(--text-light);
-      border-top: 1px solid var(--card-border);
-      padding-top: 12px;
-    }
-
-    /* Completed assessment: a boxed, status-accented result card so it reads as a finished
-       verdict rather than trailing form text. */
-    .a-result-body {
-      border: 1px solid var(--card-border);
-      border-left-width: 4px;
-      border-radius: 8px;
-      padding: 14px 16px;
-      background: var(--bg-color);
-    }
-    .a-result-body.rs-ok  { border-left-color: var(--ok-color); }
-    .a-result-body.rs-mon { border-left-color: var(--warn-color); }
-    .a-result-body.rs-rep { border-left-color: var(--danger-color); }
-
-    .a-result-eyebrow {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      color: var(--text-muted);
-      margin-bottom: 10px;
-    }
-    .a-result-eyebrow svg { color: var(--ok-color); }
-    .a-result-body.rs-mon .a-result-eyebrow svg { color: var(--warn-color); }
-    .a-result-body.rs-rep .a-result-eyebrow svg { color: var(--danger-color); }
-
-    .a-result-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
-    .a-result-head .pill { font-size: 12px; padding: 4px 12px; }
-    .a-result-note { font-size: 12.5px; color: var(--text-muted); }
-
-    .a-metrics {
+    /* Two-column form workbench: finding data entry left, live assessment right.
+       minmax(0, …) so the workbench SVG/equations can shrink instead of forcing overflow. */
+    .form-split {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
-      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+      gap: 14px;
+      align-items: start;
+      margin-bottom: 14px;
     }
 
-    .a-metric {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 6px;
-      padding: 8px 10px;
-    }
-    .a-metric .am-label {
-      display: block;
-      font-size: 10px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.4px;
-      color: var(--text-muted);
-    }
-    .a-metric .am-val { font-size: 15px; font-weight: 700; margin-top: 2px; display: block; }
+    .form-col > .panel:last-child { margin-bottom: 0; }
 
-    .a-openfull {
-      display: inline-block;
-      margin-top: 12px;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--button-primary);
-      text-decoration: none;
+    @media (max-width: 960px) {
+      .form-split { grid-template-columns: 1fr; }
     }
-    .a-openfull:hover { text-decoration: underline; }
 
+    /* Quick calculator (#/calc): a single centered column */
+    .quick-calc-wrap {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    /* Lives inside #viewForm's sticky .toolbar now (back-link left, this right) — its own
+       justify-content is just "flow the two button groups together", not full-width spacing;
+       the outer .toolbar's space-between already handles the back-link/actions split. */
     .form-actions {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      gap: 10px;
+      gap: 16px;
       flex-wrap: wrap;
-      margin-top: 4px;
     }
 
     .form-actions .grp { display: flex; gap: 8px; }
@@ -752,18 +929,45 @@
     .photo-group + .photo-group { margin-top: 16px; }
 
     /* ============ Detail ============ */
+    /* Sticky toolbar's left side: back-link + the finding's identity (tag/status/terminal-type),
+       pinned together so the reader never loses context of which finding they're scrolled into. */
+    .toolbar-id-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
     .detail-head {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       flex-wrap: wrap;
+      min-width: 0;
+      padding-left: 14px;
+      border-left: 1px solid var(--card-border);
     }
 
     .detail-head h2 {
       margin: 0;
-      font-size: 17px;
+      font-size: 14px;
       font-weight: 800;
       font-family: 'JetBrains Mono', monospace;
+      white-space: nowrap;
+    }
+
+    .detail-head .dh-meta {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    @media (max-width: 720px) {
+      .detail-head { padding-left: 0; border-left: none; flex-basis: 100%; }
+      .detail-head .dh-meta { white-space: normal; }
     }
 
     .dgrid {
@@ -772,12 +976,15 @@
       gap: 10px 16px;
     }
 
-    .dgrid .d-item .d-label {
+    /* Not scoped to .dgrid .d-item — also used standalone as a section label above free text
+       (e.g. the Description heading in renderDetail) where there's no d-item ancestor. */
+    .d-label {
       font-size: 10px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       color: var(--text-muted);
+      margin-bottom: 4px;
     }
 
     .dgrid .d-item .d-val {
@@ -806,6 +1013,14 @@
       margin: 14px 0 4px;
     }
 
+    /* Latest-snapshot header above the read-only workbench on the detail page */
+    .assess-latest-head {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-bottom: 10px;
+    }
+
     .assess-item {
       display: flex;
       flex-wrap: wrap;
@@ -824,7 +1039,7 @@
 
     .assess-meta {
       width: 100%;
-      font-size: 11px;
+      font-size: 11.5px;
       color: var(--text-light);
     }
 
@@ -853,7 +1068,7 @@
     }
 
     .tl-title { font-size: 12.5px; font-weight: 600; }
-    .tl-meta { font-size: 11px; color: var(--text-light); margin-top: 1px; }
+    .tl-meta { font-size: 11.5px; color: var(--text-light); margin-top: 1px; }
     .tl-note { font-size: 12px; color: var(--text-muted); margin-top: 3px; white-space: pre-wrap; }
 
     /* ============ Dialog ============ */
@@ -877,6 +1092,49 @@
 
     dialog.app-dlg::backdrop { background: rgba(15, 23, 42, 0.5); }
 
+    /* ============ Modal open/close transition (transitions.dev 06-modal) ============
+       Native <dialog> already handles focus trap/backdrop/Esc; this only adds the
+       scale+fade. .is-open drives the open transition; .is-closing plays a softer,
+       quicker scale-down before JS calls dialog.close() once --modal-close-dur elapses
+       (see openDialog/closeDialog). Applies to both dialog.app-dlg and dialog#lightbox. */
+    :root {
+      --modal-open-dur: 250ms;
+      --modal-close-dur: 150ms;
+      --modal-scale: 0.96;
+      --modal-scale-close: 0.96;
+      --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    dialog.app-dlg, dialog#lightbox {
+      transform-origin: center;
+      transform: scale(var(--modal-scale));
+      opacity: 0;
+      transition: transform var(--modal-open-dur) var(--modal-ease),
+                  opacity var(--modal-open-dur) var(--modal-ease);
+      will-change: transform, opacity;
+    }
+    dialog.app-dlg.is-open, dialog#lightbox.is-open {
+      transform: scale(1);
+      opacity: 1;
+    }
+    dialog.app-dlg.is-closing, dialog#lightbox.is-closing {
+      transform: scale(var(--modal-scale-close));
+      opacity: 0;
+      transition: transform var(--modal-close-dur) var(--modal-ease),
+                  opacity var(--modal-close-dur) var(--modal-ease);
+    }
+    dialog.app-dlg::backdrop, dialog#lightbox::backdrop {
+      opacity: 0;
+      transition: opacity var(--modal-open-dur) var(--modal-ease);
+    }
+    dialog.app-dlg.is-open::backdrop, dialog#lightbox.is-open::backdrop {
+      opacity: 1;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      dialog.app-dlg, dialog#lightbox, dialog.app-dlg::backdrop, dialog#lightbox::backdrop {
+        transition: none !important;
+      }
+    }
+
     #importDlg { width: min(640px, calc(100vw - 32px)); }
     .import-summary { font-size: 12.5px; margin: 4px 0 8px; }
     .import-summary .ok { color: var(--ok-color); font-weight: 600; }
@@ -888,7 +1146,7 @@
     table.import-tbl tr.bad td { background: var(--danger-bg); }
     table.import-tbl .rowstat-ok { color: var(--ok-color); font-weight: 700; }
     table.import-tbl .rowstat-bad { color: var(--danger-color); font-weight: 700; }
-    .import-reason { color: var(--danger-text); font-size: 11px; }
+    .import-reason { color: var(--danger-text); font-size: 11.5px; }
 
     .dlg-h {
       padding: 12px 16px;
@@ -908,6 +1166,11 @@
     }
 
     /* ============ Toast ============ */
+    :root {
+      --toast-open-dur: 250ms;
+      --toast-close-dur: 350ms;
+      --toast-ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
     #toast {
       position: fixed;
       left: 50%;
@@ -921,16 +1184,30 @@
       box-shadow: 0 4px 12px rgba(15, 23, 42, 0.3);
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.25s, transform 0.25s;
+      /* Close (toast hiding) is the resting/base transition; .show overrides it with the
+         quicker open timing below — see transitions-polish's toast open/close split
+         (--duration-fast open / --duration-medium close, per its documented usage). */
+      transition: opacity var(--toast-close-dur) var(--toast-ease), transform var(--toast-close-dur) var(--toast-ease);
       z-index: 1000;
       max-width: calc(100vw - 32px);
     }
 
-    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      transition: opacity var(--toast-open-dur) var(--toast-ease), transform var(--toast-open-dur) var(--toast-ease);
+    }
     #toast.err { background: var(--danger-color); }
 
     /* ============ Photo lightbox ============ */
     dialog#lightbox {
+      position: fixed;
+      inset-block-start: 50%;
+      inset-inline-start: 50%;
+      top: 50%;
+      left: 50%;
+      translate: -50% -50%;
+      margin: 0;
       border: none;
       background: transparent;
       padding: 0;
@@ -948,7 +1225,7 @@
 
     .footer {
       text-align: center;
-      font-size: 10.5px;
+      font-size: 11.5px;
       color: var(--text-light);
       padding: 18px 20px 26px;
     }
@@ -961,21 +1238,19 @@
   <div class="wrap">
     <div class="header-brand">
       <a class="hdr-logo-chip" href="#/list" title="Go to dashboard">
-        <img class="hdr-logo hdr-logo-light" src="asset/RGB_OR_Full%20color.png" alt="OR Logo"/>
-        <img class="hdr-logo hdr-logo-dark" src="asset/RGB_OR_invert_logo%20on%20BlueOR%20Trans.png" alt="OR Logo"/>
+        <img class="hdr-logo" src="asset/RGB_OR_Full%20color.png" alt="OR Logo"/>
       </a>
       <div class="header-info">
-        <h1>Findings Tracker</h1>
-        <div class="hdr-sub">Piping abnormal findings — recorded until repaired</div>
+        <h1>Pipe Assessor</h1>
+        <div class="hdr-sub">Findings Tracker — Piping abnormal findings — recorded</div>
       </div>
     </div>
     <div class="header-actions">
       <span class="hdr-user authed-only" id="hdrUser"></span>
-      <a class="btn hdr-btn" data-variant="outline" href="calculator.html">Calculator</a>
-      <button class="btn hdr-btn authed-only" data-variant="outline" id="btnSignOut" type="button">Sign out</button>
-      <button class="theme-btn" id="themeToggle" title="Toggle Dark/Light Mode" type="button">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-      </button>
+      <div class="hdr-btn-group">
+        <a class="btn hdr-btn" data-variant="outline" href="#/calc">Quick Calc</a>
+        <button class="btn hdr-btn authed-only" data-variant="outline" id="btnSignOut" type="button">Sign out</button>
+      </div>
     </div>
   </div>
 </header>
@@ -1008,10 +1283,8 @@
 
   <!-- ================= LIST / DASHBOARD ================= -->
   <section id="viewList" class="view">
-    <div class="kpi-row" id="kpiRow"></div>
-
-    <div class="dash-split">
-      <!-- LEFT: map (sticky on desktop) -->
+    <div class="dash-top">
+      <!-- LEFT: map -->
       <div class="panel dash-map-panel">
         <div class="panel-h">
           <h2>Map</h2>
@@ -1020,19 +1293,46 @@
         <div id="dashMap"></div>
       </div>
 
+      <!-- RIGHT: completion ring + KPI chips, 2-column grid -->
+      <div class="kpi-sidebar">
+        <button type="button" class="kpi-ring-card" id="kpiRingCard" title="Repaired + Closed vs. all findings">
+          <div class="kpi-ring-wrap">
+            <svg class="kpi-ring" viewBox="0 0 100 100" aria-hidden="true">
+              <circle class="kpi-ring-track" cx="50" cy="50" r="42"></circle>
+              <circle class="kpi-ring-fill" id="kpiRingFill" cx="50" cy="50" r="42"></circle>
+            </svg>
+            <div class="kpi-ring-center">
+              <span class="kpi-ring-pct" id="kpiRingPct">0%</span>
+              <span class="kpi-ring-label">Complete</span>
+            </div>
+          </div>
+          <div class="kpi-ring-fraction" id="kpiRingFraction">0 of 0</div>
+        </button>
+        <div class="kpi-row" id="kpiRow"></div>
+      </div>
+    </div>
+
+    <div class="dash-split">
       <!-- RIGHT: register -->
       <div class="panel dash-list-panel">
         <div class="panel-h">
           <h2>Findings Register</h2>
           <div class="panel-h-btns">
+            <button class="btn" data-variant="outline" id="btnTogglePhotos" type="button" aria-pressed="true">Hide photos</button>
             <button class="btn" data-variant="outline" id="btnImport" type="button">Import</button>
+            <button class="btn" data-variant="outline" id="btnLineList" type="button">Line List</button>
             <button class="btn" data-variant="outline" id="btnSummaryPdf" type="button">Summary PDF</button>
             <button class="btn" data-variant="outline" id="btnCsv" type="button">Export CSV</button>
             <button class="btn" id="btnNew" type="button">+ New Finding</button>
           </div>
         </div>
+        <div class="sel-bar" id="selBar" hidden>
+          <span id="selCount"></span>
+          <button class="link-btn" id="btnSelClear" type="button">Clear selection</button>
+        </div>
         <div class="panel-b" style="padding-bottom: 10px;">
           <div class="seg-row" id="segTerminal" role="tablist" aria-label="Terminal filter">
+            <span class="seg-pill" aria-hidden="true"></span>
             <button class="seg-btn active" data-t="" type="button">All</button>
             <button class="seg-btn" data-t="KBY" type="button">KBY</button>
             <button class="seg-btn" data-t="SRC" type="button">SRC</button>
@@ -1044,15 +1344,18 @@
               <option>Open</option><option>Monitoring</option><option>Repair Planned</option>
               <option>Repaired</option><option>Closed</option>
               <option value="__overdue">Overdue only</option>
+              <option value="__complete">Complete (Repaired + Closed)</option>
             </select>
             <select id="filType" class="select"><option value="">All types</option></select>
             <input id="filSearch" class="input" type="search" placeholder="Search tag, description, report no., SAP…">
+            <button class="btn" data-variant="outline" id="btnResetFilters" type="button">Reset filters</button>
           </div>
         </div>
         <div class="tbl-scroll">
           <table class="list">
             <thead>
               <tr>
+                <th class="c-check"><input type="checkbox" class="row-check" id="chkSelectAll" title="Select all"></th>
                 <th>Status</th>
                 <th>Pipe Tag</th>
                 <th>Terminal</th>
@@ -1071,7 +1374,22 @@
   <section id="viewForm" class="view">
     <div class="toolbar">
       <a class="back-link" href="#/list">&#8592; All findings</a>
+      <div class="form-actions">
+        <div class="grp">
+          <button class="btn btn-danger-outline" id="btnDelete" type="button" style="display:none;">Delete finding</button>
+        </div>
+        <div class="grp">
+          <a class="btn" data-variant="outline" href="#/list">Cancel</a>
+          <button class="btn" data-variant="outline" id="btnSaveAnother" type="button" title="Save, then start a new finding keeping terminal, vendor, report no. and inspection date">Save &amp; add another</button>
+          <button class="btn" id="btnSave" type="button">Save finding</button>
+        </div>
+      </div>
     </div>
+
+    <!-- Two-column workbench: finding data entry left, live ASME B31.3 assessment right.
+         Stacks to a single column below 960px (finding panels first). -->
+    <div class="form-split">
+    <div class="form-col" id="formColMain">
 
     <div class="panel">
       <div class="panel-h"><h2 id="formTitle">New Finding</h2></div>
@@ -1122,144 +1440,38 @@
               <option value="">—</option>
               <option>Low</option><option>Medium</option><option>High</option>
             </select>
-            <div class="hint" id="sevHint" style="display:none;">Auto-suggested from the assessment — change if needed.</div>
           </div>
           <div class="full">
-            <label class="f-label" for="fDescription">Description</label>
+            <label class="f-label" for="fDescription">Anomaly Description</label>
             <textarea id="fDescription" class="textarea" rows="3" placeholder="What was found, extent, reference to report section…"></textarea>
           </div>
           <div>
             <label class="f-label" for="fDefLen">Defect Length (mm)</label>
-            <input id="fDefLen" class="input mono" type="number" step="1" placeholder="optional">
+            <input id="fDefLen" class="input" type="number" step="1" placeholder="optional">
           </div>
           <div>
             <label class="f-label" for="fDefWid">Defect Width (mm)</label>
-            <input id="fDefWid" class="input mono" type="number" step="1" placeholder="optional">
+            <input id="fDefWid" class="input" type="number" step="1" placeholder="optional">
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ================= ASSESSMENT (inline ASME B31.3) ================= -->
-    <div class="panel" id="assessPanel">
-      <div class="panel-h">
-        <h2>ASME B31.3 Assessment</h2>
-        <label class="switch-inline">
-          <input type="checkbox" id="aToggle">
-          <span>Include assessment</span>
-        </label>
-      </div>
-      <div class="panel-b" id="aBody">
-        <p class="hint" id="aIntro" style="margin-top:0;">
-          Enter the pipe data and the UT reading — the B31.3 result computes live below. It is saved onto the finding.
-        </p>
+    <div class="panel">
+      <div class="panel-h"><h2>Planning &amp; SAP</h2></div>
+      <div class="panel-b">
         <div class="fgrid">
           <div>
-            <label class="f-label" for="aNps">Nominal Pipe Size</label>
-            <select id="aNps" class="select"></select>
+            <label class="f-label" for="fTargetDate">Target Repair Date</label>
+            <input id="fTargetDate" class="input" type="date">
           </div>
           <div>
-            <label class="f-label" for="aSch">Schedule</label>
-            <select id="aSch" class="select"></select>
+            <label class="f-label" for="fSapNotif">SAP Notification No.</label>
+            <input id="fSapNotif" class="input" type="text" placeholder="e.g., 110009490">
           </div>
           <div>
-            <label class="f-label" for="aMat">Material</label>
-            <select id="aMat" class="select"></select>
-          </div>
-          <div>
-            <label class="f-label" for="aTnom">Nominal Thickness (mm)</label>
-            <input id="aTnom" class="input mono" type="number" step="0.01" placeholder="auto from schedule">
-            <div class="hint">Auto-filled from the schedule; edit for an as-built value.</div>
-          </div>
-        </div>
-
-        <div class="a-reading">
-          <div class="seg-row" id="aModeSeg" role="tablist" aria-label="Reading type">
-            <button class="seg-btn active" data-mode="tmeas" type="button">Measured thickness</button>
-            <button class="seg-btn" data-mode="depth" type="button">Wall-loss depth</button>
-          </div>
-          <div class="fgrid">
-            <div id="aTmeasGrp">
-              <label class="f-label req" for="aTmeas">Measured Min. Thickness — UT (mm)</label>
-              <input id="aTmeas" class="input mono" type="number" step="0.01" placeholder="e.g., 5.40">
-            </div>
-            <div id="aDepthGrp" style="display:none;">
-              <label class="f-label req" for="aDepth">Wall-Loss Depth (mm)</label>
-              <input id="aDepth" class="input mono" type="number" step="0.01" placeholder="e.g., 1.20">
-            </div>
-            <div>
-              <label class="f-label" for="aCa">Corrosion Allowance, CA (mm)</label>
-              <input id="aCa" class="input mono" type="number" step="0.01" placeholder="e.g., 1.5">
-            </div>
-          </div>
-        </div>
-
-        <div class="fgrid">
-          <div>
-            <label class="f-label req" for="aP">Design Pressure</label>
-            <div class="p-row">
-              <input id="aP" class="input mono" type="number" step="0.1" placeholder="e.g., 7.0">
-              <select id="aPUnit" class="select"><option value="bar">bar</option><option value="psi">psi</option></select>
-            </div>
-          </div>
-          <div>
-            <label class="f-label" for="aCorrType">Corrosion Type</label>
-            <select id="aCorrType" class="select">
-              <option value="external">External Wall Loss</option>
-              <option value="internal">Internal Wall Loss</option>
-            </select>
-          </div>
-        </div>
-
-        <details class="a-advanced">
-          <summary>Advanced parameters (defaults suit most carbon-steel lines)</summary>
-          <div class="fgrid" style="margin-top:10px;">
-            <div>
-              <label class="f-label" for="aS">Allowable Stress, S (MPa)</label>
-              <input id="aS" class="input mono" type="number" step="0.1">
-            </div>
-            <div>
-              <label class="f-label" for="aTemp">Design Temperature (°C)</label>
-              <input id="aTemp" class="input mono" type="number" step="1" placeholder="e.g., 65">
-            </div>
-            <div>
-              <label class="f-label" for="aE">Joint Factor, E</label>
-              <input id="aE" class="input mono" type="number" step="0.01" value="1.0">
-            </div>
-            <div>
-              <label class="f-label" for="aW">Weld Strength Factor, W</label>
-              <input id="aW" class="input mono" type="number" step="0.01" value="1.0">
-            </div>
-            <div>
-              <label class="f-label" for="aY">Coefficient, Y</label>
-              <input id="aY" class="input mono" type="number" step="0.01" value="0.4">
-            </div>
-            <div>
-              <label class="f-label" for="aCr">Corrosion Rate (mm/yr)</label>
-              <input id="aCr" class="input mono" type="number" step="0.001" placeholder="optional — enables remaining life">
-            </div>
-          </div>
-        </details>
-
-        <div class="a-result" id="aResult">
-          <div class="a-result-empty" id="aResultEmpty">Enter the UT reading and design pressure to see the result.</div>
-          <div class="a-result-body" id="aResultBody" style="display:none;">
-            <div class="a-result-eyebrow">
-              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
-              Assessment result
-            </div>
-            <div class="a-result-head">
-              <span class="pill" id="aStatusPill"></span>
-              <span class="a-result-note" id="aStatusNote"></span>
-            </div>
-            <div class="a-metrics">
-              <div class="a-metric"><span class="am-label">ERF</span><span class="am-val mono" id="aErf">—</span></div>
-              <div class="a-metric"><span class="am-label">t req + CA</span><span class="am-val mono" id="aTreq">—</span></div>
-              <div class="a-metric"><span class="am-label">Margin</span><span class="am-val mono" id="aMargin">—</span></div>
-              <div class="a-metric"><span class="am-label">MAWP</span><span class="am-val mono" id="aMawp">—</span></div>
-              <div class="a-metric"><span class="am-label">Rem. life</span><span class="am-val mono" id="aLife">—</span></div>
-            </div>
-            <a class="a-openfull" id="aOpenFull" href="#" target="_blank" rel="noopener">Open in full calculator (diagram, equations, PDF) &#8594;</a>
+            <label class="f-label" for="fSapOrder">SAP Order No.</label>
+            <input id="fSapOrder" class="input" type="text" placeholder="e.g., 110002019">
           </div>
         </div>
       </div>
@@ -1271,11 +1483,11 @@
         <div class="coord-row" style="margin-bottom: 10px;">
           <div>
             <label class="f-label" for="fLat">Latitude</label>
-            <input id="fLat" class="input mono" type="number" step="0.000001" placeholder="13.097720">
+            <input id="fLat" class="input" type="number" step="0.000001" placeholder="13.097720">
           </div>
           <div>
             <label class="f-label" for="fLng">Longitude</label>
-            <input id="fLng" class="input mono" type="number" step="0.000001" placeholder="100.887211">
+            <input id="fLng" class="input" type="number" step="0.000001" placeholder="100.887211">
           </div>
           <button class="btn" data-variant="outline" id="btnClearLoc" type="button" style="height: 36px;">Clear</button>
         </div>
@@ -1295,22 +1507,29 @@
       </div>
     </div>
 
-    <div class="panel">
-      <div class="panel-h"><h2>Planning &amp; SAP</h2></div>
+    <!-- Existing-finding photo management — same grids/logic as the detail page's Photographic
+         Record panel (distinct ids: gridFound2/gridRepaired2/etc.), shown only when editing. -->
+    <div class="panel" id="editPhotoPanel" style="display:none;">
+      <div class="panel-h">
+        <h2>Photographic Record</h2>
+        <span class="hint" style="margin:0;">Tip: paste a screenshot with <kbd>Ctrl</kbd>+<kbd>V</kbd> (uses the last "+ Add" you clicked)</span>
+      </div>
       <div class="panel-b">
-        <div class="fgrid">
-          <div>
-            <label class="f-label" for="fTargetDate">Target Repair Date</label>
-            <input id="fTargetDate" class="input" type="date">
+        <div class="photo-group">
+          <div class="photo-group-h">
+            <h3>As Found</h3>
+            <button class="btn" data-variant="outline" id="btnAddFound2" type="button">+ Add</button>
           </div>
-          <div>
-            <label class="f-label" for="fSapNotif">SAP Notification No.</label>
-            <input id="fSapNotif" class="input mono" type="text" placeholder="e.g., 10012345">
+          <div class="photo-grid" id="gridFound2"></div>
+          <div class="photo-empty" id="emptyFound2">No as-found photos.</div>
+        </div>
+        <div class="photo-group">
+          <div class="photo-group-h">
+            <h3>After Repair (confirmation)</h3>
+            <button class="btn" data-variant="outline" id="btnAddRepaired2" type="button">+ Add</button>
           </div>
-          <div>
-            <label class="f-label" for="fSapOrder">SAP Order No.</label>
-            <input id="fSapOrder" class="input mono" type="text" placeholder="e.g., 40012345">
-          </div>
+          <div class="photo-grid" id="gridRepaired2"></div>
+          <div class="photo-empty" id="emptyRepaired2">No after-repair photos yet — add one when the repair is completed.</div>
         </div>
       </div>
     </div>
@@ -1347,37 +1566,258 @@
       </div>
     </div>
 
-    <div class="form-actions">
-      <div class="grp">
-        <button class="btn btn-danger-outline" id="btnDelete" type="button" style="display:none;">Delete finding</button>
+    </div><!-- /formColMain -->
+
+    <!-- ================= ASSESSMENT (full ASME B31.3 workbench, right column) ================= -->
+    <div class="form-col form-col-assess" id="formColAssess">
+      <div class="panel" id="assessPanel">
+        <div class="panel-h">
+          <h2>ASME B31.3 Assessment</h2>
+          <label class="switch-inline">
+            <input type="checkbox" id="aToggle">
+            <span>Include assessment</span>
+          </label>
+        </div>
+        <div class="panel-b" id="aBody">
+          <p class="hint" id="aIntro" style="margin-top:0;">
+            Enter the pipe data and the UT reading — the full B31.3 result (status, cross-section, results,
+            repair advisor, equations) computes live below and is saved onto the finding.
+          </p>
+          <div class="fgrid">
+            <div>
+              <label class="f-label" for="aNps">Nominal Pipe Size</label>
+              <select id="aNps" class="select"></select>
+            </div>
+            <div>
+              <label class="f-label" for="aSch">Schedule</label>
+              <select id="aSch" class="select"></select>
+            </div>
+            <div>
+              <label class="f-label" for="aMat">Material</label>
+              <select id="aMat" class="select"></select>
+            </div>
+            <div>
+              <label class="f-label" for="aTnom">Nominal Thickness (mm)</label>
+              <input id="aTnom" class="input" type="number" step="0.01" placeholder="auto from schedule">
+              <div class="hint">Auto-filled from the schedule; edit for an as-built value.</div>
+            </div>
+          </div>
+
+          <div class="a-reading">
+            <div class="seg-row" id="aModeSeg" role="tablist" aria-label="Reading type">
+              <span class="seg-pill" aria-hidden="true"></span>
+              <button class="seg-btn" data-mode="tmeas" type="button">Measured thickness</button>
+              <button class="seg-btn active" data-mode="depth" type="button">Wall-loss depth</button>
+            </div>
+            <div class="fgrid">
+              <div id="aTmeasGrp" style="display:none;">
+                <label class="f-label req" for="aTmeas">Measured Min. Thickness — UT (mm)</label>
+                <input id="aTmeas" class="input" type="number" step="0.01" placeholder="e.g., 5.40">
+              </div>
+              <div id="aDepthGrp">
+                <label class="f-label req" for="aDepth">Wall-Loss Depth (mm)</label>
+                <input id="aDepth" class="input" type="number" step="0.01" placeholder="e.g., 1.20">
+              </div>
+              <div>
+                <label class="f-label" for="aCa">Corrosion Allowance, CA (mm)</label>
+                <input id="aCa" class="input" type="number" step="0.01" value="1.5">
+              </div>
+            </div>
+          </div>
+
+          <div class="fgrid">
+            <div>
+              <label class="f-label req" for="aP">Design Pressure</label>
+              <div class="p-row">
+                <input id="aP" class="input" type="number" step="0.1" placeholder="e.g., 7.0">
+                <select id="aPUnit" class="select"><option value="bar">bar</option><option value="psi">psi</option></select>
+              </div>
+            </div>
+            <div>
+              <label class="f-label" for="aCorrType">Corrosion Type</label>
+              <select id="aCorrType" class="select">
+                <option value="external">External Wall Loss</option>
+                <option value="internal">Internal Wall Loss</option>
+              </select>
+            </div>
+          </div>
+
+          <details class="a-advanced">
+            <summary>Advanced parameters (defaults suit most carbon-steel lines)</summary>
+            <div class="fgrid" style="margin-top:10px;">
+              <div>
+                <label class="f-label" for="aS">Allowable Stress, S (MPa)</label>
+                <input id="aS" class="input" type="number" step="0.1">
+              </div>
+              <div>
+                <label class="f-label" for="aTemp">Design Temperature (°C)</label>
+                <input id="aTemp" class="input" type="number" step="1" placeholder="e.g., 65">
+              </div>
+              <div>
+                <label class="f-label" for="aE">Joint Factor, E</label>
+                <input id="aE" class="input" type="number" step="0.01" value="1.0">
+              </div>
+              <div>
+                <label class="f-label" for="aW">Weld Strength Factor, W</label>
+                <input id="aW" class="input" type="number" step="0.01" value="1.0">
+              </div>
+              <div>
+                <label class="f-label" for="aY">Coefficient, Y</label>
+                <input id="aY" class="input" type="number" step="0.01" value="0.4">
+              </div>
+              <div>
+                <label class="f-label" for="aCr">Corrosion Rate (mm/yr)</label>
+                <input id="aCr" class="input" type="number" step="0.001" placeholder="optional — enables remaining life">
+              </div>
+            </div>
+          </details>
+
+          <div class="validation-alert" id="aCalcHint" style="display:none; margin-top:10px;"></div>
+
+          <!-- Full workbench (status banner, cross-section, results, advisor, equations) is
+               injected here by paCreateAssessView (asset/assess-ui.js) in initAssessment(). -->
+          <div id="awForm" style="margin-top:14px;"></div>
+        </div>
       </div>
-      <div class="grp">
-        <a class="btn" data-variant="outline" href="#/list">Cancel</a>
-        <button class="btn" data-variant="outline" id="btnSaveAnother" type="button" title="Save, then start a new finding keeping terminal, vendor, report no. and inspection date">Save &amp; add another</button>
-        <button class="btn" id="btnSave" type="button">Save finding</button>
+    </div><!-- /formColAssess -->
+    </div><!-- /form-split -->
+  </section>
+
+  <!-- ================= QUICK CALC (standalone what-if workbench; nothing saves) ================= -->
+  <section id="viewCalc" class="view">
+    <div class="toolbar">
+      <a class="back-link" href="#/list">&#8592; Dashboard</a>
+      <div class="panel-h-btns">
+        <button class="btn" data-variant="outline" id="btnQuickReset" type="button">Reset</button>
       </div>
+    </div>
+
+    <div class="quick-calc-wrap">
+      <div class="panel">
+        <div class="panel-h"><h2>Quick ASME B31.3 Calculator</h2></div>
+        <div class="panel-b">
+          <p class="hint" style="margin-top:0;">
+            A scratch what-if calculation — nothing here is saved. To record an assessment on a
+            finding, use the finding's form instead.
+          </p>
+          <div class="fgrid">
+            <div>
+              <label class="f-label" for="qNps">Nominal Pipe Size</label>
+              <select id="qNps" class="select"></select>
+            </div>
+            <div>
+              <label class="f-label" for="qSch">Schedule</label>
+              <select id="qSch" class="select"></select>
+            </div>
+            <div>
+              <label class="f-label" for="qMat">Material</label>
+              <select id="qMat" class="select"></select>
+            </div>
+            <div>
+              <label class="f-label" for="qTnom">Nominal Thickness (mm)</label>
+              <input id="qTnom" class="input" type="number" step="0.01" placeholder="auto from schedule">
+              <div class="hint">Auto-filled from the schedule; edit for an as-built value.</div>
+            </div>
+          </div>
+
+          <div class="a-reading">
+            <div class="seg-row" id="qModeSeg" role="tablist" aria-label="Reading type">
+              <span class="seg-pill" aria-hidden="true"></span>
+              <button class="seg-btn" data-mode="tmeas" type="button">Measured thickness</button>
+              <button class="seg-btn active" data-mode="depth" type="button">Wall-loss depth</button>
+            </div>
+            <div class="fgrid">
+              <div id="qTmeasGrp" style="display:none;">
+                <label class="f-label req" for="qTmeas">Measured Min. Thickness — UT (mm)</label>
+                <input id="qTmeas" class="input" type="number" step="0.01" placeholder="e.g., 5.40">
+              </div>
+              <div id="qDepthGrp">
+                <label class="f-label req" for="qDepth">Wall-Loss Depth (mm)</label>
+                <input id="qDepth" class="input" type="number" step="0.01" placeholder="e.g., 1.20">
+              </div>
+              <div>
+                <label class="f-label" for="qCa">Corrosion Allowance, CA (mm)</label>
+                <input id="qCa" class="input" type="number" step="0.01" value="1.5">
+              </div>
+            </div>
+          </div>
+
+          <div class="fgrid">
+            <div>
+              <label class="f-label req" for="qP">Design Pressure</label>
+              <div class="p-row">
+                <input id="qP" class="input" type="number" step="0.1" placeholder="e.g., 7.0">
+                <select id="qPUnit" class="select"><option value="bar">bar</option><option value="psi">psi</option></select>
+              </div>
+            </div>
+            <div>
+              <label class="f-label" for="qCorrType">Corrosion Type</label>
+              <select id="qCorrType" class="select">
+                <option value="external">External Wall Loss</option>
+                <option value="internal">Internal Wall Loss</option>
+              </select>
+            </div>
+          </div>
+
+          <details class="a-advanced">
+            <summary>Advanced parameters (defaults suit most carbon-steel lines)</summary>
+            <div class="fgrid" style="margin-top:10px;">
+              <div>
+                <label class="f-label" for="qS">Allowable Stress, S (MPa)</label>
+                <input id="qS" class="input" type="number" step="0.1">
+              </div>
+              <div>
+                <label class="f-label" for="qE">Joint Factor, E</label>
+                <input id="qE" class="input" type="number" step="0.01" value="1.0">
+              </div>
+              <div>
+                <label class="f-label" for="qW">Weld Strength Factor, W</label>
+                <input id="qW" class="input" type="number" step="0.01" value="1.0">
+              </div>
+              <div>
+                <label class="f-label" for="qY">Coefficient, Y</label>
+                <input id="qY" class="input" type="number" step="0.01" value="0.4">
+              </div>
+              <div>
+                <label class="f-label" for="qCr">Corrosion Rate (mm/yr)</label>
+                <input id="qCr" class="input" type="number" step="0.001" placeholder="optional — enables remaining life">
+              </div>
+            </div>
+          </details>
+
+          <div class="validation-alert" id="qCalcHint" style="display:none; margin-top:10px;"></div>
+        </div>
+      </div>
+
+      <div id="awQuick"></div>
     </div>
   </section>
 
   <!-- ================= DETAIL ================= -->
   <section id="viewDetail" class="view">
     <div class="toolbar">
-      <a class="back-link" href="#/list">&#8592; All findings</a>
+      <div class="toolbar-id-row">
+        <a class="back-link" href="#/list">&#8592; All findings</a>
+        <div class="detail-head" id="detailHead"></div>
+      </div>
       <div class="panel-h-btns">
         <button class="btn" data-variant="outline" id="btnPdf" type="button">Export PDF</button>
         <button class="btn" data-variant="outline" id="btnEdit" type="button">Edit details</button>
       </div>
     </div>
 
-    <div class="panel">
-      <div class="panel-b">
-        <div class="detail-head" id="detailHead"></div>
-      </div>
-    </div>
-
     <div class="detail-split">
-      <!-- LEFT: the finding data -->
+      <!-- LEFT: the finding data — priority order: what/where it is, then lifecycle status,
+           then the engineering assessment, then the audit trail. -->
       <div class="detail-col">
+        <div class="panel">
+          <div class="panel-h"><h2>Details</h2></div>
+          <div class="panel-b">
+            <div class="dgrid" id="detailGrid"></div>
+            <div id="detailDesc" style="margin-top: 12px;"></div>
+          </div>
+        </div>
+
         <div class="panel">
           <div class="panel-h"><h2>Status</h2></div>
           <div class="panel-b">
@@ -1393,17 +1833,9 @@
           </div>
           <div class="panel-b" id="assessBody"></div>
         </div>
-
-        <div class="panel">
-          <div class="panel-h"><h2>Details</h2></div>
-          <div class="panel-b">
-            <div class="dgrid" id="detailGrid"></div>
-            <div id="detailDesc" style="margin-top: 12px;"></div>
-          </div>
-        </div>
       </div>
 
-      <!-- RIGHT: evidence & trail -->
+      <!-- RIGHT: evidence -->
       <div class="detail-col">
         <div class="panel" id="detailLocPanel" style="display:none;">
           <div class="panel-h">
@@ -1486,6 +1918,52 @@
   </div>
 </dialog>
 
+<!-- Line list import dialog -->
+<dialog class="app-dlg" id="lineListImportDlg">
+  <div class="dlg-h">Import master line list</div>
+  <div class="dlg-b">
+    <p class="hint" style="margin:0;">
+      Upload a spreadsheet with one pipe tag per row. Matching tags pre-fill NPS/Schedule/Material
+      and P&amp;ID/Service/Location on new findings — column headers must match the template —
+      <a href="#" id="lineListImportTemplateLink" style="color:var(--button-primary);font-weight:600;">download the template</a>.
+      Required columns: <strong>Pipe Tag</strong>, <strong>NPS</strong>, <strong>Schedule</strong>, <strong>Material</strong>.
+      Re-importing a tag already in the list updates it — no duplicates.
+    </p>
+    <input type="file" id="lineListImportFile" class="input" accept=".xlsx,.xls,.csv">
+    <div id="lineListImportPreview" style="display:none;"></div>
+    <div class="validation-alert" id="errLineListImport"></div>
+  </div>
+  <div class="dlg-f">
+    <button class="btn" data-variant="outline" id="lineListImportCancel" type="button">Cancel</button>
+    <button class="btn" id="lineListImportConfirm" type="button" disabled>Import</button>
+  </div>
+</dialog>
+
+<!-- Line list management dialog -->
+<dialog class="app-dlg" id="lineListManageDlg" style="width:min(820px, calc(100vw - 32px));">
+  <div class="dlg-h" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+    <span>Manage Line List</span>
+    <span class="hint" id="lineListCount" style="margin:0;">0 entries</span>
+  </div>
+  <div class="dlg-b">
+    <div class="tbl-scroll" style="max-height:50vh;">
+      <table class="list">
+        <thead>
+          <tr>
+            <th>Pipe Tag</th><th>NPS</th><th>Schedule</th><th>Material</th>
+            <th>P&amp;ID</th><th>Service</th><th>Location</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="lineListTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="dlg-f">
+    <button class="btn" data-variant="outline" id="lineListManageImportBtn" type="button">Import…</button>
+    <button class="btn" id="lineListManageClose" type="button">Close</button>
+  </div>
+</dialog>
+
 <!-- Photo lightbox -->
 <dialog id="lightbox"><img id="lightboxImg" alt="Photo"/></dialog>
 
@@ -1493,6 +1971,9 @@
 <input type="file" id="fileFound" accept="image/*" capture="environment" multiple hidden>
 <input type="file" id="fileRepaired" accept="image/*" capture="environment" multiple hidden>
 <input type="file" id="filePending" accept="image/*" capture="environment" multiple hidden>
+<input type="file" id="fileFound2" accept="image/*" capture="environment" multiple hidden>
+<input type="file" id="fileDlgRepaired" accept="image/*" capture="environment" multiple hidden>
+<input type="file" id="fileRepaired2" accept="image/*" capture="environment" multiple hidden>
 
 <div id="toast"></div>
 
@@ -1525,6 +2006,7 @@ const FINDING_TYPES = [
 ];
 
 const STATUSES = ['Open', 'Monitoring', 'Repair Planned', 'Repaired', 'Closed'];
+const PHOTO_LIMIT_PER_KIND = 3; // As Found and After Repair each capped at 3 -> 6 total per finding
 
 const STATUS_META = {
   'Open':           { cls: 'st-open' },
@@ -1556,6 +2038,7 @@ const SAT_TILES = {
 let sb = null;              // Supabase client
 let session = null;
 let findings = [];          // list cache
+let lineList = [];          // master line-list cache (pipe tag -> nps/schedule/material/metadata)
 let current = null;         // finding shown in detail view
 let currentPhotos = [];
 let currentHistory = [];
@@ -1570,20 +2053,72 @@ let dashMap = null, dashLayer = null;
 const $ = (id) => document.getElementById(id);
 const val = (id) => $(id).value;
 
+// Wraps native <dialog> showModal()/close() with the transitions.dev modal open/close
+// animation (see the dialog.app-dlg/#lightbox CSS above) — .is-open drives the scale+fade
+// in, .is-closing plays a quicker scale-down before the dialog actually closes so it never
+// just vanishes.
+// Slides a .seg-row's pill under whichever .seg-btn is currently .active. animate=false
+// (first paint, resize, or a freshly-rendered #segTerminal) suspends the transition so the
+// pill snaps into place instead of sliding in from translateX(0)/width:0.
+function positionSegPill(segRow, animate) {
+  const pill = segRow.querySelector('.seg-pill');
+  const active = segRow.querySelector('.seg-btn.active');
+  if (!pill || !active) return;
+  if (!animate) {
+    const prev = pill.style.transition;
+    pill.style.transition = 'none';
+    pill.style.transform = `translateX(${active.offsetLeft - segRow.clientLeft}px)`;
+    pill.style.width = `${active.offsetWidth}px`;
+    void pill.offsetWidth;
+    pill.style.transition = prev;
+  } else {
+    pill.style.transform = `translateX(${active.offsetLeft - segRow.clientLeft}px)`;
+    pill.style.width = `${active.offsetWidth}px`;
+  }
+}
+
+function openDialog(el) {
+  el.showModal();
+  el.classList.remove('is-closing');
+  void el.offsetWidth; // reflow so the open transition always replays from --modal-scale
+  el.classList.add('is-open');
+}
+function closeDialog(el) {
+  const closeMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--modal-close-dur')) || 150;
+  el.classList.remove('is-open');
+  el.classList.add('is-closing');
+  setTimeout(() => { el.classList.remove('is-closing'); el.close(); }, closeMs);
+}
+
+// Native <details> removes its content the instant [open] is toggled off, which would skip
+// the collapse animation entirely (the grid-rows/opacity/blur transitions in theme.css's
+// accordion-expand block only play while [open] is still present). Intercept the summary
+// click, keep `open` set for one more frame, and let it fall away only after the collapse
+// transition has had time to run. Opening needs no interception — the browser adds `open`
+// immediately and the CSS transitions in from grid-template-rows: 0fr on its own.
+document.addEventListener('click', (e) => {
+  const summary = e.target.closest('summary.panel-collapse');
+  if (!summary) return;
+  const details = summary.closest('details.panel');
+  if (!details || !details.open) return; // opening — let the browser handle it natively
+  e.preventDefault();
+  const collapseMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--acc-collapse')) || 250;
+  // `open` stays set through the whole animation (removing it early would instantly hide the
+  // content) — .is-closing is what actually drives the grid-rows back to 0fr (see theme.css's
+  // `details.panel.is-closing > .panel-b-track` override). Only strip `open` once the CSS
+  // transition has had time to finish, which is what actually collapses the details element.
+  details.classList.add('is-closing');
+  setTimeout(() => { details.removeAttribute('open'); details.classList.remove('is-closing'); }, collapseMs);
+});
+
 function esc(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-const fmtDate = paFmtDate; // shared dd/Mmm/yyyy helper (asset/shared.js)
-
-function fmtDateTime(v) {
-  if (!v) return '—';
-  const d = new Date(v);
-  if (isNaN(d)) return '—';
-  return `${fmtDate(v)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
+const fmtDate = paFmtDate; // shared "dd Mmm yyyy" helper (asset/shared.js)
+const fmtDateTime = paFmtDateTime; // shared "dd Mmm yyyy HH:mm" (24-hour) helper (asset/shared.js)
 
 function todayISO() {
   const d = new Date();
@@ -1632,15 +2167,6 @@ function setBusy(btn, busy, busyText) {
 
 // downscaleImage() lives in asset/shared.js
 
-/* ---------------- theme ---------------- */
-
-function initTheme() {
-  // Shared helpers (asset/shared.js) use the same localStorage key as calculator.html,
-  // so the chosen theme follows across pages.
-  paApplyStoredTheme();
-  paWireThemeToggle($('themeToggle'));
-}
-
 /* ---------------- auth ---------------- */
 
 function updateAuthUI() {
@@ -1675,6 +2201,10 @@ async function signIn() {
 function show(viewId) {
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === viewId));
   window.scrollTo(0, 0);
+  // Seg-row pills measure offsetLeft/offsetWidth, which read 0 while their view was
+  // display:none — same gotcha as the dashboard/detail Leaflet maps. Re-snap (no animation)
+  // now that the view is visible.
+  document.querySelectorAll(`#${viewId} .seg-row`).forEach(row => positionSegPill(row, false));
 }
 
 async function route() {
@@ -1692,6 +2222,11 @@ async function route() {
     show('viewForm');
     return;
   }
+  if (h === '#/calc') {
+    // standalone what-if workbench — nothing loads, nothing saves
+    show('viewCalc');
+    return;
+  }
   if (h.startsWith('#/edit/')) {
     const id = h.slice(7);
     let f = findings.find(x => x.id === id) || (current && current.id === id ? current : null);
@@ -1707,6 +2242,7 @@ async function route() {
   // default: list — show the view BEFORE rendering so the Leaflet container has
   // real dimensions (a map initialized inside display:none sizes to 0×0)
   await loadFindings();
+  if (!lineList.length) await loadLineList(); // cheap no-op once cached
   show('viewList');
   renderList();
 }
@@ -1714,16 +2250,23 @@ async function route() {
 /* ---------------- data ---------------- */
 
 let photoCounts = {}; // finding_id -> number of photos, for the register's camera chip
+let photoThumbs = {}; // finding_id -> {storage_path, kind}, for the register's thumbnail
 
 async function loadFindings() {
+  selectedIds.clear(); // fresh data -> drop any selection from a previous load (ids may be stale)
   const [fq, pq] = await Promise.all([
     sb.from('findings').select('*').order('created_at', { ascending: false }),
-    sb.from('finding_photos').select('finding_id')
+    sb.from('finding_photos').select('finding_id, storage_path, kind, created_at').order('created_at', { ascending: true })
   ]);
   if (fq.error) { notify('Load failed: ' + fq.error.message, true); return; }
   findings = fq.data || [];
   photoCounts = {};
-  (pq.data || []).forEach(p => { photoCounts[p.finding_id] = (photoCounts[p.finding_id] || 0) + 1; });
+  photoThumbs = {}; // finding_id -> storage_path of its earliest "found" photo (falls back to any)
+  (pq.data || []).forEach(p => {
+    photoCounts[p.finding_id] = (photoCounts[p.finding_id] || 0) + 1;
+    const cur = photoThumbs[p.finding_id];
+    if (!cur || (cur.kind !== 'found' && p.kind === 'found')) photoThumbs[p.finding_id] = p;
+  });
 }
 
 /* Days since the inspection date (falls back to created_at) — how long the finding has existed. */
@@ -1780,6 +2323,7 @@ function applyFilters(rows) {
   return rows.filter(f => {
     if (filters.terminal && f.terminal !== filters.terminal) return false;
     if (filters.status === '__overdue') { if (!isOverdue(f)) return false; }
+    else if (filters.status === '__complete') { if (f.status !== 'Repaired' && f.status !== 'Closed') return false; }
     else if (filters.status && f.status !== filters.status) return false;
     if (filters.type && f.finding_type !== filters.type) return false;
     if (q) {
@@ -1790,6 +2334,10 @@ function applyFilters(rows) {
     return true;
   });
 }
+
+// Circumference of the ring's r=42 circle (2 * PI * 42) — stroke-dasharray/-dashoffset are set
+// in absolute SVG units, not percentages, so this constant drives the fill math below.
+const KPI_RING_CIRCUMFERENCE = 2 * Math.PI * 42;
 
 function renderKpis() {
   const count = (st) => findings.filter(f => f.status === st).length;
@@ -1814,6 +2362,19 @@ function renderKpis() {
       renderList();
     });
   });
+
+  // Completion ring: Repaired + Closed vs. all findings. A finding is "resolved" once its
+  // repair is confirmed OR the record is formally closed out — matches the register's own
+  // dimmed/"row-dim" treatment for these two statuses.
+  const total = findings.length;
+  const complete = count('Repaired') + count('Closed');
+  const pct = total > 0 ? Math.round((complete / total) * 100) : 0;
+  const offset = KPI_RING_CIRCUMFERENCE * (1 - (total > 0 ? complete / total : 0));
+  $('kpiRingFill').style.strokeDasharray = `${KPI_RING_CIRCUMFERENCE}`;
+  $('kpiRingFill').style.strokeDashoffset = `${offset}`;
+  $('kpiRingPct').textContent = `${pct}%`;
+  $('kpiRingFraction').textContent = `${complete} of ${total}`;
+  $('kpiRingCard').classList.toggle('active', filters.status === '__complete');
 }
 
 /* ---------------- dashboard map ---------------- */
@@ -1842,7 +2403,7 @@ function ensureDashMap() {
 function popupHtml(f) {
   return `<div class="map-popup">
     <div class="mp-tag">${esc(f.pipe_tag)}</div>
-    ${pillHtml(f.status)}${isOverdue(f) ? ' <span style="color:#dc2626;font-weight:700;font-size:10px;">OVERDUE</span>' : ''}
+    ${pillHtml(f.status)}${isOverdue(f) ? ' <span class="ov-badge">OVERDUE</span>' : ''}
     <div class="mp-meta">${esc(f.terminal)} — ${esc(f.finding_type)}</div>
     <a href="#/f/${esc(f.id)}">Open finding &#8594;</a>
   </div>`;
@@ -1913,10 +2474,18 @@ function ageHtml(f) {
   return `<span class="${cls}" title="Days since inspection">${d}d</span>`;
 }
 
+// Row selection for the Summary PDF (see exportSummaryPdf): a plain Set of finding ids,
+// persisted across re-renders/filter changes within the same list load, cleared whenever
+// loadFindings() pulls fresh data (stale ids could otherwise reference deleted rows).
+let selectedIds = new Set();
+let lastRenderedRows = [];
+
 function renderTable(rows) {
+  lastRenderedRows = rows;
   const body = $('listBody');
   if (!rows.length) {
-    body.innerHTML = `<tr class="empty-row"><td colspan="5">${findings.length ? 'No findings match the current filters.' : 'No findings recorded yet — use “+ New Finding” to add the first one.'}</td></tr>`;
+    body.innerHTML = `<tr class="empty-row"><td colspan="6">${findings.length ? 'No findings match the current filters.' : 'No findings recorded yet — use “+ New Finding” to add the first one.'}</td></tr>`;
+    updateSelectionUI();
     return;
   }
   body.innerHTML = rows.map(f => {
@@ -1926,12 +2495,25 @@ function renderTable(rows) {
       : `<span class="mono" style="font-size:12px;">${fmtDate(due)}</span>`;
     const np = photoCounts[f.id] || 0;
     const photoChip = np ? `<span class="t-photos">${CAMERA_SVG}${np}</span>` : '';
+    const thumb = photoThumbs[f.id];
+    const thumbHtml = thumb
+      ? `<img class="row-thumb" src="${esc(photoUrl(thumb.storage_path))}" alt="" loading="lazy">`
+      : `<span class="row-thumb row-thumb-empty"></span>`;
     const dim = (f.status === 'Repaired' || f.status === 'Closed') ? ' row-dim' : '';
+    const checked = selectedIds.has(f.id) ? ' checked' : '';
     return `<tr data-id="${esc(f.id)}" class="${dim.trim()}">
+      <td class="c-check"><input type="checkbox" class="row-check" data-sel="${esc(f.id)}"${checked}></td>
       <td>${pillHtml(f.status)}</td>
       <td class="c-tag">
-        <div class="t-tag-row"><span class="t-tag" title="${esc(f.pipe_tag)}">${esc(f.pipe_tag)}</span>${photoChip}</div>
-        <div class="t-type" title="${esc(f.finding_type)}">${esc(f.finding_type)}</div>
+        <div class="c-tag-flex">
+          ${thumbHtml}
+          <div class="c-tag-text">
+            <div class="t-tag-row"><span class="t-tag" title="${esc(f.pipe_tag)}">${esc(f.pipe_tag)}</span>${photoChip}</div>
+            <div class="t-type" title="${esc(f.finding_type)}">${esc(f.finding_type)}</div>
+            ${f.location_desc ? `<div class="t-desc" title="${esc(f.location_desc)}"><span class="t-desc-label">Loc:</span> ${esc(f.location_desc)}</div>` : ''}
+            ${f.description ? `<div class="t-desc" title="${esc(f.description)}"><span class="t-desc-label">Anomaly:</span> ${esc(f.description)}</div>` : ''}
+          </div>
+        </div>
       </td>
       <td style="font-size:12px;">${esc(f.terminal)}</td>
       <td>${ageHtml(f)}</td>
@@ -1940,10 +2522,49 @@ function renderTable(rows) {
   }).join('');
   body.querySelectorAll('tr[data-id]').forEach(tr => {
     const id = tr.dataset.id;
-    tr.addEventListener('click', () => { location.hash = '#/f/' + id; });
+    tr.addEventListener('click', (e) => { if (e.target.closest('.c-check')) return; location.hash = '#/f/' + id; });
     tr.addEventListener('mouseenter', () => highlightPin(id, true));
     tr.addEventListener('mouseleave', () => highlightPin(id, false));
   });
+  body.querySelectorAll('.row-check[data-sel]').forEach(chk => {
+    chk.addEventListener('click', (e) => e.stopPropagation());
+    chk.addEventListener('change', () => {
+      const id = chk.dataset.sel;
+      if (chk.checked) selectedIds.add(id); else selectedIds.delete(id);
+      updateSelectionUI();
+    });
+  });
+  updateSelectionUI();
+}
+
+// Syncs the header "select all" checkbox (checked/indeterminate) and the selection bar
+// (count + Summary PDF button label) to the current selectedIds / rendered-rows state.
+function updateSelectionUI() {
+  const selectAll = $('chkSelectAll');
+  const idsOnPage = lastRenderedRows.map(f => f.id);
+  const selectedOnPage = idsOnPage.filter(id => selectedIds.has(id)).length;
+  if (selectAll) {
+    selectAll.checked = idsOnPage.length > 0 && selectedOnPage === idsOnPage.length;
+    selectAll.indeterminate = selectedOnPage > 0 && selectedOnPage < idsOnPage.length;
+  }
+  const bar = $('selBar');
+  const btn = $('btnSummaryPdf');
+  if (selectedIds.size > 0) {
+    bar.hidden = false;
+    $('selCount').textContent = `${selectedIds.size} selected`;
+    btn.textContent = `Summary PDF (${selectedIds.size})`;
+  } else {
+    bar.hidden = true;
+    btn.textContent = 'Summary PDF';
+  }
+}
+
+// Tag autocomplete union: findings' own history plus the master line list, so a tag that's
+// only ever been imported (never appeared on a finding) is still discoverable/autocompletable
+// — otherwise a user would have to type it exactly by hand for applyTagMemory's lookup to fire.
+function refreshTagList() {
+  const tags = [...new Set([...findings.map(f => f.pipe_tag), ...lineList.map(r => r.pipe_tag)].filter(Boolean))];
+  $('tagList').innerHTML = tags.map(t => `<option value="${esc(t)}"></option>`).join('');
 }
 
 function renderList() {
@@ -1951,9 +2572,7 @@ function renderList() {
   const rows = sortFindings(applyFilters(findings));
   renderTable(rows);
   renderMap(rows);
-  // refresh the tag autocomplete from everything recorded so far
-  const tags = [...new Set(findings.map(f => f.pipe_tag).filter(Boolean))];
-  $('tagList').innerHTML = tags.map(t => `<option value="${esc(t)}"></option>`).join('');
+  refreshTagList();
 }
 
 /* ---------------- CSV export (filtered register, Excel-friendly UTF-8 BOM) ---------------- */
@@ -2138,7 +2757,7 @@ async function doImport() {
     // opening history entry for each imported finding (insert order is preserved)
     const hist = (data || []).map(r => ({ finding_id: r.id, old_status: null, new_status: 'Open', note: 'Imported from spreadsheet' }));
     if (hist.length) await sb.from('status_history').insert(hist);
-    $('importDlg').close();
+    closeDialog($('importDlg'));
     notify(`Imported ${data.length} finding(s).`);
     await loadFindings();
     renderList();
@@ -2171,7 +2790,227 @@ function openImportDialog() {
   importValidRows = [];
   $('importConfirm').disabled = true;
   $('importConfirm').textContent = 'Import';
-  $('importDlg').showModal();
+  openDialog($('importDlg'));
+}
+
+/* ===================== Master line list (import + prefill) =====================
+   A maintained pipe-tag -> NPS/schedule/material + P&ID/service/location reference,
+   imported from Excel/CSV (same UX pattern as the findings import above, kept as a
+   parallel set of functions rather than threading a mode flag through the findings-
+   import pipeline — that pipeline is tightly coupled to the findings table shape
+   (terminal/finding_type checks, a status_history side-insert), which a second table
+   doesn't need. Only the table-agnostic helpers (normHeader/toImportNum/toImportDate)
+   are reused as-is. Used by applyTagMemory() to pre-fill a brand-new tag that has never
+   appeared on a finding before. */
+
+const LINE_LIST_IMPORT_COLS = [
+  { header: 'Pipe Tag', field: 'pipe_tag', required: true },
+  { header: 'NPS', field: 'nps', required: true },
+  { header: 'Schedule', field: 'schedule', required: true },
+  { header: 'Material', field: 'material', required: true },
+  { header: 'P&ID No.', field: 'pid_no' },
+  { header: 'Service', field: 'service' },
+  { header: 'Location', field: 'location_desc' }
+];
+
+let lineListValidRows = [];  // payloads ready to upsert, set after a file is parsed+validated
+
+function lineListHeaderMap() {
+  const m = {};
+  LINE_LIST_IMPORT_COLS.forEach(c => { m[normHeader(c.header)] = c; m[normHeader(c.field)] = c; });
+  return m;
+}
+
+// NPS is a precise engineering value fed straight into computeB313 — unlike
+// resolveFindingType's substring fallback, this is exact-match only (normalized for
+// whitespace/inch-marker variance); a wrong silent match would produce actively
+// incorrect wall-thickness math.
+function resolveNps(v) {
+  if (!v) return null;
+  let s = String(v).trim().replace(/\s+in(ch(es)?)?\.?$/i, '').replace(/"$/, '').trim();
+  const candidate = s + '"';
+  if (PA_PIPE_DATABASE[candidate]) return candidate;
+  const stripped = s.replace(/\s+/g, '');
+  const hit = Object.keys(PA_PIPE_DATABASE).find(k => k.replace(/\s+/g, '').replace(/"$/, '') === stripped);
+  return hit || null;
+}
+
+// Schedules are NPS-scoped — only call once resolveNps has already succeeded for the row.
+function resolveSchedule(nps, v) {
+  if (!v || !PA_PIPE_DATABASE[nps]) return null;
+  const s = String(v).trim().replace(/^sch\.?\s*/i, '').toUpperCase();
+  const schedules = PA_PIPE_DATABASE[nps].schedules;
+  return Object.keys(schedules).find(k => k.toUpperCase() === s) || null;
+}
+
+// Match against PA_MATERIALS[].code first (exact, case-insensitive), then fall back to
+// PA_MATERIALS[].name via the same loose normHeader-based comparison validateImportRow
+// already uses — a line list is more likely to carry a human material description
+// ("API 5L Gr. B") than the internal code. Never implicitly matches 'MANUAL'.
+function resolveMaterialCode(v) {
+  if (!v) return null;
+  const s = String(v).trim();
+  const byCode = PA_MATERIALS.find(m => m.code.toLowerCase() === s.toLowerCase() && m.code !== 'MANUAL');
+  if (byCode) return byCode.code;
+  const n = normHeader(s);
+  const byName = PA_MATERIALS.find(m => m.code !== 'MANUAL' &&
+    (normHeader(m.name) === n || normHeader(m.name).includes(n) || n.includes(normHeader(m.name))));
+  return byName ? byName.code : null;
+}
+
+// Validate one spreadsheet row (object keyed by original headers) -> { payload } or { reasons: [] }.
+function validateLineListRow(raw) {
+  const map = lineListHeaderMap();
+  const p = {};
+  const reasons = [];
+  for (const key of Object.keys(raw)) {
+    const col = map[normHeader(key)];
+    if (!col) continue;
+    let val = raw[key];
+    if (typeof val === 'string') val = val.trim();
+    if (val === '' || val == null) continue;
+    p[col.field] = String(val);
+  }
+  if (!p.pipe_tag) reasons.push('Pipe Tag is required');
+  const nps = resolveNps(p.nps);
+  if (!nps) reasons.push(`NPS "${p.nps || ''}" not recognized`);
+  else p.nps = nps;
+  if (nps) {
+    const sch = resolveSchedule(nps, p.schedule);
+    if (!sch) reasons.push(`Schedule "${p.schedule || ''}" not valid for NPS ${nps}`);
+    else p.schedule = sch;
+  }
+  const mat = resolveMaterialCode(p.material);
+  if (!mat) reasons.push(`Material "${p.material || ''}" not recognized`);
+  else p.material = mat;
+  return reasons.length ? { reasons } : { payload: p };
+}
+
+function renderLineListImportPreview(results) {
+  const valid = results.filter(r => r.payload);
+  const invalid = results.filter(r => r.reasons);
+  lineListValidRows = valid.map(r => r.payload);
+  const box = $('lineListImportPreview');
+  box.style.display = 'block';
+  const head = `<div class="import-summary"><span class="ok">${valid.length} ready</span> · <span class="bad">${invalid.length} with problems</span> (of ${results.length} rows)</div>`;
+  const rowsHtml = results.slice(0, 40).map((r) => {
+    const ok = !!r.payload;
+    const p = r.payload || {};
+    return `<tr class="${ok ? '' : 'bad'}">
+      <td class="${ok ? 'rowstat-ok' : 'rowstat-bad'}">${ok ? '✓' : '✕'}</td>
+      <td>${esc(p.pipe_tag || '—')}</td>
+      <td>${esc(p.nps || '—')}</td>
+      <td>${esc(p.schedule || '—')}</td>
+      <td>${esc(p.material || '—')}</td>
+      <td class="import-reason">${ok ? '' : esc(r.reasons.join('; '))}</td>
+    </tr>`;
+  }).join('');
+  box.innerHTML = head +
+    `<div class="import-tbl-scroll"><table class="import-tbl"><thead><tr><th></th><th>Pipe Tag</th><th>NPS</th><th>Schedule</th><th>Material</th><th>Problems</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>` +
+    (results.length > 40 ? `<div class="hint">Showing first 40 of ${results.length} rows.</div>` : '');
+  $('lineListImportConfirm').disabled = valid.length === 0;
+  $('lineListImportConfirm').textContent = valid.length ? `Import ${valid.length} entr${valid.length === 1 ? 'y' : 'ies'}` : 'Import';
+}
+
+async function parseLineListImportFile(file) {
+  $('errLineListImport').style.display = 'none';
+  lineListValidRows = [];
+  $('lineListImportConfirm').disabled = true;
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { cellDates: true });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    if (!rows.length) { $('errLineListImport').textContent = 'No rows found in the first sheet.'; $('errLineListImport').style.display = 'block'; return; }
+    renderLineListImportPreview(rows.map(validateLineListRow));
+  } catch (e) {
+    $('errLineListImport').textContent = 'Could not read the file: ' + e.message;
+    $('errLineListImport').style.display = 'block';
+  }
+}
+
+async function doLineListImport() {
+  if (!lineListValidRows.length) return;
+  const btn = $('lineListImportConfirm');
+  setBusy(btn, true, 'Importing…');
+  try {
+    const { data, error } = await sb.from('line_list')
+      .upsert(lineListValidRows, { onConflict: 'pipe_tag' }).select('id');
+    if (error) throw error;
+    closeDialog($('lineListImportDlg'));
+    notify(`Imported ${data.length} line list entr${data.length === 1 ? 'y' : 'ies'}.`);
+    await loadLineList();
+    if ($('lineListManageDlg').open) renderLineListManageTable();
+  } catch (e) {
+    $('errLineListImport').textContent = 'Import failed: ' + e.message;
+    $('errLineListImport').style.display = 'block';
+  } finally {
+    setBusy(btn, false);
+  }
+}
+
+function downloadLineListTemplate() {
+  const headers = LINE_LIST_IMPORT_COLS.map(c => c.header);
+  const example = ['953-P-0001-10"-D1101-N', '10"', '40', 'A106B',
+    '15-3-KBY-906-0117_Rev.Z2', 'Diesel B7', 'Elbow downstream of P-101'];
+  const ws = XLSX.utils.aoa_to_sheet([headers, example]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Line List');
+  XLSX.writeFile(wb, 'line_list_import_template.xlsx');
+}
+
+function openLineListImportDialog() {
+  if (typeof XLSX === 'undefined') { notify('Spreadsheet library not loaded — check your connection and reload.', true); return; }
+  $('lineListImportFile').value = '';
+  $('lineListImportPreview').style.display = 'none';
+  $('lineListImportPreview').innerHTML = '';
+  $('errLineListImport').style.display = 'none';
+  lineListValidRows = [];
+  $('lineListImportConfirm').disabled = true;
+  $('lineListImportConfirm').textContent = 'Import';
+  openDialog($('lineListImportDlg'));
+}
+
+// Loads the master list into memory; called once during the list route's initial data load
+// and again after a successful import. Lazy-loaded defensively inside applyTagMemory() too,
+// since #/new and #/edit/ can be reached without visiting #/list first (see route()).
+async function loadLineList() {
+  const { data, error } = await sb.from('line_list').select('*').order('pipe_tag');
+  if (!error) { lineList = data || []; refreshTagList(); }
+}
+
+function renderLineListManageTable() {
+  const body = $('lineListTableBody');
+  if (!lineList.length) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="8">No line list entries yet — click Import to add some.</td></tr>`;
+  } else {
+    body.innerHTML = lineList.map(r => `<tr data-id="${esc(r.id)}">
+      <td>${esc(r.pipe_tag)}</td><td>${esc(r.nps || '—')}</td><td>${esc(r.schedule || '—')}</td>
+      <td>${esc(r.material || '—')}</td><td>${esc(r.pid_no || '—')}</td>
+      <td>${esc(r.service || '—')}</td><td>${esc(r.location_desc || '—')}</td>
+      <td><button type="button" class="link-btn" data-del="${esc(r.id)}">Delete</button></td>
+    </tr>`).join('');
+    body.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => deleteLineListRow(btn.dataset.del)));
+  }
+  $('lineListCount').textContent = `${lineList.length} entr${lineList.length === 1 ? 'y' : 'ies'}`;
+}
+
+async function deleteLineListRow(id) {
+  const row = lineList.find(r => r.id === id);
+  if (!window.confirm(`Delete line list entry "${row ? row.pipe_tag : ''}"?`)) return;
+  try {
+    const { error } = await sb.from('line_list').delete().eq('id', id);
+    if (error) throw error;
+    lineList = lineList.filter(r => r.id !== id);
+    renderLineListManageTable();
+    refreshTagList();
+    notify('Line list entry deleted.');
+  } catch (e) { notify('Delete failed: ' + e.message, true); }
+}
+
+function openLineListManageDialog() {
+  renderLineListManageTable();
+  openDialog($('lineListManageDlg'));
 }
 
 /* ---------------- form (new / edit) ---------------- */
@@ -2229,13 +3068,22 @@ function renderPendingGrid() {
       renderPendingGrid();
     });
   });
+  const addBtn = $('btnAddPendingPhoto');
+  const atLimit = pendingPhotos.length >= PHOTO_LIMIT_PER_KIND;
+  addBtn.disabled = atLimit;
+  addBtn.textContent = atLimit ? `Max ${PHOTO_LIMIT_PER_KIND} reached` : `+ Add photos (${pendingPhotos.length}/${PHOTO_LIMIT_PER_KIND})`;
 }
 
 // Queue as-found photos on the new-finding form (downscaled preview held in memory until save).
 async function addPendingFiles(files) {
+  const room = Math.max(0, PHOTO_LIMIT_PER_KIND - pendingPhotos.length);
+  if (room <= 0) {
+    notify(`Limit reached: ${PHOTO_LIMIT_PER_KIND} As Found photos max.`, true);
+    return 0;
+  }
+  const toQueue = files.filter(f => f.type && f.type.startsWith('image/')).slice(0, room);
   let n = 0;
-  for (const file of files) {
-    if (!file.type || !file.type.startsWith('image/')) continue;
+  for (const file of toQueue) {
     try {
       const previewUrl = await downscaleImage(file, 480, 0.7);
       pendingPhotos.push({ file, previewUrl });
@@ -2243,6 +3091,9 @@ async function addPendingFiles(files) {
     } catch (err) { console.warn('preview failed', err); }
   }
   renderPendingGrid();
+  if (files.length > toQueue.length) {
+    notify(`${n} photo(s) queued (${files.length - toQueue.length} skipped — ${PHOTO_LIMIT_PER_KIND} max reached).`, true);
+  }
   return n;
 }
 
@@ -2267,10 +3118,13 @@ async function onPastePhoto(e) {
   const files = imageFilesFromClipboard(e.clipboardData);
   if (!files.length) return; // not an image paste — let normal text paste happen
   if ($('viewForm').classList.contains('active')) {
-    if (editingId) { notify('Manage photos from the finding’s page after saving.', true); return; }
     e.preventDefault();
-    const n = await addPendingFiles(files);
-    if (n) notify(n + ' photo(s) pasted.');
+    if (editingId) {
+      addDetailPhotos(files, photoPasteTarget, editingId); // shows its own progress/result toast
+    } else {
+      const n = await addPendingFiles(files);
+      if (n && n === files.length) notify(n + ' photo(s) pasted.');
+    }
   } else if ($('viewDetail').classList.contains('active') && current) {
     e.preventDefault();
     addDetailPhotos(files, photoPasteTarget); // shows its own progress/result toast
@@ -2279,8 +3133,16 @@ async function onPastePhoto(e) {
 
 /* ---------------- inline ASME B31.3 assessment (combined into the finding form) ---------------- */
 
-// Finding types that auto-enable the assessment (a UT reading is expected for these).
+// Finding types where a UT reading is inherently expected — used only for the Corrosion Type
+// prefill below. Kept separate from AUTO_ASSESS_TYPES: CUI/CUS still map to a sensible corrosion
+// type if the user manually turns the assessment on, even though it no longer auto-enables.
 const WALL_LOSS_TYPES = ['External Corrosion', 'Internal Corrosion', 'CUI (Corrosion Under Insulation)', 'CUS (Corrosion Under Support)'];
+
+// Finding types that auto-enable the assessment panel. Deliberately excludes CUI/CUS — under
+// insulation/supports a thickness reading usually isn't available at the time the finding is
+// first logged (needs insulation/support removal to inspect), so auto-opening the assessment
+// there was more often wrong than helpful. The user can still turn it on manually for those types.
+const AUTO_ASSESS_TYPES = ['External Corrosion', 'Internal Corrosion'];
 
 // The finding type dictates whether the wall loss is internal or external, so the assessment's
 // Corrosion Type follows it automatically (CUI/CUS are external-surface mechanisms).
@@ -2293,6 +3155,27 @@ const CORR_TYPE_BY_FINDING = {
 function syncCorrTypeFromFinding() {
   const c = CORR_TYPE_BY_FINDING[$('fType').value];
   if (c) $('aCorrType').value = c;
+}
+
+// Sensible starting severity by finding type, shown before any assessment has run — the user
+// can always override it (severityTouched short-circuits every auto-suggestion below once set).
+// Corrosion/CUI/CUS start at Medium since the real severity depends on the reading, which isn't
+// known yet; Leak is High as a safety-relevant default; cosmetic coating damage starts Low.
+const SEVERITY_BY_FINDING = {
+  'External Corrosion': 'Medium',
+  'Internal Corrosion': 'Medium',
+  'CUI (Corrosion Under Insulation)': 'Medium',
+  'CUS (Corrosion Under Support)': 'Medium',
+  'Coating / Painting Damage': 'Low',
+  'Pipe Support Defect': 'Medium',
+  'Leak': 'High',
+  'Dent / Mechanical Damage': 'Medium'
+};
+function suggestSeverityFromType() {
+  if (severityTouched) return;
+  const sev = SEVERITY_BY_FINDING[$('fType').value];
+  if (!sev) return;
+  $('fSeverity').value = sev;
 }
 
 let assessResult = null;   // last valid computeB313 result, or null
@@ -2359,49 +3242,41 @@ function assessThickness() {
   return { t_nom: tnom, t_meas: tmeas };
 }
 
-const A_PILL = { OK: 'st-rep', MONITOR: 'st-mon', REPAIR: 'st-open' };
+// The form's live workbench instance (paCreateAssessView), created in initAssessment().
+let awFormView = null;
 
 function recalcAssessment() {
   if (!$('assessPanel').classList.contains('on')) { assessResult = null; return; }
   const res = computeB313(gatherAssessParams());
+  const hint = $('aCalcHint');
   if (res.hasErrors) {
     assessResult = null;
-    $('aResultEmpty').style.display = 'block';
-    $('aResultBody').style.display = 'none';
-    $('aResultEmpty').textContent = res.errors.P ? 'Enter design pressure to compute the result.'
-      : (res.errors.tmeas || res.errors.depth) ? 'Check the UT reading (cannot exceed nominal thickness).'
-      : res.errors.ca ? (typeof res.errors.ca === 'string' ? res.errors.ca : 'Check the corrosion allowance.')
-      : 'Enter the UT reading and design pressure to see the result.';
+    // Distinguish "not filled in yet" (neutral banner, no red) from "typed something invalid"
+    // (ERROR banner + targeted message) — same cold-load rule the calculator used. With the
+    // reading still blank, t_meas defaults to 0, which spuriously trips the CA >= t_meas check,
+    // so ca errors only count once a reading exists.
+    const readingEmpty = aMode() === 'tmeas' ? $('aTmeas').value === '' : $('aDepth').value === '';
+    const msg = (res.errors.tmeas || res.errors.depth) && !readingEmpty ? 'Check the UT reading (cannot exceed nominal thickness).'
+      : (res.errors.ca && !readingEmpty) ? (typeof res.errors.ca === 'string' ? res.errors.ca : 'Check the corrosion allowance.')
+      : (res.errors.P && $('aP').value !== '') ? 'Design pressure must be positive.'
+      : res.errors.overrideTnom ? 'Check the nominal thickness.'
+      : (res.errors.S && $('aS').value !== '') ? 'Allowable stress S must be positive.'
+      : '';
+    hint.style.display = msg ? 'block' : 'none';
+    hint.textContent = msg;
+    if (awFormView) awFormView.render(res, { neutral: !msg, nps: $('aNps').value });
     return;
   }
   assessResult = res;
-  const erf = res.mawp_with > 0 ? res.P_input / res.mawp_with : null;
-  $('aResultEmpty').style.display = 'none';
-  const rbody = $('aResultBody');
-  rbody.classList.remove('rs-ok', 'rs-mon', 'rs-rep');
-  rbody.classList.add(res.status === 'OK' ? 'rs-ok' : res.status === 'MONITOR' ? 'rs-mon' : 'rs-rep');
-  rbody.style.display = 'block';
-  $('aStatusPill').className = 'pill ' + (A_PILL[res.status] || 'st-closed');
-  $('aStatusPill').textContent = res.status;
-  $('aStatusNote').textContent = res.status === 'OK' ? 'Meets B31.3 with margin.'
-    : res.status === 'MONITOR' ? 'Approaching limits — increase inspection.'
-    : 'Below required minimum — plan repair.';
-  $('aErf').textContent = paFmt(erf, 3);
-  $('aTreq').textContent = paFmt(res.t_req_total, 3) + ' mm';
-  $('aMargin').textContent = paFmt(res.margin, 3) + ' mm';
-  $('aMawp').textContent = paFmt(res.mawp_with, 2) + ' ' + res.pUnit;
-  $('aLife').textContent = res.remainingLife != null ? paFmt(res.remainingLife, 1) + ' y' : '—';
+  hint.style.display = 'none';
+  if (awFormView) awFormView.render(res, { nps: $('aNps').value });
 
-  // the full calculator (diagram/equations/PDF) is only reachable for a saved finding
-  const openFull = $('aOpenFull');
-  if (editingId) { openFull.style.display = 'inline-block'; openFull.href = 'calculator.html?finding=' + encodeURIComponent(editingId); }
-  else { openFull.style.display = 'none'; }
-
-  // auto-suggest severity from the result unless the user has set it themselves
+  // auto-suggest severity from the result unless the user has set it themselves — the assessment
+  // result is more precise than the finding-type prefill (suggestSeverityFromType), so it wins
+  // whenever it's available.
   if (!severityTouched) {
     const sev = res.status === 'OK' ? 'Low' : res.status === 'MONITOR' ? 'Medium' : 'High';
     $('fSeverity').value = sev;
-    $('sevHint').style.display = 'block';
   }
 }
 
@@ -2426,6 +3301,7 @@ function loadAssessmentInto(inp, skipReading) {
   if (!skipReading) {
     const m = inp.mode === 'depth' ? 'depth' : 'tmeas';
     document.querySelectorAll('#aModeSeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+    positionSegPill($('aModeSeg'), false);
     $('aTmeasGrp').style.display = m === 'tmeas' ? 'block' : 'none';
     $('aDepthGrp').style.display = m === 'depth' ? 'block' : 'none';
     if (inp.tmeas != null) $('aTmeas').value = inp.tmeas;
@@ -2441,24 +3317,41 @@ function resetAssessment() {
   $('aTemp').value = '';
   $('aP').value = '';
   $('aPUnit').value = 'bar';
-  $('aCa').value = '';
+  $('aCa').value = '1.5';
   $('aCorrType').value = 'external';
   $('aCr').value = '';
   $('aE').value = '1.0'; $('aW').value = '1.0'; $('aY').value = '0.4';
   $('aTmeas').value = ''; $('aDepth').value = '';
-  document.querySelectorAll('#aModeSeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === 'tmeas'));
-  $('aTmeasGrp').style.display = 'block';
-  $('aDepthGrp').style.display = 'none';
+  document.querySelectorAll('#aModeSeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === 'depth'));
+  positionSegPill($('aModeSeg'), false);
+  $('aTmeasGrp').style.display = 'none';
+  $('aDepthGrp').style.display = 'block';
   autofillAtnom();
   assessResult = null;
-  $('aResultEmpty').style.display = 'block';
-  $('aResultEmpty').textContent = 'Enter the UT reading and design pressure to see the result.';
-  $('aResultBody').style.display = 'none';
+  $('aCalcHint').style.display = 'none';
+  if (awFormView) awFormView.render(null, { neutral: true });
 }
 
 function initAssessment() {
   $('aNps').innerHTML = Object.keys(PA_PIPE_DATABASE).map(n => `<option>${n}</option>`).join('');
   $('aMat').innerHTML = PA_MATERIALS.map(m => `<option value="${m.code}">${m.name}</option>`).join('');
+
+  // Full workbench under the inputs (advisor + equations ship collapsed to keep the column
+  // scannable). The drag handle writes back into whichever reading field is active.
+  awFormView = paCreateAssessView($('awForm'), {
+    sections: ['status', 'svg', 'results', 'advisor', 'equations', 'scope'],
+    collapsed: ['advisor', 'equations'],
+    onDepthDrag: (depth_mm) => {
+      if (!assessResult) return;
+      if (aMode() === 'depth') {
+        $('aDepth').value = depth_mm.toFixed(2);
+      } else {
+        $('aTmeas').value = (assessResult.t_nom - depth_mm).toFixed(2);
+      }
+      recalcAssessment();
+    }
+  });
+  awFormView.render(null, { neutral: true });
 
   $('aToggle').addEventListener('change', () => setAssessOn($('aToggle').checked));
   $('aNps').addEventListener('change', () => { updateAschedules(false); recalcAssessment(); });
@@ -2468,6 +3361,7 @@ function initAssessment() {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#aModeSeg .seg-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+      positionSegPill($('aModeSeg'), true);
       const m = btn.dataset.mode;
       $('aTmeasGrp').style.display = m === 'tmeas' ? 'block' : 'none';
       $('aDepthGrp').style.display = m === 'depth' ? 'block' : 'none';
@@ -2480,48 +3374,193 @@ function initAssessment() {
   $('fType').addEventListener('change', () => {
     // corrosion type follows the finding type
     syncCorrTypeFromFinding();
-    // auto-enable the assessment for wall-loss types (only when creating, and only if the user
-    // hasn't already turned it on/off deliberately for this finding)
+    // auto-enable the assessment for types where a UT reading is normally already on hand
+    // (only when creating, and only if the user hasn't already turned it on/off deliberately for
+    // this finding) — CUI/CUS are deliberately excluded, see AUTO_ASSESS_TYPES.
     if (!editingId && !assessToggleTouched) {
-      setAssessOn(WALL_LOSS_TYPES.includes($('fType').value));
+      setAssessOn(AUTO_ASSESS_TYPES.includes($('fType').value));
     }
+    suggestSeverityFromType();
     recalcAssessment();
   });
   $('aToggle').addEventListener('change', () => { assessToggleTouched = true; });
 
   $('fSeverity').addEventListener('change', () => {
     severityTouched = true;
-    $('sevHint').style.display = 'none';
   });
 }
 
 let assessToggleTouched = false;
 
 // Per-tag memory: reuse metadata + pipe setup from the last finding with the same tag.
+// Per-tag memory: reuse metadata + pipe setup from the last finding with the same tag, falling
+// back to the master line list for tags that have never appeared on a finding before. A prior
+// finding's own recorded assessment always wins over the line list — it reflects what an
+// engineer actually measured and verified for that tag (possibly correcting a stale master-list
+// entry), while the line list is a bulk-imported, unverified-per-row reference. Metadata fields
+// combine both sources under the same fill-only-if-empty rule rather than picking one source
+// exclusively, so a partially-known prior finding can still pick up whatever the line list has
+// that it doesn't.
 async function applyTagMemory() {
   if (editingId) return; // only when creating
   const tag = $('fTag').value.trim();
   if (!tag) return;
+  if (!lineList.length) await loadLineList(); // lazy-load: #/new is reachable without #/list first
+  const lineRow = lineList.find(r => r.pipe_tag === tag);
   const prior = findings.filter(f => f.pipe_tag === tag)
     .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
-  if (!prior.length) return;
+
+  // metadata: prior finding first, then whatever the line list has that's still empty
   const last = prior[0];
-  // fill only empty metadata fields, never clobber what the user already typed
-  if (!$('fPid').value && last.pid_no) $('fPid').value = last.pid_no;
-  if (!$('fService').value && last.service) $('fService').value = last.service;
-  if (!$('fLocationDesc').value && last.location_desc) $('fLocationDesc').value = last.location_desc;
-  // pull the most recent assessment setup for any finding with this tag
-  try {
-    const ids = prior.map(f => f.id);
-    const { data } = await sb.from('assessments').select('inputs, created_at')
-      .in('finding_id', ids).order('created_at', { ascending: false }).limit(1);
-    if (data && data.length) {
-      if (!$('assessPanel').classList.contains('on')) setAssessOn(true);
-      loadAssessmentInto(data[0].inputs, true); // reuse pipe setup, not the old reading
-      recalcAssessment();
-      notify('Pre-filled pipe data from a previous finding on this tag.');
+  if (last) {
+    if (!$('fPid').value && last.pid_no) $('fPid').value = last.pid_no;
+    if (!$('fService').value && last.service) $('fService').value = last.service;
+    if (!$('fLocationDesc').value && last.location_desc) $('fLocationDesc').value = last.location_desc;
+  }
+  if (lineRow) {
+    if (!$('fPid').value && lineRow.pid_no) $('fPid').value = lineRow.pid_no;
+    if (!$('fService').value && lineRow.service) $('fService').value = lineRow.service;
+    if (!$('fLocationDesc').value && lineRow.location_desc) $('fLocationDesc').value = lineRow.location_desc;
+  }
+
+  // engineering setup: prior finding's own assessment wins; line list is the fallback
+  if (prior.length) {
+    try {
+      const ids = prior.map(f => f.id);
+      const { data } = await sb.from('assessments').select('inputs, created_at')
+        .in('finding_id', ids).order('created_at', { ascending: false }).limit(1);
+      if (data && data.length) {
+        if (!$('assessPanel').classList.contains('on')) setAssessOn(true);
+        loadAssessmentInto(data[0].inputs, true); // reuse pipe setup, not the old reading
+        recalcAssessment();
+        notify('Pre-filled pipe data from a previous finding on this tag.');
+        return;
+      }
+    } catch (e) { /* memory is best-effort */ }
+  }
+  if (lineRow && lineRow.nps) {
+    if (!$('assessPanel').classList.contains('on')) setAssessOn(true);
+    loadAssessmentInto({ nps: lineRow.nps, schedule: lineRow.schedule, material: lineRow.material }, true);
+    recalcAssessment();
+    notify('Pre-filled pipe data from the master line list.');
+  }
+}
+
+/* ---------------- quick calculator (#/calc — standalone what-if, nothing saves) ----------------
+   Its own small input set (q-prefixed ids) + workbench instance, fully independent of the
+   finding form so a what-if never clobbers a half-entered finding's assessment. */
+let awQuickView = null;
+
+function initQuickCalc() {
+  $('qNps').innerHTML = Object.keys(PA_PIPE_DATABASE).map(n => `<option>${n}</option>`).join('');
+  $('qMat').innerHTML = PA_MATERIALS.map(m => `<option value="${m.code}">${m.name}</option>`).join('');
+
+  const qMode = () => {
+    const b = document.querySelector('#qModeSeg .seg-btn.active');
+    return b ? b.dataset.mode : 'tmeas';
+  };
+  const updateSchedules = (keepValue) => {
+    const pipe = PA_PIPE_DATABASE[$('qNps').value];
+    if (!pipe) return;
+    const prev = $('qSch').value;
+    $('qSch').innerHTML = Object.keys(pipe.schedules)
+      .map(s => `<option value="${s}">${pipe.schedules[s].label}</option>`).join('');
+    const def = paDefaultScheduleForNps($('qNps').value);
+    $('qSch').value = (keepValue && pipe.schedules[prev]) ? prev : (pipe.schedules[def] ? def : Object.keys(pipe.schedules)[0]);
+    autofillTnom();
+  };
+  const autofillTnom = () => {
+    const pipe = PA_PIPE_DATABASE[$('qNps').value];
+    const sch = pipe && pipe.schedules[$('qSch').value];
+    if (sch) $('qTnom').value = sch.t;
+  };
+  const applyStress = () => {
+    const m = PA_MATERIALS.find(x => x.code === $('qMat').value);
+    if (m && m.stress !== null) { $('qS').value = m.stress; $('qS').disabled = true; }
+    else { $('qS').disabled = false; }
+  };
+  const params = () => ({
+    nps: $('qNps').value, sch: $('qSch').value,
+    overrideTnom: $('qTnom').value, overrideOd: '',
+    mode: qMode(), depth: $('qDepth').value, tmeas: $('qTmeas').value,
+    ca: $('qCa').value, pInput: $('qP').value, pUnit: $('qPUnit').value,
+    S: $('qS').value, E: $('qE').value, W: $('qW').value, Y: $('qY').value, CR: $('qCr').value,
+    matCode: $('qMat').value, isInternal: $('qCorrType').value === 'internal'
+  });
+
+  let lastQuickRes = null;
+  const recalcQuick = () => {
+    const res = computeB313(params());
+    const hint = $('qCalcHint');
+    if (res.hasErrors) {
+      lastQuickRes = null;
+      // same neutral-vs-invalid rule as the form's assessment section
+      const readingEmpty = qMode() === 'tmeas' ? $('qTmeas').value === '' : $('qDepth').value === '';
+      const msg = (res.errors.tmeas || res.errors.depth) && !readingEmpty ? 'Check the UT reading (cannot exceed nominal thickness).'
+        : (res.errors.ca && !readingEmpty) ? (typeof res.errors.ca === 'string' ? res.errors.ca : 'Check the corrosion allowance.')
+        : (res.errors.P && $('qP').value !== '') ? 'Design pressure must be positive.'
+        : res.errors.overrideTnom ? 'Check the nominal thickness.'
+        : (res.errors.S && $('qS').value !== '') ? 'Allowable stress S must be positive.'
+        : '';
+      hint.style.display = msg ? 'block' : 'none';
+      hint.textContent = msg;
+      awQuickView.render(res, { neutral: !msg, nps: $('qNps').value });
+      return;
     }
-  } catch (e) { /* memory is best-effort */ }
+    lastQuickRes = res;
+    hint.style.display = 'none';
+    awQuickView.render(res, { nps: $('qNps').value });
+  };
+
+  awQuickView = paCreateAssessView($('awQuick'), {
+    sections: ['status', 'svg', 'results', 'advisor', 'equations', 'scope'],
+    collapsed: ['advisor', 'equations'],
+    onDepthDrag: (depth_mm) => {
+      if (!lastQuickRes) return;
+      if (qMode() === 'depth') $('qDepth').value = depth_mm.toFixed(2);
+      else $('qTmeas').value = (lastQuickRes.t_nom - depth_mm).toFixed(2);
+      recalcQuick();
+    }
+  });
+
+  const reset = () => {
+    $('qNps').value = '4"';
+    updateSchedules(false);
+    $('qMat').value = 'API5LB';
+    applyStress();
+    $('qP').value = ''; $('qPUnit').value = 'bar';
+    $('qCa').value = '1.5'; $('qCorrType').value = 'external'; $('qCr').value = '';
+    $('qE').value = '1.0'; $('qW').value = '1.0'; $('qY').value = '0.4';
+    $('qTmeas').value = ''; $('qDepth').value = '';
+    document.querySelectorAll('#qModeSeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === 'depth'));
+    positionSegPill($('qModeSeg'), false);
+    $('qTmeasGrp').style.display = 'none';
+    $('qDepthGrp').style.display = 'block';
+    autofillTnom();
+    lastQuickRes = null;
+    $('qCalcHint').style.display = 'none';
+    awQuickView.render(null, { neutral: true });
+  };
+
+  $('qNps').addEventListener('change', () => { updateSchedules(false); recalcQuick(); });
+  $('qSch').addEventListener('change', () => { autofillTnom(); recalcQuick(); });
+  $('qMat').addEventListener('change', () => { applyStress(); recalcQuick(); });
+  document.querySelectorAll('#qModeSeg .seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#qModeSeg .seg-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      positionSegPill($('qModeSeg'), true);
+      const m = btn.dataset.mode;
+      $('qTmeasGrp').style.display = m === 'tmeas' ? 'block' : 'none';
+      $('qDepthGrp').style.display = m === 'depth' ? 'block' : 'none';
+      recalcQuick();
+    });
+  });
+  ['qTnom', 'qTmeas', 'qDepth', 'qCa', 'qP', 'qPUnit', 'qCorrType', 'qS', 'qE', 'qW', 'qY', 'qCr']
+    .forEach(id => $(id).addEventListener('input', recalcQuick));
+  $('btnQuickReset').addEventListener('click', reset);
+
+  reset();
 }
 
 function openForm(f) {
@@ -2532,14 +3571,26 @@ function openForm(f) {
   severityTouched = false;
   assessToggleTouched = false;
   lastLoadedAssessInputs = null;
-  $('sevHint').style.display = 'none';
   resetAssessment();
   setAssessOn(false);
 
   $('formTitle').textContent = f ? 'Edit Finding' : 'New Finding';
   $('btnDelete').style.display = f ? 'inline-flex' : 'none';
-  // photos of an existing finding are managed from its detail page
+  // New findings queue photos in memory (uploaded on save); existing findings manage photos
+  // immediately via the same Photographic Record panel/logic the detail page uses.
   $('pendingPhotoPanel').style.display = f ? 'none' : 'block';
+  $('editPhotoPanel').style.display = f ? 'block' : 'none';
+  photoPasteTarget = 'found'; // Ctrl+V defaults to As Found until a group's "+ Add" is clicked
+  if (f) {
+    // `current` may not point at this finding (e.g. navigating straight from the dashboard
+    // list to #/edit/<id> without visiting the detail page first) — load its photos explicitly
+    // rather than assuming currentPhotos is already correct.
+    sb.from('finding_photos').select('*').eq('finding_id', f.id).order('created_at', { ascending: true })
+      .then(({ data }) => { currentPhotos = data || []; renderPhotoGroups(); });
+  } else {
+    currentPhotos = [];
+    renderPhotoGroups();
+  }
 
   $('fTerminal').value = f ? f.terminal : '';
   $('fTag').value = f ? f.pipe_tag : '';
@@ -2555,6 +3606,7 @@ function openForm(f) {
   syncCorrTypeFromFinding(); // corrosion type follows the finding type (a saved assessment overrides it below)
   $('fSeverity').value = f ? (f.severity || '') : '';
   if (f && f.severity) severityTouched = true; // don't auto-overwrite a stored severity
+  else suggestSeverityFromType(); // new finding: prefill from the finding type if one is already set
   $('fDescription').value = f ? (f.description || '') : '';
   $('fDefLen').value = f && f.defect_length_mm != null ? f.defect_length_mm : '';
   $('fDefWid').value = f && f.defect_width_mm != null ? f.defect_width_mm : '';
@@ -2580,7 +3632,7 @@ function openForm(f) {
           recalcAssessment();
         }
       });
-  } else if (WALL_LOSS_TYPES.includes($('fType').value)) {
+  } else if (AUTO_ASSESS_TYPES.includes($('fType').value)) {
     setAssessOn(true);
   }
 
@@ -2653,7 +3705,8 @@ function collectForm() {
 }
 
 // Snapshot the assessment (inputs + full result) for the assessments table, or null if the
-// section is off / can't compute. Inputs shape matches calculator.html's saveAssessmentToFinding.
+// section is off / can't compute. Inputs shape is the long-standing snapshot schema (originally
+// defined by the old calculator page's saveAssessmentToFinding) — keep it stable, saved rows depend on it.
 function collectAssessment() {
   if (!$('assessPanel').classList.contains('on')) return null;
   const res = computeB313(gatherAssessParams());
@@ -2667,13 +3720,19 @@ function collectAssessment() {
     override_tnom: $('aTnom').value
   };
   const results = Object.assign({}, res, {
+    // erf_no (current, no-CA) is the headline figure surfaced everywhere this snapshot is later
+    // displayed (detail-page card, finding PDF); erf_with kept alongside as the secondary reference.
+    erf_no: res.mawp_no > 0 ? res.P_input / res.mawp_no : null,
     erf_with: res.mawp_with > 0 ? res.P_input / res.mawp_with : null
   });
   return { inputs, results };
 }
 
 async function uploadPhoto(findingId, file, kind) {
-  const dataUrl = await downscaleImage(file, 1600, 0.8);
+  // 900px / 0.55 — chosen for max headroom on Supabase's free-tier 1GB storage bucket (this
+  // table has all of it to itself); still legible for the lightbox and the PDF's largest photo
+  // cell (~84x62mm) at typical print/screen resolution.
+  const dataUrl = await downscaleImage(file, 900, 0.55);
   const blob = await (await fetch(dataUrl)).blob();
   const path = `${findingId}/${crypto.randomUUID()}.jpg`;
   const up = await sb.storage.from(PHOTO_BUCKET).upload(path, blob, { contentType: 'image/jpeg' });
@@ -2777,7 +3836,7 @@ function renderDetail() {
 
   $('detailHead').innerHTML =
     `<h2>${esc(f.pipe_tag)}</h2>${pillHtml(f.status)}${isOverdue(f) ? '<span class="ov-badge">OVERDUE</span>' : ''}` +
-    `<span style="font-size:12px;color:var(--text-muted);">${esc(f.terminal)} Terminal — ${esc(f.finding_type)}</span>`;
+    `<span class="dh-meta">${esc(f.terminal)} Terminal — ${esc(f.finding_type)}</span>`;
 
   const life = [];
   life.push(dItem('Current Status', pillHtml(f.status)));
@@ -2821,7 +3880,7 @@ function renderDetail() {
   $('detailGrid').innerHTML = d.join('');
 
   $('detailDesc').innerHTML = f.description
-    ? `<div class="d-label" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:4px;">Description</div><p class="d-desc">${esc(f.description)}</p>`
+    ? `<div class="d-label">Description</div><p class="d-desc">${esc(f.description)}</p>`
     : '';
 
   renderAssessments();
@@ -2864,6 +3923,15 @@ function renderDetailMap() {
 
 const fmtN = (v, d) => (v != null && isFinite(v)) ? Number(v).toFixed(d) : '—';
 
+// erf_no (no-CA, current-condition) is the headline figure everywhere an assessment result is
+// shown. Snapshots saved before this field existed only have erf_with — mawp_no was always part
+// of the saved results (it's spread from the raw computeB313() result), so it can still be
+// derived from mawp_no + P_input for those older rows rather than showing a blank dash.
+function erfNo(r) {
+  if (r.erf_no != null) return r.erf_no;
+  return (r.mawp_no > 0 && r.P_input > 0) ? r.P_input / r.mawp_no : null;
+}
+
 function assessPill(status) {
   // calculator statuses mapped onto the existing pill palette
   const cls = status === 'OK' ? 'st-rep' : status === 'MONITOR' ? 'st-mon' : 'st-open';
@@ -2889,36 +3957,40 @@ function assessSetupLine(inputs) {
   return esc(parts.join(' · '));
 }
 
+// Re-run the shared engine on a snapshot's saved inputs so the detail page can show the full
+// workbench (status, cross-section, results, advisor, equations), not just summary tiles.
+// Falls back to null (compact tiles) if the inputs can't compute — e.g. a malformed old row.
+function resFromSnapshot(a) {
+  if (!a || !a.inputs) return null;
+  const inp = a.inputs;
+  const res = computeB313({
+    nps: inp.nps, sch: inp.schedule, overrideOd: '',
+    overrideTnom: inp.override_tnom != null ? inp.override_tnom : '',
+    mode: inp.mode === 'depth' ? 'depth' : 'tmeas',
+    depth: inp.depth != null ? inp.depth : '', tmeas: inp.tmeas != null ? inp.tmeas : '',
+    ca: inp.ca != null ? inp.ca : '', pInput: inp.P != null ? inp.P : '',
+    pUnit: inp.p_unit || 'bar', S: inp.S, E: inp.E, W: inp.W, Y: inp.Y,
+    CR: inp.cr != null ? inp.cr : '', matCode: inp.material,
+    isInternal: inp.corr_type === 'internal'
+  });
+  return res.hasErrors ? null : res;
+}
+
 function renderAssessments() {
   const body = $('assessBody');
   if (!currentAssessments.length) {
-    body.innerHTML = '<div class="photo-empty">No assessment yet — "Run assessment" opens the calculator pre-filled with this pipe\'s data; saving there attaches the result here.</div>';
+    body.innerHTML = '<div class="photo-empty">No assessment yet — "Run assessment" opens this finding\'s edit form with the ASME B31.3 workbench; saving records the result here.</div>';
     return;
   }
   const [latest, ...older] = currentAssessments;
   const r = latest.results || {};
-  const rsCls = r.status === 'OK' ? 'rs-ok' : r.status === 'MONITOR' ? 'rs-mon' : 'rs-rep';
   const setupLine = assessSetupLine(latest.inputs);
 
-  let html = `<div class="a-result-body ${rsCls}">
-    <div class="a-result-eyebrow">
-      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-      LATEST ASSESSMENT — ${fmtDateTime(latest.created_at)}
-    </div>
-    <div class="a-result-head">
-      ${assessPill(r.status)}
-      ${setupLine ? `<span class="a-result-note">${setupLine}</span>` : ''}
-    </div>
-    <div class="a-metrics">
-      <div class="a-metric"><span class="am-label">ERF</span><span class="am-val mono">${fmtN(r.erf_with, 3)}</span></div>
-      <div class="a-metric"><span class="am-label">t req+CA</span><span class="am-val mono">${fmtN(r.t_req_total, 3)} mm</span></div>
-      <div class="a-metric"><span class="am-label">t meas</span><span class="am-val mono">${fmtN(r.t_meas, 2)} mm</span></div>
-      <div class="a-metric"><span class="am-label">Margin</span><span class="am-val mono">${fmtN(r.margin, 3)} mm</span></div>
-      <div class="a-metric"><span class="am-label">MAWP</span><span class="am-val mono">${fmtN(r.mawp_with, 2)} ${esc(r.pUnit || '')}</span></div>
-      ${r.remainingLife != null ? `<div class="a-metric"><span class="am-label">Remaining life</span><span class="am-val mono">${fmtN(r.remainingLife, 1)} yr</span></div>` : ''}
-    </div>
-    <div class="a-result-note" style="margin-top:10px;">Recorded by ${esc(latest.created_by_email || '—')}</div>
-  </div>`;
+  let html = `<div class="assess-latest-head">
+    <span class="assess-history-label" style="margin:0;">Latest assessment — ${fmtDateTime(latest.created_at)}</span>
+    <span class="assess-meta">${setupLine ? setupLine + ' — ' : ''}by ${esc(latest.created_by_email || '—')}</span>
+  </div>
+  <div id="awDetail"></div>`;
 
   if (older.length) {
     html += `<div class="assess-history-label">Previous assessments (${older.length})</div>`;
@@ -2927,7 +3999,7 @@ function renderAssessments() {
       const setup = assessSetupLine(a.inputs);
       return `<div class="assess-item">
         ${assessPill(or.status)}
-        <span class="kv mono"><b>ERF</b> ${fmtN(or.erf_with, 3)}</span>
+        <span class="kv mono"><b>ERF</b> ${fmtN(erfNo(or), 3)}</span>
         <span class="kv mono"><b>t meas</b> ${fmtN(or.t_meas, 2)} mm</span>
         <span class="kv mono"><b>Margin</b> ${fmtN(or.margin, 3)} mm</span>
         ${or.remainingLife != null ? `<span class="kv mono"><b>Life</b> ${fmtN(or.remainingLife, 1)} y</span>` : ''}
@@ -2937,6 +4009,26 @@ function renderAssessments() {
   }
 
   body.innerHTML = html;
+
+  // Mount the read-only workbench for the latest snapshot (no drag handle — display only).
+  const res = resFromSnapshot(latest);
+  const host = $('awDetail');
+  if (res) {
+    const view = paCreateAssessView(host, {
+      sections: ['status', 'svg', 'results', 'advisor', 'equations'],
+      collapsed: ['advisor', 'equations']
+    });
+    view.render(res, { nps: latest.inputs.nps });
+  } else {
+    // snapshot whose inputs can't re-compute (malformed/legacy row): show the saved results
+    host.innerHTML = `<div class="assess-item">
+      ${assessPill(r.status)}
+      <span class="kv mono"><b>ERF (no CA)</b> ${fmtN(erfNo(r), 3)}</span>
+      <span class="kv mono"><b>t meas</b> ${fmtN(r.t_meas, 2)} mm</span>
+      <span class="kv mono"><b>Margin</b> ${fmtN(r.margin, 3)} mm</span>
+      <span class="kv mono"><b>MAWP (no CA)</b> ${fmtN(r.mawp_no, 2)} ${esc(r.pUnit || '')}</span>
+    </div>`;
+  }
 }
 
 function photoThumb(p) {
@@ -2947,21 +4039,42 @@ function photoThumb(p) {
   </div>`;
 }
 
+// Photo management (add/remove) is shown in TWO places — the detail page's Photographic
+// Record panel, and (identically) the edit form's, so photos can be managed while editing
+// without a detour through the detail page. Both read/write the same currentPhotos array and
+// both are re-rendered together on every change — the ids differ (gridFound/gridFound2 etc.)
+// but the content and behavior are otherwise identical.
+const PHOTO_GRID_SETS = [
+  { grid: 'gridFound', empty: 'emptyFound', addBtn: 'btnAddFound', kind: 'found' },
+  { grid: 'gridRepaired', empty: 'emptyRepaired', addBtn: 'btnAddRepaired', kind: 'repaired' },
+  { grid: 'gridFound2', empty: 'emptyFound2', addBtn: 'btnAddFound2', kind: 'found' },
+  { grid: 'gridRepaired2', empty: 'emptyRepaired2', addBtn: 'btnAddRepaired2', kind: 'repaired' },
+];
+
 function renderPhotoGroups() {
   const found = currentPhotos.filter(p => p.kind === 'found');
   const rep = currentPhotos.filter(p => p.kind === 'repaired');
-  $('gridFound').innerHTML = found.map(photoThumb).join('');
-  $('gridRepaired').innerHTML = rep.map(photoThumb).join('');
-  $('emptyFound').style.display = found.length ? 'none' : 'block';
-  $('emptyRepaired').style.display = rep.length ? 'none' : 'block';
+  PHOTO_GRID_SETS.forEach(({ grid, empty, addBtn, kind }) => {
+    const el = $(grid);
+    if (!el) return; // markup may not exist yet on first call — harmless no-op
+    const rows = kind === 'found' ? found : rep;
+    el.innerHTML = rows.map(photoThumb).join('');
+    $(empty).style.display = rows.length ? 'none' : 'block';
+    const btn = $(addBtn);
+    if (btn) {
+      const atLimit = rows.length >= PHOTO_LIMIT_PER_KIND;
+      btn.disabled = atLimit;
+      btn.textContent = atLimit ? `Max ${PHOTO_LIMIT_PER_KIND} reached` : `+ Add (${rows.length}/${PHOTO_LIMIT_PER_KIND})`;
+    }
+  });
 
-  document.querySelectorAll('#viewDetail .photo-thumb img').forEach(img => {
+  document.querySelectorAll('#viewDetail .photo-thumb img, #viewForm .photo-thumb img').forEach(img => {
     img.addEventListener('click', () => {
       $('lightboxImg').src = img.dataset.url;
-      $('lightbox').showModal();
+      openDialog($('lightbox'));
     });
   });
-  document.querySelectorAll('#viewDetail .photo-remove').forEach(btn => {
+  document.querySelectorAll('#viewDetail .photo-remove, #viewForm .photo-remove').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!window.confirm('Delete this photo?')) return;
       try {
@@ -2976,20 +4089,34 @@ function renderPhotoGroups() {
   });
 }
 
-async function addDetailPhotos(files, kind) {
+// findingId defaults to current.id (the detail page's usage) but the edit form passes its own
+// editingId explicitly, since `current` may not point at the finding being edited (e.g.
+// navigating straight from the dashboard list to #/edit/<id> without visiting the detail page).
+async function addDetailPhotos(files, kind, findingId) {
   if (!files || !files.length) return;
-  notify('Uploading ' + files.length + ' photo(s)…');
+  const id = findingId || (current && current.id);
+  if (!id) return;
+  const already = currentPhotos.filter(p => p.kind === kind).length;
+  const room = Math.max(0, PHOTO_LIMIT_PER_KIND - already);
+  if (room <= 0) {
+    notify(`Limit reached: ${PHOTO_LIMIT_PER_KIND} ${kind === 'found' ? 'As Found' : 'After Repair'} photos max.`, true);
+    return;
+  }
+  const toUpload = files.filter(f => f.type && f.type.startsWith('image/')).slice(0, room);
+  const skipped = files.length - toUpload.length;
+  notify('Uploading ' + toUpload.length + ' photo(s)…');
   let ok = 0, failed = 0;
-  for (const f of files) {
-    if (!f.type || !f.type.startsWith('image/')) continue;
-    try { await uploadPhoto(current.id, f, kind); ok++; }
+  for (const f of toUpload) {
+    try { await uploadPhoto(id, f, kind); ok++; }
     catch (e) { failed++; console.warn('upload failed', e); }
   }
-  const { data } = await sb.from('finding_photos').select('*').eq('finding_id', current.id).order('created_at', { ascending: true });
+  const { data } = await sb.from('finding_photos').select('*').eq('finding_id', id).order('created_at', { ascending: true });
   currentPhotos = data || [];
   renderPhotoGroups();
-  if (failed) notify(`${ok} uploaded, ${failed} failed.`, true);
-  else notify(`${ok} photo(s) added.`);
+  renderDlgRepairedPhotos(); // no-op if the status-change dialog isn't showing the Repaired target
+  const limitNote = skipped ? ` (${skipped} skipped — ${PHOTO_LIMIT_PER_KIND} max reached)` : '';
+  if (failed) notify(`${ok} uploaded, ${failed} failed.${limitNote}`, true);
+  else notify(`${ok} photo(s) added.${limitNote}`, !!skipped);
 }
 
 function renderTimeline() {
@@ -3027,10 +4154,54 @@ function openStatusDialog(target) {
     extra = `<label class="f-label req" for="dlgDate">Repaired date</label>
              <input id="dlgDate" class="input" type="date" value="${todayISO()}">
              <label class="f-label" for="dlgRepairMethod" style="margin-top:12px;">Repair method (PCC-2 / description)</label>
-             <input id="dlgRepairMethod" class="input" type="text" value="${esc(current.repair_method || '')}" placeholder="e.g., Weld overlay / clamp / replacement spool">`;
+             <input id="dlgRepairMethod" class="input" type="text" value="${esc(current.repair_method || '')}" placeholder="e.g., Weld overlay / clamp / replacement spool">
+             <div class="photo-group" style="margin-top:12px;">
+               <div class="photo-group-h">
+                 <h3>After Repair photos</h3>
+                 <button class="btn" data-variant="outline" id="dlgAddRepairedPhoto" type="button">+ Add</button>
+               </div>
+               <div class="photo-grid" id="dlgRepairedGrid"></div>
+               <div class="photo-empty" id="dlgRepairedEmpty">No after-repair photos yet.</div>
+             </div>`;
   }
   $('dlgExtra').innerHTML = extra;
-  $('statusDlg').showModal();
+  if (target === 'Repaired') {
+    renderDlgRepairedPhotos();
+    $('dlgAddRepairedPhoto').addEventListener('click', () => $('fileDlgRepaired').click());
+  }
+  openDialog($('statusDlg'));
+}
+
+// Mirrors renderPhotoGroups' "repaired" slice, scoped to the status-change dialog's own grid —
+// kept separate rather than added to PHOTO_GRID_SETS since this markup is rebuilt fresh every
+// time the dialog opens (dlgExtra.innerHTML), unlike the detail/edit-form grids that persist.
+function renderDlgRepairedPhotos() {
+  const grid = $('dlgRepairedGrid');
+  if (!grid) return; // dialog closed / not the Repaired target
+  const rows = currentPhotos.filter(p => p.kind === 'repaired');
+  grid.innerHTML = rows.map(photoThumb).join('');
+  $('dlgRepairedEmpty').style.display = rows.length ? 'none' : 'block';
+  const btn = $('dlgAddRepairedPhoto');
+  const atLimit = rows.length >= PHOTO_LIMIT_PER_KIND;
+  btn.disabled = atLimit;
+  btn.textContent = atLimit ? `Max ${PHOTO_LIMIT_PER_KIND} reached` : `+ Add (${rows.length}/${PHOTO_LIMIT_PER_KIND})`;
+  grid.querySelectorAll('.photo-thumb img').forEach(img => {
+    img.addEventListener('click', () => { $('lightboxImg').src = img.dataset.url; openDialog($('lightbox')); });
+  });
+  grid.querySelectorAll('.photo-remove').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!window.confirm('Delete this photo?')) return;
+      try {
+        await sb.storage.from(PHOTO_BUCKET).remove([btn.dataset.path]);
+        const { error } = await sb.from('finding_photos').delete().eq('id', btn.dataset.id);
+        if (error) throw error;
+        currentPhotos = currentPhotos.filter(p => p.id !== btn.dataset.id);
+        renderDlgRepairedPhotos();
+        renderPhotoGroups();
+        notify('Photo deleted.');
+      } catch (e) { notify('Delete failed: ' + e.message, true); }
+    });
+  });
 }
 
 async function confirmStatusChange() {
@@ -3071,7 +4242,7 @@ async function confirmStatusChange() {
       finding_id: current.id, old_status: current.status, new_status: target, note: note || null
     });
     if (e2) throw e2;
-    $('statusDlg').close();
+    closeDialog($('statusDlg'));
     notify(`Status changed to ${target}.`);
     await loadDetail(current.id);
     renderDetail();
@@ -3089,10 +4260,18 @@ async function confirmStatusChange() {
    manually — no autotable dependency. Opens in the browser's native PDF viewer
    via a blob anchor (the one approach that also survives file://). */
 
-const PDF_NAVY = '#103C5C';
+const PDF_NAVY = '#156B95'; // matches --header-accent / --button-primary exactly
 const PDF_TEXT = '#0f172a';
 const PDF_MUTED = '#64748b';
 const PDF_BORDER = '#cbd5e1';
+/* Semantic status colors — match :root's light-mode --ok/--warn/--danger tokens exactly (the
+   report always renders in the fixed light palette regardless of app theme). Named constants,
+   never re-typed hex per call site — same rule as the old calculator report. */
+const PDF_OK = '#059669';
+const PDF_WARN = '#d97706';
+const PDF_WARN_DARK = '#92400e';   // --warn-text — the CS-reference caveat note
+const PDF_WARN_MID = '#b45309';    // warn accent — the bold FFS recommendation
+const PDF_DANGER = '#dc2626';
 
 function fetchAsDataUrl(url, timeoutMs) {
   const job = fetch(url)
@@ -3164,6 +4343,7 @@ async function buildFindingPdf() {
   const f = current;
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  registerGoogleSansFonts(doc); // asset/shared.js — use doc.setFont('GoogleSans', ...) below
   const PW = 210, PH = 297, M = 14, CW = PW - 2 * M;
   const HEADER_H = 18, FOOTER_H = 16;
   let y = 0, secNum = 0, figNum = 0;
@@ -3173,6 +4353,10 @@ async function buildFindingPdf() {
   const logo = (typeof OR_LOGO_DATAURL !== 'undefined' && OR_LOGO_DATAURL) || await fetchAsDataUrl('asset/RGB_OR_Full color.png', 3000);
   const logoIm = logo ? await loadImg(logo) : null;
   const mapImg = (f.lat != null && f.lng != null) ? await composeMapPng(f.lat, f.lng, 17, 1000, 500) : null;
+  // latest assessment re-computed from its saved inputs (single engine source) + its cross-section
+  const assess = currentAssessments.length ? currentAssessments[0] : null;
+  const assessRes = assess ? resFromSnapshot(assess) : null;
+  const xsecPng = assessRes ? await paCrossSectionPng(assessRes, 2).catch(() => null) : null;
   const photoData = [];
   for (const p of currentPhotos) {
     const d = await fetchAsDataUrl(photoUrl(p.storage_path), 8000);
@@ -3190,24 +4374,24 @@ async function buildFindingPdf() {
     if (logoIm) {
       const lw = 26, lh = 26 * logoIm.naturalHeight / logoIm.naturalWidth;
       try { doc.addImage(logo, 'PNG', M, 3, lw, lh); }
-      catch (_) { doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(PDF_NAVY); doc.text('OR', M, 12); }
+      catch (_) { doc.setFont('GoogleSans', 'bold'); doc.setFontSize(15); doc.setTextColor(PDF_NAVY); doc.text('OR', M, 12); }
     } else {
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(PDF_NAVY);
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(15); doc.setTextColor(PDF_NAVY);
       doc.text('OR', M, 12);
     }
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(PDF_NAVY);
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(11); doc.setTextColor(PDF_NAVY);
     doc.text('PIPING ABNORMAL FINDING REPORT', PW - M, 8.5, { align: 'right' });
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor('#64748b');
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(7.5); doc.setTextColor('#64748b');
     doc.text(`TAG: ${f.pipe_tag}   •   ${paFmtDate(now)}`, PW - M, 13.5, { align: 'right' });
     doc.setDrawColor(PDF_NAVY); doc.setLineWidth(0.8);
     doc.line(M, HEADER_H - 1, PW - M, HEADER_H - 1);
 
     doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
     doc.line(M, PH - FOOTER_H, PW - M, PH - FOOTER_H);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor('#64748b');
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(7.5); doc.setTextColor('#64748b');
     doc.text('Piping integrity — abnormal finding record', M, PH - FOOTER_H + 4);
     doc.text(`Page ${doc.internal.getNumberOfPages()} of {tp}`, PW / 2, PH - FOOTER_H + 4, { align: 'center' });
-    doc.text(`Generated ${paFmtDate(now)} ${now.toLocaleTimeString()}`, PW - M, PH - FOOTER_H + 4, { align: 'right' });
+    doc.text(`Generated ${paFmtDateTime(now)}`, PW - M, PH - FOOTER_H + 4, { align: 'right' });
     doc.setFontSize(6.5); doc.setTextColor('#94a3b8');
     doc.text('Central and Eastern Engineering and Maintenance Division — PTT Oil and Retail Business Public Company Limited', PW / 2, PH - FOOTER_H + 9, { align: 'center' });
     doc.setTextColor(PDF_TEXT);
@@ -3221,7 +4405,7 @@ async function buildFindingPdf() {
   function section(t) {
     ensure(14);
     secNum++;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(PDF_NAVY);
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(9); doc.setTextColor(PDF_NAVY);
     doc.text(`${secNum}. ${t.toUpperCase()}`, M, y);
     doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
     doc.line(M, y + 1.5, PW - M, y + 1.5);
@@ -3234,9 +4418,9 @@ async function buildFindingPdf() {
     const lines = doc.splitTextToSize(v, CW - 48);
     const h = Math.max(6, lines.length * 4.2 + 2);
     ensure(h);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(PDF_MUTED);
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(8); doc.setTextColor(PDF_MUTED);
     doc.text(label, M, y + 3.6);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(PDF_TEXT);
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(9); doc.setTextColor(PDF_TEXT);
     doc.text(lines, M + 48, y + 3.7);
     doc.setDrawColor('#e2e8f0'); doc.setLineWidth(0.15);
     doc.line(M, y + h, PW - M, y + h);
@@ -3249,14 +4433,14 @@ async function buildFindingPdf() {
   // (fixed hex from STATUS_COLORS; report surface never themes)
   doc.setFillColor(STATUS_COLORS[f.status] || '#64748b');
   doc.roundedRect(M, y, CW, 12, 1.5, 1.5, 'F');
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor('#ffffff');
+  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(14); doc.setTextColor('#ffffff');
   doc.text(`STATUS: ${(f.status || '').toUpperCase()}`, M + 4, y + 8);
   if (isOverdue(f)) {
     doc.setFont('courier', 'bold'); doc.setFontSize(8);
     doc.text(`OVERDUE - due ${paFmtDate(dueDateOf(f))}`, PW - M - 4, y + 8, { align: 'right' });
   }
   y += 16;
-  doc.setTextColor('#334155'); doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+  doc.setTextColor('#334155'); doc.setFont('GoogleSans', 'normal'); doc.setFontSize(8);
   doc.text(`${f.terminal} Terminal   •   ${f.finding_type}`, M, y);
   y += 8;
   doc.setTextColor(PDF_TEXT);
@@ -3276,9 +4460,9 @@ async function buildFindingPdf() {
   row('Report No.', f.report_no);
   if (f.report_link) {
     ensure(6);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(PDF_MUTED);
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(8); doc.setTextColor(PDF_MUTED);
     doc.text('Report Link', M, y + 3.6);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor('#156B95');
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(9); doc.setTextColor('#156B95');
     doc.textWithLink('Open source report', M + 48, y + 3.7, { url: f.report_link });
     doc.setDrawColor('#e2e8f0'); doc.setLineWidth(0.15);
     doc.line(M, y + 6, PW - M, y + 6);
@@ -3310,21 +4494,277 @@ async function buildFindingPdf() {
   if (f.closing_note) row('Closing Note', f.closing_note);
   y += 4;
 
-  if (currentAssessments.length) {
-    const a = currentAssessments[0];
-    const r = a.results || {};
+  /* ===== ASME B31.3 assessment sections (full calculator-grade report block) =====
+     Only rendered when the finding has a saved assessment whose inputs still compute —
+     section auto-numbering means their absence leaves no gap. Numbers are re-derived from
+     the saved inputs through the shared computeB313 engine (single math source); a legacy
+     snapshot that can't re-compute falls back to a compact summary of its saved results. */
+  if (assess && assessRes) {
+    const inp = assess.inputs || {};
+    const r = assessRes;
+    const erf_no = r.mawp_no > 0 ? (r.P_input / r.mawp_no) : 9.99;
+    const erf_with = r.mawp_with > 0 ? (r.P_input / r.mawp_with) : 9.99;
+    const schLabel = (PA_PIPE_DATABASE[inp.nps] && PA_PIPE_DATABASE[inp.nps].schedules[inp.schedule])
+      ? PA_PIPE_DATABASE[inp.nps].schedules[inp.schedule].label : (inp.schedule || '—');
+
+    const tableBase = {
+      margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
+      styles: { font: 'GoogleSans', fontSize: 8, cellPadding: 1.6, lineColor: PDF_BORDER, lineWidth: 0.15 },
+      headStyles: { fillColor: PDF_NAVY, textColor: '#ffffff', fontStyle: 'bold', fontSize: 7.5 },
+      didDrawPage: () => { if (doc.internal.getNumberOfPages() > 1) chrome(); }
+    };
+
+    // --- integrity status band (mirrors the on-screen workbench banner) ---
+    section('ASME B31.3 Assessment');
+    ensure(24);
+    const iColor = r.status === 'OK' ? PDF_OK : r.status === 'MONITOR' ? PDF_WARN : PDF_DANGER;
+    doc.setFillColor(iColor);
+    doc.roundedRect(M, y, CW, 12, 1.5, 1.5, 'F');
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(14); doc.setTextColor('#ffffff');
+    doc.text(`INTEGRITY STATUS: ${r.status}`, M + 4, y + 8);
+    doc.setFont('courier', 'bold'); doc.setFontSize(8);
+    doc.text(`ERF ${fmtN(erf_no, 3)}   MAWP ${fmtN(r.mawp_no, 1)} ${r.pUnit} (no CA)   MARGIN ${fmtN(r.margin, 3)} mm`, PW - M - 4, y + 8, { align: 'right' });
+    y += 16;
+    doc.setTextColor('#334155'); doc.setFont('GoogleSans', 'normal'); doc.setFontSize(8);
+    const descLines = doc.splitTextToSize(r.desc, CW);
+    ensure(descLines.length * 3.6 + 4);
+    doc.text(descLines, M, y);
+    y += descLines.length * 3.6 + 2;
+    doc.setFont('GoogleSans', 'italic'); doc.setFontSize(7.5); doc.setTextColor(PDF_MUTED);
+    doc.text(`Assessed ${fmtDateTime(assess.created_at)} by ${assess.created_by_email || '—'}`
+      + (currentAssessments.length > 1 ? `  •  ${currentAssessments.length} assessments recorded — latest shown` : ''), M, y);
+    doc.setTextColor(PDF_TEXT);
+    y += 7;
+
+    // --- input parameters ---
+    section('Assessment Input Parameters');
+    const modeIsDepth = inp.mode === 'depth';
+    doc.autoTable({
+      ...tableBase,
+      startY: y,
+      theme: 'grid',
+      head: [['Parameter', 'Symbol', 'Value', 'Unit', 'Source']],
+      body: [
+        ['Nominal pipe size / schedule', 'NPS', `${inp.nps} / ${schLabel}`, '—', 'ASME B36.10M'],
+        ['Outside diameter', 'D', fmtN(r.D, 2), 'mm', 'B36.10M table'],
+        ['Nominal wall thickness', 't_nom', fmtN(r.t_nom, 2), 'mm', 'B36.10M / as-built'],
+        ['Measurement mode', '—', modeIsDepth ? 'Wall-loss depth' : 'Measured minimum', '—', 'Field input'],
+        ['Wall loss depth', 'd', fmtN(r.depth, 2), 'mm', modeIsDepth ? 'Measured' : 'Derived'],
+        ['Measured minimum thickness', 't_meas', fmtN(r.t_meas, 2), 'mm', modeIsDepth ? 'Derived' : 'UT measurement'],
+        ['Corrosion type', '—', r.isInternal ? 'Internal wall loss' : 'External wall loss', '—', 'Field input'],
+        ['Corrosion allowance', 'CA', fmtN(r.ca, 2), 'mm', 'Design'],
+        ['Corrosion rate (optional)', 'CR', r.CR > 0 ? fmtN(r.CR, 3) : '—', 'mm/yr', 'Historical/estimated'],
+        ['Design pressure', 'P', fmtN(r.P_input, 2), r.pUnit, 'Design'],
+        ['Material', '—', materialName(inp.material), '—', 'Specification'],
+        ['Allowable stress', 'S', fmtN(r.S, 1), 'MPa', 'B31.3 Table A-1'],
+        ['Longitudinal joint factor', 'E', fmtN(r.E, 2), '—', 'B31.3 Table A-1B'],
+        ['Weld strength reduction factor', 'W', fmtN(r.W, 2), '—', 'B31.3 Table 302.3.5'],
+        ['Wall thickness coefficient', 'Y', fmtN(r.Y, 2), '—', 'B31.3 Table 304.1.1'],
+      ],
+      columnStyles: {
+        1: { font: 'courier', halign: 'center', cellWidth: 18 },
+        2: { font: 'courier', fontStyle: 'bold', halign: 'right', cellWidth: 40 },
+        3: { halign: 'center', cellWidth: 16 },
+      },
+    });
+    y = doc.lastAutoTable.finalY + 7;
+
+    // --- cross-section figure ---
+    if (xsecPng) {
+      const figW = 150, figH = figW * 270 / 500;
+      ensure(26 + figH + 14);
+      section('Wall Thickness Cross-Section');
+      doc.addImage(xsecPng, 'PNG', (PW - figW) / 2, y, figW, figH);
+      y += figH + 4;
+      figNum++;
+      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(7.5); doc.setTextColor(PDF_MUTED);
+      doc.text(`Figure ${figNum} — Wall thickness cross-section (localized loss pocket; boundaries: t_req, t_req + CA, API 574 structural minimum)`, PW / 2, y, { align: 'center' });
+      doc.setTextColor(PDF_TEXT);
+      y += 8;
+    }
+
+    // --- results with verdicts ---
+    section('Calculation Results');
+    const life = r.remainingLife !== null ? (r.remainingLife >= 0 ? `${fmtN(r.remainingLife, 2)} years` : '0.00 years (exceeded)') : '—';
+    doc.autoTable({
+      ...tableBase,
+      startY: y,
+      theme: 'grid',
+      head: [['Quantity', 'Value', 'Criterion', 'Verdict']],
+      body: [
+        [{ content: 'THICKNESS', colSpan: 4, styles: { fillColor: '#e2e8f0', fontStyle: 'bold', fontSize: 7 } }],
+        ['Nominal wall thickness t_nom', `${fmtN(r.t_nom, 2)} mm`, '—', ''],
+        ['Remaining wall percentage', `${fmtN(r.pctRemainNom, 1)} %`, '>= 50 %', r.pctRemainNom >= 50 ? 'PASS' : 'CHECK'],
+        ['Required thickness t_req', `${fmtN(r.t_req_noCA, 3)} mm`, '—', ''],
+        ['Required incl. CA (t_req + CA)', `${fmtN(r.t_req_total, 3)} mm`, 't_meas >= t_req + CA', r.margin >= 0 ? 'PASS' : 'CHECK'],
+        [`API 574 structural min t_struct${r.isCsRef ? ' *' : ''}`, `${fmtN(r.t_struct, 2)} mm`, 't_meas >= t_struct', r.t_meas >= r.t_struct ? 'PASS' : 'CHECK'],
+        ['Remaining margin', `${fmtN(r.margin, 3)} mm`, '>= 0', r.margin >= 0 ? 'PASS' : 'CHECK'],
+        [{ content: 'PRESSURE & ERF', colSpan: 4, styles: { fillColor: '#e2e8f0', fontStyle: 'bold', fontSize: 7 } }],
+        ['Design pressure P', `${fmtN(r.P_input, 2)} ${r.pUnit}`, '—', ''],
+        ['MAWP (no CA — current)', `${fmtN(r.mawp_no, 2)} ${r.pUnit}`, '>= P', r.mawp_no >= r.P_input ? 'PASS' : 'CHECK'],
+        ['ERF (no CA — current)', fmtN(erf_no, 3), '<= 1.0', erf_no <= 1.0 ? 'PASS' : 'CHECK'],
+        ['MAWP (with CA reserved)', `${fmtN(r.mawp_with, 2)} ${r.pUnit}`, '>= P', r.mawp_with >= r.P_input ? 'PASS' : 'CHECK'],
+        ['ERF (with CA reserved)', fmtN(erf_with, 3), '<= 1.0', erf_with <= 1.0 ? 'PASS' : 'CHECK'],
+        [{ content: 'REMAINING LIFE', colSpan: 4, styles: { fillColor: '#e2e8f0', fontStyle: 'bold', fontSize: 7 } }],
+        ['Corrosion allowance CA', `${fmtN(r.ca, 2)} mm`, '—', ''],
+        ['Corrosion rate CR', r.CR > 0 ? `${fmtN(r.CR, 3)} mm/yr` : '—', '—', ''],
+        ['Estimated remaining life', life, '—', ''],
+      ],
+      columnStyles: {
+        1: { font: 'courier', fontStyle: 'bold', halign: 'right', cellWidth: 42 },
+        2: { font: 'courier', halign: 'center', cellWidth: 38 },
+        3: { fontStyle: 'bold', halign: 'center', cellWidth: 18 },
+      },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index === 3) {
+          if (data.cell.raw === 'PASS') data.cell.styles.textColor = PDF_OK;
+          if (data.cell.raw === 'CHECK') data.cell.styles.textColor = PDF_DANGER;
+        }
+      },
+    });
+    y = doc.lastAutoTable.finalY + 3;
+    if (r.isCsRef) {
+      ensure(6);
+      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(7.5); doc.setTextColor(PDF_WARN_DARK);
+      doc.text('* API 574 structural minimum is a carbon/low-alloy steel reference table; not validated for the selected material.', M, y);
+      doc.setTextColor(PDF_TEXT);
+      y += 6;
+    } else {
+      y += 4;
+    }
+    if (r.margin < 0 || r.t_meas < r.t_struct) {
+      const ffsText = 'RECOMMENDATION: One or more code checks did not pass. Consider a Level 1/2 fitness-for-service assessment per API 579-1/ASME FFS-1 or a B31G/RSTRENG remaining-strength evaluation before the repair/replace decision.';
+      const ffsLines = doc.splitTextToSize(ffsText, CW);
+      ensure(ffsLines.length * 3.4 + 4);
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(7.5); doc.setTextColor(PDF_WARN_MID);
+      doc.text(ffsLines, M, y);
+      doc.setTextColor(PDF_TEXT);
+      y += ffsLines.length * 3.4 + 4;
+    }
+
+    // --- substituted equations (real stacked fractions, mirroring the on-screen .eq-box) ---
+    // segs: plain strings baseline text; { num, den } a stacked fraction. Returns space consumed.
+    function drawFractionRow(segs, x0, yTop, opts2) {
+      const fs = (opts2 && opts2.fontSize) || 8;
+      const font = (opts2 && opts2.font) || 'courier';
+      const hasFraction = segs.some(s => typeof s !== 'string');
+      const numOffset = 3.4, barOffset = 4.6, denOffset = 8.4;
+      const flatBaseline = yTop + 3;
+      const barBaseline = yTop + barOffset;
+      let x = x0;
+      segs.forEach(seg => {
+        doc.setFont(font, 'normal'); doc.setFontSize(fs); doc.setTextColor(PDF_TEXT);
+        if (typeof seg === 'string') {
+          doc.text(seg, x, hasFraction ? barBaseline : flatBaseline);
+          x += doc.getTextWidth(seg);
+        } else {
+          const numW = doc.getTextWidth(seg.num);
+          const denW = doc.getTextWidth(seg.den);
+          const w = Math.max(numW, denW) + 2;
+          doc.text(seg.num, x + w / 2, yTop + numOffset, { align: 'center' });
+          doc.setDrawColor(PDF_TEXT); doc.setLineWidth(0.25);
+          doc.line(x, yTop + barOffset, x + w, yTop + barOffset);
+          doc.text(seg.den, x + w / 2, yTop + denOffset, { align: 'center' });
+          x += w;
+        }
+      });
+      doc.setTextColor(PDF_TEXT);
+      return hasFraction ? denOffset + 2 : 6;
+    }
+
+    const t_use_with = Math.max(0, r.t_meas - r.ca);
+    const eqRows = [
+      {
+        label: 't_req = P · D / (2 · (S · E · W + P · Y))', ref: '[B31.3 304.1.2]',
+        segs: ['t_req = ', { num: `${fmtN(r.P, 4)} · ${fmtN(r.D, 2)}`, den: `2(${fmtN(r.S, 1)}·${fmtN(r.E, 2)}·${fmtN(r.W, 2)} + ${fmtN(r.P, 4)}·${fmtN(r.Y, 2)})` }, ` = ${fmtN(r.t_req_noCA, 3)} mm`],
+      },
+      {
+        label: 't_req_total = t_req + CA', ref: '',
+        segs: [`t_req_total = ${fmtN(r.t_req_noCA, 3)} + ${fmtN(r.ca, 2)} = ${fmtN(r.t_req_total, 3)} mm`],
+      },
+      {
+        label: 'MAWP (no CA, current) = 2 · S · E · W · t_meas / (D - 2 · Y · t_meas)', ref: '[B31.3 304.1.2]',
+        segs: ['MAWP = ', { num: `2 · ${fmtN(r.S, 1)}·${fmtN(r.E, 2)}·${fmtN(r.W, 2)}·${fmtN(r.t_meas, 2)}`, den: `${fmtN(r.D, 2)} - 2·${fmtN(r.Y, 2)}·${fmtN(r.t_meas, 2)}` }, ` = ${fmtN(r.mawp_no, 2)} ${r.pUnit}`],
+      },
+      {
+        label: 'ERF (no CA, current) = P / MAWP', ref: '',
+        segs: ['ERF = ', { num: `${fmtN(r.P_input, 2)}`, den: `${fmtN(r.mawp_no, 2)}` }, ` = ${fmtN(erf_no, 3)}`],
+      },
+      {
+        label: 'MAWP (with CA reserved) = 2 · S · E · W · t / (D - 2 · Y · t),  t = max(0, t_meas - CA)', ref: '',
+        segs: [`t = ${fmtN(t_use_with, 2)} mm,  MAWP = `, { num: `2 · ${fmtN(r.S, 1)}·${fmtN(r.E, 2)}·${fmtN(r.W, 2)}·${fmtN(t_use_with, 2)}`, den: `${fmtN(r.D, 2)} - 2·${fmtN(r.Y, 2)}·${fmtN(t_use_with, 2)}` }, ` = ${fmtN(r.mawp_with, 2)} ${r.pUnit}`],
+      },
+      {
+        label: 'ERF (with CA reserved) = P / MAWP', ref: '',
+        segs: ['ERF = ', { num: `${fmtN(r.P_input, 2)}`, den: `${fmtN(r.mawp_with, 2)}` }, ` = ${fmtN(erf_with, 3)}`],
+      },
+    ];
+    if (r.CR > 0 && r.remainingLife !== null) {
+      eqRows.push({
+        label: 'Remaining life = (t_meas - t_req_total) / CR', ref: '',
+        segs: ['Life = ', { num: `${fmtN(r.t_meas, 2)} - ${fmtN(r.t_req_total, 3)}`, den: `${fmtN(r.CR, 3)}` }, ` = ${fmtN(r.remainingLife, 2)} years`],
+      });
+    }
+    const rowHeight = (rw) => 4 + (rw.segs.some(s => typeof s !== 'string') ? 12.4 : 6) + 3;
+    const totalEqH = eqRows.reduce((sum, rw) => sum + rowHeight(rw), 0);
+    ensure(26 + Math.min(totalEqH, 120)); // keep the title with at least the first equations
+    section('Governing Equations (Substituted)');
+    eqRows.forEach(rw => {
+      ensure(rowHeight(rw));
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(7.5); doc.setTextColor('#475569');
+      doc.text(rw.label, M, y);
+      if (rw.ref) {
+        doc.setFont('GoogleSans', 'normal'); doc.setTextColor('#94a3b8');
+        doc.text(rw.ref, PW - M, y, { align: 'right' });
+      }
+      y += 4;
+      const consumed = drawFractionRow(rw.segs, M, y, { fontSize: 8.5, font: 'courier' });
+      y += consumed + 3;
+    });
+    y += 1;
+
+    // --- PCC-2 recommendation (shared paAdvisorItems — same content as the workbench) ---
+    section('ASME PCC-2 Repair Recommendation');
+    doc.setFontSize(8);
+    paAdvisorItems(r).forEach(item => {
+      const leadText = item.title ? `${item.title} ` : '';
+      const bodyLines = doc.splitTextToSize(`• ${leadText}${item.body}`, CW - 2);
+      ensure(bodyLines.length * 3.6 + item.sub.length * 3.6 + 2);
+      doc.setFont('GoogleSans', 'normal'); doc.setTextColor(PDF_TEXT);
+      doc.text(bodyLines, M, y);
+      y += bodyLines.length * 3.6;
+      item.sub.forEach(s => {
+        const subLines = doc.splitTextToSize(`    - ${s}`, CW - 6);
+        ensure(subLines.length * 3.6);
+        doc.text(subLines, M + 2, y);
+        y += subLines.length * 3.6;
+      });
+      y += 1.5;
+    });
+    y += 3;
+
+    // --- scope & limitations (assessment-scoped disclaimer) ---
+    doc.setFont('GoogleSans', 'italic'); doc.setFontSize(7.5);
+    const scopeLines = doc.splitTextToSize(PA_SCOPE_TEXT, CW);
+    ensure(14 + scopeLines.length * 3.3 + 4); // keep the title with its text
+    section('Scope & Limitations');
+    doc.setFont('GoogleSans', 'italic'); doc.setFontSize(7.5); doc.setTextColor('#475569');
+    doc.text(scopeLines, M, y);
+    doc.setTextColor(PDF_TEXT);
+    y += scopeLines.length * 3.3 + 6;
+  } else if (assess) {
+    // legacy snapshot whose inputs can't re-compute: fall back to its saved results
+    const r = assess.results || {};
     section('ASME B31.3 Assessment (Latest)');
     row('Result', r.status);
-    row('ERF (with CA)', fmtN(r.erf_with, 3));
+    row('ERF (no CA — current)', fmtN(erfNo(r), 3));
     row('Required Thk. incl. CA', r.t_req_total != null ? `${fmtN(r.t_req_total, 3)} mm` : null);
     row('Measured Thickness', r.t_meas != null ? `${fmtN(r.t_meas, 2)} mm` : null);
     row('Remaining Margin', r.margin != null ? `${fmtN(r.margin, 3)} mm` : null);
-    row('MAWP (with CA)', r.mawp_with != null ? `${fmtN(r.mawp_with, 2)} ${r.pUnit || ''}` : null);
+    row('MAWP (no CA — current)', r.mawp_no != null ? `${fmtN(r.mawp_no, 2)} ${r.pUnit || ''}` : null);
     if (r.remainingLife != null) row('Est. Remaining Life', `${fmtN(r.remainingLife, 1)} years`);
-    row('Assessed By', a.created_by_email);
-    row('Assessed At', fmtDateTime(a.created_at));
-    if (currentAssessments.length > 1)
-      row('Note', `${currentAssessments.length} assessments recorded; latest shown. Full detail in Pipe Assessor.`);
+    row('Assessed By', assess.created_by_email);
+    row('Assessed At', fmtDateTime(assess.created_at));
     y += 4;
   }
 
@@ -3340,7 +4780,7 @@ async function buildFindingPdf() {
       doc.rect(M, y, w, h);
       y += h + 4;
       figNum++;
-      doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(PDF_MUTED);
+      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(7.5); doc.setTextColor(PDF_MUTED);
       doc.text(`Figure ${figNum}: Satellite view of the finding location (pin marks recorded coordinates)`, PW / 2, y, { align: 'center' });
       doc.setTextColor(PDF_TEXT);
       y += 6;
@@ -3354,7 +4794,7 @@ async function buildFindingPdf() {
       const items = photoData.filter(p => p.kind === kind);
       if (!items.length) continue;
       ensure(10);
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(PDF_MUTED);
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(8.5); doc.setTextColor(PDF_MUTED);
       doc.text(title.toUpperCase(), M, y + 3);
       y += 6;
       doc.setTextColor(PDF_TEXT);
@@ -3386,10 +4826,10 @@ async function buildFindingPdf() {
       const noteLines = h.note ? doc.splitTextToSize(h.note, CW - 8) : [];
       const hh = 5.5 + (noteLines.length ? noteLines.length * 4 + 2 : 0);
       ensure(hh);
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(PDF_TEXT);
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(8.5); doc.setTextColor(PDF_TEXT);
       doc.text(head, M, y + 3.5);
       if (noteLines.length) {
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(PDF_MUTED);
+        doc.setFont('GoogleSans', 'normal'); doc.setFontSize(8.5); doc.setTextColor(PDF_MUTED);
         doc.text(noteLines, M + 4, y + 8);
         doc.setTextColor(PDF_TEXT);
       }
@@ -3399,7 +4839,7 @@ async function buildFindingPdf() {
 
   ensure(12);
   y += 5;
-  doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor('#94a3b8');
+  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(7.5); doc.setTextColor('#94a3b8');
   doc.text('— End of Report —', PW / 2, y, { align: 'center' });
 
   if (doc.putTotalPages) doc.putTotalPages('{tp}');
@@ -3434,7 +4874,10 @@ async function exportFindingPdf() {
 
 async function exportSummaryPdf() {
   if (!window.jspdf) { notify('PDF engine not loaded — check your connection and reload.', true); return; }
-  const rows = sortFindings(applyFilters(findings));
+  // A non-empty selection (checkboxes in the register) narrows the report to just those
+  // findings; with nothing selected it falls back to the whole filtered set, as before.
+  const filtered = sortFindings(applyFilters(findings));
+  const rows = selectedIds.size ? filtered.filter(f => selectedIds.has(f.id)) : filtered;
   if (!rows.length) { notify('No findings to summarize with the current filters.', true); return; }
   const btn = $('btnSummaryPdf');
   setBusy(btn, true, 'Building…');
@@ -3454,35 +4897,57 @@ async function exportSummaryPdf() {
 async function buildSummaryPdf(rows) {
   {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-    const PW = 210, PH = 297, M = 14;
-    const HEADER_H = 18, FOOTER_H = 16;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+    registerGoogleSansFonts(doc); // asset/shared.js — use doc.setFont('GoogleSans', ...) below
+    const PW = 297, PH = 210, M = 12; // landscape A4 — extra width for the Map + Photo columns
+    const HEADER_H = 13, FOOTER_H = 14;
     const DANGER = '#dc2626';
     const now = new Date();
     const logo = (typeof OR_LOGO_DATAURL !== 'undefined' && OR_LOGO_DATAURL) || await fetchAsDataUrl('asset/RGB_OR_Full color.png', 3000);
     const logoIm = logo ? await loadImg(logo) : null;
 
     const term = filters.terminal || 'All terminals';
-    const stat = filters.status === '__overdue' ? 'Overdue only' : (filters.status || 'All statuses');
+    const stat = filters.status === '__overdue' ? 'Overdue only'
+      : filters.status === '__complete' ? 'Complete only'
+      : (filters.status || 'All statuses');
     const cnt = (s) => rows.filter(f => f.status === s).length;
     const overdue = rows.filter(isOverdue).length;
 
-    // Same header/footer chrome as the finding & calculator reports.
+    // Pre-fetch a small map + the earliest "as found" photo per row. autoTable's didDrawCell
+    // runs synchronously during table layout, so every async image fetch has to be resolved
+    // before doc.autoTable() is called — there is no way to await inside it. One photo only,
+    // even if a finding has several (per design: keep each row a fixed, predictable height).
+    const MAP_PX = { w: 240, h: 150 };
+    const [mapImgs, photoImgs] = await Promise.all([
+      Promise.all(rows.map(f => (f.lat != null && f.lng != null) ? composeMapPng(f.lat, f.lng, 16, MAP_PX.w, MAP_PX.h) : null)),
+      Promise.all(rows.map(async f => {
+        const p = photoThumbs[f.id];
+        if (!p) return null;
+        const durl = await fetchAsDataUrl(photoUrl(p.storage_path), 6000);
+        if (!durl) return null;
+        const im = await loadImg(durl);
+        return im ? { dataUrl: durl, ratio: im.naturalWidth / im.naturalHeight } : null;
+      }))
+    ]);
+
+    // Same header/footer chrome as the finding & calculator reports, compressed to a shorter
+    // band (HEADER_H=13 vs the portrait reports' 18 — this report has no title/date subline
+    // worth the extra height, so logo + title share one compact row instead of two).
     function chrome() {
-      const textOR = () => { doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(PDF_NAVY); doc.text('OR', M, 12); };
-      if (logoIm) { const lw = 26, lh = 26 * logoIm.naturalHeight / logoIm.naturalWidth; try { doc.addImage(logo, 'PNG', M, 3, lw, lh); } catch (_) { textOR(); } }
+      const textOR = () => { doc.setFont('GoogleSans', 'bold'); doc.setFontSize(11); doc.setTextColor(PDF_NAVY); doc.text('OR', M, 8.5); };
+      if (logoIm) { const lh = 7.5, lw = lh * logoIm.naturalWidth / logoIm.naturalHeight; try { doc.addImage(logo, 'PNG', M, 2.5, lw, lh); } catch (_) { textOR(); } }
       else textOR();
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(PDF_NAVY);
-      doc.text('PIPING FINDINGS SUMMARY', PW - M, 8.5, { align: 'right' });
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor('#64748b');
-      doc.text(`${term}  ·  ${stat}  ·  ${paFmtDate(now)}`, PW - M, 13.5, { align: 'right' });
-      doc.setDrawColor(PDF_NAVY); doc.setLineWidth(0.8); doc.line(M, HEADER_H - 1, PW - M, HEADER_H - 1);
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(10); doc.setTextColor(PDF_NAVY);
+      doc.text('PIPING FINDINGS SUMMARY', PW - M, 6.5, { align: 'right' });
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(7); doc.setTextColor('#64748b');
+      doc.text(`${term}  ·  ${stat}  ·  ${paFmtDate(now)}`, PW - M, 10.5, { align: 'right' });
+      doc.setDrawColor(PDF_NAVY); doc.setLineWidth(0.6); doc.line(M, HEADER_H - 1, PW - M, HEADER_H - 1);
 
       doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2); doc.line(M, PH - FOOTER_H, PW - M, PH - FOOTER_H);
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor('#64748b');
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(7.5); doc.setTextColor('#64748b');
       doc.text('Piping integrity — findings summary', M, PH - FOOTER_H + 4);
       doc.text(`Page ${doc.internal.getNumberOfPages()} of {tp}`, PW / 2, PH - FOOTER_H + 4, { align: 'center' });
-      doc.text(`Generated ${paFmtDate(now)} ${now.toLocaleTimeString()}`, PW - M, PH - FOOTER_H + 4, { align: 'right' });
+      doc.text(`Generated ${paFmtDateTime(now)}`, PW - M, PH - FOOTER_H + 4, { align: 'right' });
       doc.setFontSize(6.5); doc.setTextColor('#94a3b8');
       doc.text('Central and Eastern Engineering and Maintenance Division — PTT Oil and Retail Business Public Company Limited', PW / 2, PH - FOOTER_H + 9, { align: 'center' });
       doc.setTextColor(PDF_TEXT);
@@ -3490,32 +4955,107 @@ async function buildSummaryPdf(rows) {
 
     chrome();
     let y = HEADER_H + 8;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(PDF_TEXT);
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(9); doc.setTextColor(PDF_TEXT);
     doc.text(`${rows.length} findings   ·   Open ${cnt('Open')}   ·   Monitoring ${cnt('Monitoring')}   ·   Repair Planned ${cnt('Repair Planned')}   ·   Repaired ${cnt('Repaired')}`, M, y);
-    if (overdue) { doc.setFont('helvetica', 'bold'); doc.setTextColor(DANGER); doc.text(`${overdue} OVERDUE`, PW - M, y, { align: 'right' }); doc.setTextColor(PDF_TEXT); doc.setFont('helvetica', 'normal'); }
+    if (overdue) { doc.setFont('GoogleSans', 'bold'); doc.setTextColor(DANGER); doc.text(`${overdue} OVERDUE`, PW - M, y, { align: 'right' }); doc.setTextColor(PDF_TEXT); doc.setFont('GoogleSans', 'normal'); }
     y += 6;
 
-    const body = rows.map((f, i) => ([
-      String(i + 1), f.terminal, f.pipe_tag, f.finding_type, f.status, f.severity || '—',
-      (dueDateOf(f) ? paFmtDate(dueDateOf(f)) : '—') + (isOverdue(f) ? '  (OVERDUE)' : ''),
-      (ageDays(f) != null ? ageDays(f) + 'd' : '—'), f.sap_notification || '—'
-    ]));
+    // Type column carries the finding type plus, on their own wrapped lines, the Location
+    // Description and Anomaly Description (when present) — folded in here rather than as two
+    // more narrow columns, which would squeeze Map/Photo below a useful size.
+    const body = rows.map((f, i) => {
+      const typeLines = [f.finding_type];
+      if (f.location_desc) typeLines.push(`Loc: ${f.location_desc}`);
+      if (f.description) typeLines.push(`Anomaly: ${f.description}`);
+      return [
+        String(i + 1), f.terminal, f.pipe_tag, typeLines.join('\n'), f.status, f.severity || '—',
+        (dueDateOf(f) ? paFmtDate(dueDateOf(f)) : '—') + (isOverdue(f) ? '  (OVERDUE)' : ''),
+        (ageDays(f) != null ? ageDays(f) + 'd' : '—'), '', ''
+      ];
+    });
+
+    // Fit an image into a cell, letterboxed and centered, capped by BOTH the column width and
+    // the fixed row height (minCellHeight below) — without this a portrait phone photo would
+    // blow the row far taller than its map/text neighbors.
+    function drawFitted(dataUrl, format, ratio, cell) {
+      const pad = 1.2;
+      const availW = cell.width - pad * 2, availH = cell.height - pad * 2;
+      let w = availW, h = w / ratio;
+      if (h > availH) { h = availH; w = h * ratio; }
+      const x = cell.x + (cell.width - w) / 2, y2 = cell.y + (cell.height - h) / 2;
+      try { doc.addImage(dataUrl, format, x, y2, w, h); } catch (_) {}
+    }
+    function drawEmptyNote(text, cell) {
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(7); doc.setTextColor('#94a3b8');
+      doc.text(text, cell.x + cell.width / 2, cell.y + cell.height / 2, { align: 'center', baseline: 'middle' });
+      doc.setTextColor(PDF_TEXT);
+    }
 
     doc.autoTable({
       startY: y,
-      head: [['#', 'Terminal', 'Pipe Tag', 'Type', 'Status', 'Sev.', 'Due', 'Age', 'SAP Notif.']],
+      head: [['#', 'Terminal', 'Pipe Tag', 'Type', 'Status', 'Sev.', 'Due', 'Age', 'Map', 'Photo']],
       body,
       theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 1.6, lineColor: '#e2e8f0', lineWidth: 0.1, textColor: '#0f172a', overflow: 'linebreak' },
-      headStyles: { fillColor: PDF_NAVY, textColor: '#ffffff', fontStyle: 'bold', fontSize: 8 },
+      styles: { font: 'GoogleSans', fontSize: 8, cellPadding: 1.6, lineColor: '#e2e8f0', lineWidth: 0.1, textColor: '#0f172a', overflow: 'linebreak', minCellHeight: 26, valign: 'top' },
+      headStyles: { fillColor: PDF_NAVY, textColor: '#ffffff', fontStyle: 'bold', fontSize: 8, valign: 'middle', cellPadding: { top: 2.2, right: 1.6, bottom: 2.2, left: 1.6 }, minCellHeight: 0 },
       alternateRowStyles: { fillColor: '#f8fafc' },
-      columnStyles: { 0: { cellWidth: 8, halign: 'right' }, 2: { fontStyle: 'bold' } },
+      columnStyles: {
+        0: { cellWidth: 8, halign: 'right', valign: 'middle' },
+        1: { cellWidth: 17, valign: 'middle' },
+        2: { cellWidth: 42, fontStyle: 'bold', valign: 'middle' }, // long tags (e.g. 953-P-009-10"-D1101-ET-80) need real room
+        4: { cellWidth: 20, valign: 'middle' },
+        5: { cellWidth: 18, valign: 'middle' }, // "Medium" needs more room than the other two severities
+        6: { cellWidth: 22, valign: 'middle' },
+        7: { cellWidth: 11, valign: 'middle' },
+        8: { cellWidth: 32 },
+        9: { cellWidth: 32 }
+        // column 3 (Type + Loc/Anomaly sub-lines) is left unset -> autoTable gives it whatever
+        // width remains; text is drawn manually in didDrawCell so its own valign doesn't matter.
+      },
       margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
       didParseCell: (data) => {
         if (data.section !== 'body') return;
         const f = rows[data.row.index];
         if (data.column.index === 4) { data.cell.styles.textColor = STATUS_COLORS[f.status] || '#334155'; data.cell.styles.fontStyle = 'bold'; }
         if (data.column.index === 6 && isOverdue(f)) { data.cell.styles.textColor = DANGER; data.cell.styles.fontStyle = 'bold'; }
+      },
+      didDrawCell: (data) => {
+        if (data.section !== 'body') return;
+        const i = data.row.index;
+        if (data.column.index === 8) {
+          const img = mapImgs[i];
+          if (img) drawFitted(img, 'JPEG', MAP_PX.w / MAP_PX.h, data.cell);
+          else drawEmptyNote('No location', data.cell);
+        }
+        if (data.column.index === 9) {
+          const ph = photoImgs[i];
+          if (ph) drawFitted(ph.dataUrl, 'JPEG', ph.ratio, data.cell);
+          else drawEmptyNote('No photo', data.cell);
+        }
+        // Re-draw the Type cell manually: line 1 (finding type) bold/dark, the Loc:/Anomaly:
+        // sub-lines muted/smaller — autoTable has no per-line style within one cell.
+        if (data.column.index === 3) {
+          const f = rows[i];
+          const lines = data.cell.text;
+          // Use the fill color autoTable itself already computed for this cell (via
+          // alternateRowStyles) rather than re-deriving odd/even here — a hand-rolled i%2 can
+          // disagree with autoTable's own row parity (e.g. across a page break), which is why
+          // the Type column's stripe was drifting out of sync with the rest of the row.
+          // Inset the repaint rect by half the grid line width (autoTable centers its border
+          // stroke on the cell boundary) so this fill never overpaints the border itself — that
+          // was why the Type column's left/right borders looked thinner than every other column's.
+          const inset = 0.15;
+          doc.setFillColor(data.cell.styles.fillColor || '#ffffff');
+          doc.rect(data.cell.x + inset, data.cell.y + inset, data.cell.width - inset * 2, data.cell.height - inset * 2, 'F');
+          let ty = data.cell.y + 3.6;
+          const tx = data.cell.x + data.cell.styles.cellPadding;
+          doc.setFont('GoogleSans', 'bold'); doc.setFontSize(8); doc.setTextColor(PDF_TEXT);
+          doc.text(f.finding_type, tx, ty);
+          ty += 3.6;
+          doc.setFont('GoogleSans', 'normal'); doc.setFontSize(7); doc.setTextColor('#64748b');
+          lines.slice(1).forEach(line => { doc.text(line, tx, ty); ty += 3.2; });
+          doc.setTextColor(PDF_TEXT);
+        }
       },
       didDrawPage: () => chrome()
     });
@@ -3527,8 +5067,22 @@ async function buildSummaryPdf(rows) {
 
 /* ---------------- init ---------------- */
 
+// The app header is itself position:sticky (theme.css) and its height varies responsively
+// (subtitle hidden <640px, smaller logo <700px, font metrics, etc). Sticky elements further
+// down the page (the detail toolbar) need to stack BELOW it, not collide at top:0 — measure
+// the real height into a custom property so their CSS can offset by it exactly.
+function syncHeaderHeight() {
+  const header = document.querySelector('body > header');
+  if (header) document.documentElement.style.setProperty('--app-header-h', header.offsetHeight + 'px');
+}
+
 function initApp() {
-  initTheme();
+  syncHeaderHeight();
+  window.addEventListener('resize', syncHeaderHeight);
+  window.addEventListener('resize', () => {
+    document.querySelectorAll('.view.active .seg-row').forEach(row => positionSegPill(row, false));
+  });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncHeaderHeight);
 
   if (!window.supabase) {
     show('viewLogin');
@@ -3569,11 +5123,17 @@ function initApp() {
     btn.addEventListener('click', () => {
       $('segTerminal').querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+      positionSegPill($('segTerminal'), true);
       filters.terminal = btn.dataset.t;
       renderList();
     });
   });
   $('filStatus').addEventListener('change', () => { filters.status = val('filStatus'); renderList(); });
+  $('kpiRingCard').addEventListener('click', () => {
+    filters.status = '__complete';
+    $('filStatus').value = '__complete';
+    renderList();
+  });
   $('filType').addEventListener('change', () => { filters.type = val('filType'); renderList(); });
   $('filSearch').addEventListener('input', () => {
     filters.q = val('filSearch');
@@ -3581,13 +5141,48 @@ function initApp() {
     renderTable(rows);
     renderMap(rows);
   });
+  $('btnResetFilters').addEventListener('click', () => {
+    filters.terminal = ''; filters.status = ''; filters.type = ''; filters.q = '';
+    $('segTerminal').querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.t === ''));
+    positionSegPill($('segTerminal'), true);
+    $('filStatus').value = '';
+    $('filType').value = '';
+    $('filSearch').value = '';
+    renderList();
+  });
+  // Register photo thumbnails: remembered on/off (localStorage), applied on load before the
+  // first render so the register never flashes photos-on then off.
+  const applyPhotoToggle = (hidden) => {
+    document.body.classList.toggle('hide-row-photos', hidden);
+    $('btnTogglePhotos').textContent = hidden ? 'Show photos' : 'Hide photos';
+    $('btnTogglePhotos').setAttribute('aria-pressed', String(!hidden));
+  };
+  applyPhotoToggle(localStorage.getItem('hideRowPhotos') === '1');
+  $('btnTogglePhotos').addEventListener('click', () => {
+    const hidden = !document.body.classList.contains('hide-row-photos');
+    localStorage.setItem('hideRowPhotos', hidden ? '1' : '0');
+    applyPhotoToggle(hidden);
+  });
   $('btnCsv').addEventListener('click', exportCsv);
   $('btnImport').addEventListener('click', openImportDialog);
-  $('importCancel').addEventListener('click', () => $('importDlg').close());
+  $('importCancel').addEventListener('click', () => closeDialog($('importDlg')));
   $('importTemplateLink').addEventListener('click', (e) => { e.preventDefault(); downloadImportTemplate(); });
   $('importFile').addEventListener('change', (e) => { if (e.target.files[0]) parseImportFile(e.target.files[0]); });
   $('importConfirm').addEventListener('click', doImport);
+
+  $('btnLineList').addEventListener('click', openLineListManageDialog);
+  $('lineListManageClose').addEventListener('click', () => closeDialog($('lineListManageDlg')));
+  $('lineListManageImportBtn').addEventListener('click', openLineListImportDialog);
+  $('lineListImportCancel').addEventListener('click', () => closeDialog($('lineListImportDlg')));
+  $('lineListImportTemplateLink').addEventListener('click', (e) => { e.preventDefault(); downloadLineListTemplate(); });
+  $('lineListImportFile').addEventListener('change', (e) => { if (e.target.files[0]) parseLineListImportFile(e.target.files[0]); });
+  $('lineListImportConfirm').addEventListener('click', doLineListImport);
   $('btnSummaryPdf').addEventListener('click', exportSummaryPdf);
+  $('chkSelectAll').addEventListener('change', (e) => {
+    lastRenderedRows.forEach(f => { if (e.target.checked) selectedIds.add(f.id); else selectedIds.delete(f.id); });
+    renderTable(lastRenderedRows);
+  });
+  $('btnSelClear').addEventListener('click', () => { selectedIds.clear(); renderTable(lastRenderedRows); });
 
   // map legend generated from STATUS_COLORS so pins and legend can never drift apart
   $('mapLegend').innerHTML = Object.entries(STATUS_COLORS)
@@ -3597,6 +5192,7 @@ function initApp() {
 
   // form
   initAssessment();
+  initQuickCalc();
   $('btnSave').addEventListener('click', () => saveForm(false));
   $('btnSaveAnother').addEventListener('click', () => saveForm(true));
   $('fTag').addEventListener('change', applyTagMemory);
@@ -3615,23 +5211,32 @@ function initApp() {
   // detail
   $('btnEdit').addEventListener('click', () => { if (current) location.hash = '#/edit/' + current.id; });
   $('btnPdf').addEventListener('click', exportFindingPdf);
-  $('btnAssess').addEventListener('click', () => {
-    if (current) location.href = 'calculator.html?finding=' + encodeURIComponent(current.id);
-  });
+  // the full assessment workbench lives on the edit form now (the calculator page is retired)
+  $('btnAssess').addEventListener('click', () => { if (current) location.hash = '#/edit/' + current.id; });
   // clicking a group's "+ Add" also makes that group the target for the next Ctrl+V paste
   $('btnAddFound').addEventListener('click', () => { photoPasteTarget = 'found'; $('fileFound').click(); });
   $('btnAddRepaired').addEventListener('click', () => { photoPasteTarget = 'repaired'; $('fileRepaired').click(); });
   $('fileFound').addEventListener('change', (e) => { addDetailPhotos([...e.target.files], 'found'); e.target.value = ''; });
   $('fileRepaired').addEventListener('change', (e) => { addDetailPhotos([...e.target.files], 'repaired'); e.target.value = ''; });
 
-  // Ctrl+V paste of an image: on the new-finding form it queues an as-found photo; on a finding's
-  // detail page it uploads to whichever group's "+ Add" was last used (defaults to As Found).
+  // Same wiring for the edit form's Photographic Record panel — uploads against editingId
+  // explicitly (not current.id: `current` may point at a different finding than the one being
+  // edited if the user navigated straight from the dashboard list rather than via its detail page).
+  $('btnAddFound2').addEventListener('click', () => { photoPasteTarget = 'found'; $('fileFound2').click(); });
+  $('btnAddRepaired2').addEventListener('click', () => { photoPasteTarget = 'repaired'; $('fileRepaired2').click(); });
+  $('fileFound2').addEventListener('change', (e) => { addDetailPhotos([...e.target.files], 'found', editingId); e.target.value = ''; });
+  $('fileRepaired2').addEventListener('change', (e) => { addDetailPhotos([...e.target.files], 'repaired', editingId); e.target.value = ''; });
+  $('fileDlgRepaired').addEventListener('change', (e) => { addDetailPhotos([...e.target.files], 'repaired'); e.target.value = ''; });
+
+  // Ctrl+V paste of an image: on a new finding it queues an as-found photo; on the edit form
+  // (existing finding) and the detail page it uploads immediately to whichever group's "+ Add"
+  // was last used (defaults to As Found).
   document.addEventListener('paste', onPastePhoto);
 
   // dialogs
-  $('dlgCancel').addEventListener('click', () => $('statusDlg').close());
+  $('dlgCancel').addEventListener('click', () => closeDialog($('statusDlg')));
   $('dlgConfirm').addEventListener('click', confirmStatusChange);
-  $('lightbox').addEventListener('click', () => $('lightbox').close());
+  $('lightbox').addEventListener('click', () => closeDialog($('lightbox')));
 }
 
 document.addEventListener('DOMContentLoaded', initApp);
