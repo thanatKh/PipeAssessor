@@ -1,0 +1,28 @@
+{
+  "name": "pipe-assessor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pipe Assessor — Findings Tracker & ASME B31.3 wall-thickness workbench (Vite + Vanilla TypeScript).",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.49.4",
+    "basecoat-css": "1.0.1",
+    "jspdf": "2.5.2",
+    "jspdf-autotable": "3.8.4",
+    "leaflet": "1.9.4",
+    "xlsx": "0.18.5"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.12",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0"
+  }
+}

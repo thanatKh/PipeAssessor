@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+
+    /* Gradual, engine-first typing (Phase 1): strict on, but implicit-any tolerated so the
+       view/DOM modules can be ported 1:1 without annotating every local up front. The engine
+       (src/engine/compute.ts) and data models (src/types) are genuinely typed. Tighten later. */
+    "strict": true,
+    "noImplicitAny": false,
+
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "useDefineForClassFields": true,
+    "noEmit": true,
+    "types": ["vite/client"]
+  },
+  "include": ["src"]
+}
