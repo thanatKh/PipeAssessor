@@ -8,7 +8,7 @@
    are dynamic-imported at their call sites — never in the eager entry chunk.
    Extracted from the app monolith.
    ============================================================================ */
-import { $, val, esc, notify, todayISO, isOverdue, dueDateOf, openDialog, closeDialog, setBusy } from '../core/dom';
+import { $, val, esc, notify, todayISO, isOverdue, dueDateOf, openDialog, closeDialog, setBusy, fmtDate, fmtDateTime } from '../core/dom';
 import { STATUS_COLORS } from '../core/constants';
 import { computeB313, PA_PIPE_DATABASE } from '../engine/compute';
 import { paFmtDate, paFmtDateTime } from '../engine/format';

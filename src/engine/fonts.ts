@@ -71,11 +71,23 @@ async function ensureThaiFont(): Promise<string> {
   return thaiFontB64;
 }
 
-/* Registers NotoSansThai into the jsPDF instance and wraps doc.text so any string
-   containing Thai codepoints (U+0E01-U+0E5B) is drawn with it instead of whatever
-   font is currently set — Latin/numeric-only strings are completely unaffected,
-   so none of the app's 49 existing doc.text() call sites need to change. Call
-   once per doc, after registerGoogleSansFonts(doc). */
+// text can be a string OR an array of strings (doc.text accepts pre-wrapped lines from
+// splitTextToSize) — treat any Thai codepoint anywhere in it as "this call needs the Thai font".
+function containsThai(text: any): boolean {
+  if (typeof text === 'string') return THAI_RANGE.test(text);
+  if (Array.isArray(text)) return text.some(t => typeof t === 'string' && THAI_RANGE.test(t));
+  return false;
+}
+
+/* Registers NotoSansThai into the jsPDF instance and wraps doc.text + doc.splitTextToSize so any
+   string (or array of strings) containing Thai codepoints (U+0E01-U+0E5B) is measured/drawn with
+   it instead of whatever font is currently set — Latin/numeric-only strings are completely
+   unaffected, so none of the app's ~49 existing doc.text()/splitTextToSize() call sites need to
+   change. Both wrappers matter: splitTextToSize measures glyph widths at CALL time to decide line
+   breaks, so if it runs under GoogleSans (which has zero Thai glyphs) the wrapped lines are already
+   wrong by the time doc.text sees them — patching text() alone silently drops Thai text pre-wrapped
+   this way (row() in pdf.ts is exactly this pattern). Call once per doc, after
+   registerGoogleSansFonts(doc). */
 export async function registerThaiPdfFont(doc: any): Promise<void> {
   const b64 = await ensureThaiFont();
   doc.addFileToVFS('NotoSansThai.ttf', b64);
@@ -83,6 +95,7 @@ export async function registerThaiPdfFont(doc: any): Promise<void> {
   doc.addFont('NotoSansThai.ttf', 'NotoSansThai', 'bold'); // single weight; jsPDF needs a 'bold' entry to satisfy setFont('...', 'bold') calls
 
   const originalText = doc.text.bind(doc);
+  const originalSplit = doc.splitTextToSize.bind(doc);
   const originalSetFont = doc.setFont.bind(doc);
   let currentFont = 'GoogleSans';
   let currentStyle = 'normal';
@@ -90,14 +103,14 @@ export async function registerThaiPdfFont(doc: any): Promise<void> {
     if (name !== 'NotoSansThai') { currentFont = name; currentStyle = style || 'normal'; }
     return originalSetFont(name, style);
   };
-  doc.text = (text: any, ...rest: any[]) => {
-    const isThai = typeof text === 'string' && THAI_RANGE.test(text);
-    if (isThai) {
-      originalSetFont('NotoSansThai', currentStyle === 'bold' ? 'bold' : 'normal');
-      const result = originalText(text, ...rest);
-      originalSetFont(currentFont, currentStyle);
-      return result;
-    }
-    return originalText(text, ...rest);
+  const withThaiFont = (fn: () => any) => {
+    originalSetFont('NotoSansThai', currentStyle === 'bold' ? 'bold' : 'normal');
+    const result = fn();
+    originalSetFont(currentFont, currentStyle);
+    return result;
   };
+  doc.text = (text: any, ...rest: any[]) =>
+    containsThai(text) ? withThaiFont(() => originalText(text, ...rest)) : originalText(text, ...rest);
+  doc.splitTextToSize = (text: any, ...rest: any[]) =>
+    containsThai(text) ? withThaiFont(() => originalSplit(text, ...rest)) : originalSplit(text, ...rest);
 }
