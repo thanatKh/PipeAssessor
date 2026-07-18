@@ -38,63 +38,9 @@ L.Icon.Default.mergeOptions({ iconRetinaUrl: markerIcon2x, iconUrl: markerIconUr
 
 const SUPABASE_URL = PA_SUPABASE_URL;  // from asset/shared.js — single source for both pages
 const SUPABASE_KEY = PA_SUPABASE_KEY;
-const PHOTO_BUCKET = 'finding-photos';
-
-const FINDING_TYPES = [
-  'External Corrosion',
-  'Internal Corrosion',
-  'CUI (Corrosion Under Insulation)',
-  'CUS (Corrosion Under Support)',
-  'Coating / Painting Damage',
-  'Pipe Support Defect',
-  'Leak',
-  'Dent / Mechanical Damage',
-  'Other'
-];
-
-// Short axis labels for the findings-by-type radar (must fit at ~9px around a small chart).
-const FINDING_TYPE_SHORT = {
-  'External Corrosion': 'Ext Corr',
-  'Internal Corrosion': 'Int Corr',
-  'CUI (Corrosion Under Insulation)': 'CUI',
-  'CUS (Corrosion Under Support)': 'CUS',
-  'Coating / Painting Damage': 'Coating',
-  'Pipe Support Defect': 'Support',
-  'Leak': 'Leak',
-  'Dent / Mechanical Damage': 'Dent',
-  'Other': 'Other'
-};
-
-const STATUSES = ['Open', 'Monitoring', 'Repair Planned', 'Repaired', 'Closed'];
-const PHOTO_LIMIT_PER_KIND = 3; // As Found and After Repair each capped at 3 -> 6 total per finding
-
-const STATUS_META = {
-  'Open':           { cls: 'st-open' },
-  'Monitoring':     { cls: 'st-mon' },
-  'Repair Planned': { cls: 'st-plan' },
-  'Repaired':       { cls: 'st-rep' },
-  'Closed':         { cls: 'st-closed' }
-};
-
-// Dashboard-map pin fills — deliberately theme-independent fixed hex (drawn over satellite
-// imagery, whose background never changes with the app theme — same rationale as the PDF_*
-// constants in calculator.html). Single source: the legend is generated from this object too.
-const STATUS_COLORS = {
-  'Open':           '#dc2626',
-  'Monitoring':     '#d97706',
-  'Repair Planned': '#2563eb',
-  'Repaired':       '#059669',
-  'Closed':         '#64748b'
-};
-
-// Same default view as the calculator's site-location map.
-const DEFAULT_MAP_VIEW = { center: [13.097720, 100.887211], zoom: 14 };
-const SAT_TILES = {
-  url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-  attribution: 'Imagery (c) Esri, Maxar, Earthstar Geographics',
-  maxZoom: 19
-};
-
+import {
+  PHOTO_BUCKET, FINDING_TYPES, FINDING_TYPE_SHORT, STATUSES, PHOTO_LIMIT_PER_KIND, STATUS_META, STATUS_COLORS, DEFAULT_MAP_VIEW, SAT_TILES,
+} from './core/constants';
 // sb is imported from ./core/supabase (created once at module load).              // Supabase client
 let session = null;
 let findings = [];          // list cache
