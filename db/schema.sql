@@ -12,7 +12,7 @@ create table if not exists public.findings (
 
   -- identity
   terminal text not null check (terminal in ('KBY','SRC','BRP')),
-  pipe_tag text not null,
+  pipe_tag text,          -- optional: engineer assigns the Line No. later (findings are keyed by Location)
   pid_no text,
   service text,
   location_desc text,
@@ -44,6 +44,7 @@ create table if not exists public.findings (
   next_check_date date,  -- re-inspect-by date (used for overdue when Monitoring)
   sap_notification text, -- optional SAP PM notification no.
   sap_order text,        -- optional SAP PM order / work order no.
+  estimated_cost numeric,-- manual estimated repair cost (THB); rolls up into the outstanding-budget KPI
   repair_method text,    -- PCC-2 method / how it was repaired
   repaired_date date,
   closing_note text,
@@ -62,6 +63,10 @@ create index if not exists idx_findings_terminal on public.findings (terminal);
 -- Patch existing databases (the create-table above is skipped once the table exists, so new
 -- columns must be added explicitly; re-running this whole file is safe).
 alter table public.findings add column if not exists report_link text;
+-- Pipe Tag / Line No. is optional: operators record a finding by Location Description, an
+-- engineer assigns the Line No. later. (Idempotent — re-dropping NOT NULL is a no-op.)
+alter table public.findings alter column pipe_tag drop not null;
+alter table public.findings add column if not exists estimated_cost numeric;
 
 -- ---------------------------------------------------------------------------
 -- 2. finding_photos — photos live in the 'finding-photos' storage bucket;
@@ -127,8 +132,8 @@ create trigger trg_findings_touch
   for each row execute function public.touch_updated_at();
 
 -- ---------------------------------------------------------------------------
--- 6a. line_list — master pipe-tag reference (NPS/schedule/material + P&ID/
---    service/location), imported from Excel/CSV. Used only to pre-fill new
+-- 6a. line_list — master pipe-tag reference (terminal/NPS/schedule/material +
+--    P&ID/service), imported from Excel/CSV. Used only to pre-fill new
 --    findings; never referenced by a foreign key so importing/replacing it
 --    can never break existing findings. (Kept before section 6's RLS block,
 --    which enables RLS on this table — must exist first.)
@@ -137,12 +142,12 @@ create table if not exists public.line_list (
   id uuid primary key default gen_random_uuid(),
 
   pipe_tag text not null,
+  terminal text check (terminal in ('KBY','SRC','BRP')),
   nps text,              -- must match a PA_PIPE_DATABASE key, e.g. 2"
   schedule text,         -- must match a schedule key under that nps, e.g. 40
   material text,         -- must match a PA_MATERIALS[].code, e.g. A106B
   pid_no text,
   service text,
-  location_desc text,
 
   created_by uuid not null default auth.uid(),
   created_by_email text not null default coalesce(auth.jwt() ->> 'email', ''),
@@ -157,6 +162,11 @@ drop trigger if exists trg_line_list_touch on public.line_list;
 create trigger trg_line_list_touch
   before update on public.line_list
   for each row execute function public.touch_updated_at();
+
+-- Patch existing databases (line_list may already exist from a prior apply of this file
+-- without the terminal column / with the now-removed location_desc column).
+alter table public.line_list add column if not exists terminal text check (terminal in ('KBY','SRC','BRP'));
+alter table public.line_list drop column if exists location_desc;
 
 -- ---------------------------------------------------------------------------
 -- 6. Row Level Security — any logged-in user (you + inspectors) has full

@@ -722,7 +722,9 @@ function paCreateAssessView(root, opts) {
       return;
     }
 
-    const erf_with = res.mawp_with > 0 ? (res.P_input / res.mawp_with) : 9.99;
+    // mawp_with is null when the remaining wall is already at/below CA (no valid "with CA"
+    // thickness) — carry that through as a null ERF so both render as "n/a", not a pegged 9.99.
+    const erf_with = res.mawp_with == null ? null : (res.mawp_with > 0 ? (res.P_input / res.mawp_with) : 9.99);
     const erf_no = res.mawp_no > 0 ? (res.P_input / res.mawp_no) : 9.99;
 
     if (has('statusBox')) {
@@ -743,9 +745,9 @@ function paCreateAssessView(root, opts) {
       q('resTstruct').textContent = `${paFmt(res.t_struct)} mm${res.isCsRef ? ' (CS-only ref, unverified for this material)' : ''}`;
       q('resMargin').textContent = `${paFmt(res.margin, 3)} mm`;
       q('resPres').textContent = `${paFmt(res.P_input, 1)} ${res.pUnit}`;
-      q('resMawpWith').textContent = `${paFmt(res.mawp_with, 2)} ${res.pUnit}`;
+      q('resMawpWith').textContent = res.mawp_with == null ? 'n/a — wall below CA' : `${paFmt(res.mawp_with, 2)} ${res.pUnit}`;
       q('resMawpNoCA').textContent = `${paFmt(res.mawp_no, 2)} ${res.pUnit}`;
-      q('resErfWith').textContent = paFmt(erf_with, 3);
+      q('resErfWith').textContent = erf_with == null ? 'n/a' : paFmt(erf_with, 3);
       q('resErfNo').textContent = paFmt(erf_no, 3);
       q('resCa').textContent = `${paFmt(res.ca)} mm`;
       q('resCr').textContent = res.CR > 0 ? `${paFmt(res.CR, 2)} mm/year` : '—';

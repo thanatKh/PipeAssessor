@@ -5,11 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Pipe Assessor – Findings Tracker</title>
 
-  <!-- Google Fonts: Google Sans (UI) + JetBrains Mono (numerics/equations). Inter stays loaded
-       as a fallback in case Google Sans fails to load (offline, blocked CDN, etc.) -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- Fonts: Google Sans is registered as a web @font-face from the embedded base64 TTFs in
+       asset/shared.js (registerGoogleSansWebFont) — the whole UI uses it, offline-safe. The old
+       Google Fonts <link> is gone: the public API never actually served "Google Sans" (it fell
+       back to Inter), and JetBrains Mono is no longer used (all text is Google Sans now). -->
 
   <!-- Basecoat CSS (pinned) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/basecoat-css@1.0.1/dist/basecoat.cdn.min.css" />
@@ -100,10 +99,45 @@
 
     .req::after { content: " *"; color: var(--danger-color); }
 
+    /* muted "(engineer can add later)" note on an optional label */
+    .f-optnote { font-weight: 400; color: var(--text-light); text-transform: none; letter-spacing: 0; }
+
+    /* ============ Searchable combobox (Pipe Tag / Line No.) ============
+       position:fixed (not absolute) — .combo lives inside .panel, which uses
+       overflow:hidden to clip its own rounded corners; an absolutely-positioned menu was
+       being clipped to just the sliver of the card visible below the input (~2 rows) instead
+       of overlaying the rest of the page. Fixed positioning escapes that ancestor clip entirely;
+       initTagCombo() sets top/left/width from the input's getBoundingClientRect() on open. */
+    .combo { position: relative; }
+    .combo-menu {
+      position: fixed;
+      margin: 0;
+      padding: 4px;
+      list-style: none;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+      max-height: 360px;
+      overflow-y: auto;
+      z-index: 500;
+    }
+    .combo-menu[hidden] { display: none; }
+    .combo-item {
+      padding: 6px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .combo-item.active, .combo-item:hover { background: var(--button-ghost-hover); }
+    .combo-tag { font-family: 'Google Sans', sans-serif; font-size: 12.5px; color: var(--text-color); }
+    .combo-loc { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+    .combo-empty { padding: 6px 8px; font-size: 11px; color: var(--text-light); }
+    .combo-more { padding: 6px 8px; font-size: 10.5px; color: var(--text-light); border-top: 1px solid var(--card-border); margin-top: 4px; text-align: center; }
+
     .hint { font-size: 11px; color: var(--text-light); margin-top: 6px; }
 
     kbd {
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'Google Sans', sans-serif;
       font-size: 10px;
       padding: 1px 5px;
       border: 1px solid var(--card-border);
@@ -120,7 +154,12 @@
       margin-top: 6px;
     }
 
-    /* ============ Dashboard top: map left, KPI chips right ============ */
+    /* ============ Dashboard top: map left, KPI column right ============
+       Mutual max-height: align-items:stretch makes both columns match whichever is naturally
+       taller — the KPI column's own accumulated card heights (Ring+Budget pair, 6 chips, radar)
+       normally set that height, and the map (flex-grown, no fixed height) fills it. Individual
+       KPI cards inside the column stay content-sized (see .kpi-sidebar below) — only the
+       column's *aggregate* height participates in the stretch, not each card individually. */
     .dash-top {
       display: flex;
       gap: 14px;
@@ -132,21 +171,37 @@
       flex: 1 1 auto;
       min-width: 0;
       margin-bottom: 0;
+      display: flex;
+      flex-direction: column;
     }
 
-    /* ============ KPI sidebar: completion ring + chip grid, next to the map ============ */
+    .dash-top .dash-map-panel #dashMap { flex: 1 1 auto; }
+
+    /* ============ KPI column: natural-height cards stacked vertically ============
+       Ring + Budget sit side by side as a compact pair (both short); the 6 status chips follow
+       in a 2-col grid. The cards themselves are not stretched to fill extra space — the column's
+       total (sum of its cards + gaps) is simply read by the sibling map/radar panels via
+       align-items:stretch on .dash-top above. */
     .kpi-sidebar {
-      flex: 0 0 260px;
+      flex: 0 0 340px;
+      min-width: 0;
       display: flex;
       flex-direction: column;
       gap: 8px;
-      min-height: 0;
     }
 
-    .kpi-ring-card {
-      display: flex;
-      align-items: center;
-      gap: 12px;
+    /* Ring + Budget stacked full-width (not side-by-side) — each card spans the sidebar's full
+       width (equivalent to the old two 1fr columns combined), Ring on top, Budget below. */
+    .kpi-top-pair { display: flex; flex-direction: column; gap: 8px; }
+    /* All 6 status chips, 3 across x 2 rows. */
+    .kpi-row-bottom { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+    /* Budget KPI card — same card shell as the ring card, currency-sum content. Natural height
+       (see .dash-top comment) — content flows top to bottom instead of being vertically centered
+       in a forced-tall cell. */
+    .kpi-budget-card {
+      display: block;
+      width: 100%;
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 8px;
@@ -155,7 +210,70 @@
       cursor: pointer;
       font: inherit;
       color: var(--text-color);
-      flex: none;
+      outline: none; /* see .kpi-ring-card's reset — real outline re-added for :focus-visible only */
+    }
+    .kpi-budget-card:hover { border-color: var(--button-primary); }
+    .kpi-budget-card.active { border-color: var(--button-primary); box-shadow: 0 0 0 1px var(--button-primary); }
+    .kpi-budget-card:focus-visible { outline: 2px solid var(--button-primary); outline-offset: 2px; }
+    .kb-head { display: flex; flex-direction: column; gap: 2px; }
+    .kb-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); }
+    .kb-total { font-family: 'Google Sans', sans-serif; font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 700; color: var(--text-color); }
+    .kb-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .kb-sev { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 8px; }
+    .kb-sev span { font-size: 11px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; }
+    .kb-sev i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .kb-sev .kb-hi i { background: var(--danger-color); }
+    .kb-sev .kb-md i { background: var(--warn-color); }
+    .kb-sev .kb-lo i { background: var(--ok-color); }
+    .kb-sev b { font-family: 'Google Sans', sans-serif; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text-color); }
+
+    /* Findings-by-type radar — its own column, third sibling in .dash-top, matching the map/KPI
+       column height via align-items:stretch (see .dash-top comment). The SVG grows to fill
+       whatever height that stretch gives the card, so it reads clearly at any dashboard height. */
+    .kpi-radar-card {
+      flex: 0 0 300px;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 10px 12px 8px;
+    }
+    .kpi-radar-title { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); margin-bottom: 4px; }
+    #kpiRadar { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    #kpiRadar svg { display: block; width: 100%; flex: 1 1 auto; min-height: 220px; }
+    .radar-grid { fill: none; stroke: var(--card-border); stroke-width: 0.8; }
+    .radar-axis { stroke: var(--card-border); stroke-width: 0.8; }
+    .radar-label { font-size: 9px; fill: var(--text-muted); }
+    .radar-total { fill: var(--button-primary); fill-opacity: 0.14; stroke: var(--button-primary); stroke-width: 1.4; }
+    .radar-remain { fill: var(--warn-color); fill-opacity: 0.26; stroke: var(--warn-color); stroke-width: 1.4; }
+    .radar-remain-dot { fill: var(--warn-color); }
+    .radar-legend { display: flex; justify-content: center; gap: 14px; margin-top: 4px; font-size: 11px; color: var(--text-muted); }
+    .radar-legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .radar-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+    .radar-legend .rl-remain i { background: var(--warn-color); }
+    .radar-legend .rl-total i { background: var(--button-primary); }
+    .radar-legend b { font-variant-numeric: tabular-nums; color: var(--text-color); }
+    .radar-empty { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--text-light); text-align: center; padding: 8px 0; }
+
+    /* Stacked full-width above the budget card (see .kpi-top-pair) — horizontal layout (ring
+       left, percentage + fraction right) so the card reads well at full sidebar width instead
+       of leaving empty space either side of a centered ring. */
+    .kpi-ring-card {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 14px;
+      width: 100%;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+      color: var(--text-color);
       /* Reset first so a plain mouse-click focus never shows the browser's raw default outline
          (it doesn't reliably respect :focus-visible on <button> across engines) — the deliberate
          outline below is added back only for :focus-visible (keyboard nav). */
@@ -210,7 +328,6 @@
 
     .kpi-ring-center {
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
       pointer-events: none;
@@ -219,37 +336,34 @@
     }
 
     .kpi-ring-pct {
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'Google Sans', sans-serif;
       font-variant-numeric: tabular-nums;
-      font-size: 16px;
+      font-size: 17px;
       font-weight: 700;
       line-height: 1.1;
     }
 
+    /* Text block to the right of the ring (see .kpi-ring-card row layout) — same eyebrow-label +
+       value hierarchy as the budget card's .kb-head/.kb-total below it. */
+    .kpi-ring-info { display: flex; flex-direction: column; gap: 2px; }
+
     .kpi-ring-label {
-      font-size: 7.5px;
+      font-size: 10px;
       font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.2px;
+      letter-spacing: 0.4px;
       color: var(--text-muted);
-      margin-top: 1px;
     }
 
     .kpi-ring-fraction {
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'Google Sans', sans-serif;
       font-variant-numeric: tabular-nums;
-      font-size: 12.5px;
-      color: var(--text-muted);
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-color);
     }
 
-    /* ============ KPI chips: 2-column grid sidebar next to the map ============ */
-    .kpi-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      align-content: start;
-    }
-
+    /* ============ KPI chips: 2 in the tall column-4 stack, 4 across the row below ============ */
     .kpi {
       min-width: 0;
       background: var(--card-bg);
@@ -277,7 +391,7 @@
 
     .kpi .k-num {
       display: block;
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'Google Sans', sans-serif;
       font-variant-numeric: tabular-nums;
       font-size: 20px;
       font-weight: 700;
@@ -296,24 +410,37 @@
 
     .kpi.k-overdue .k-num { color: var(--danger-color); }
 
-    /* Below ~960px the map and KPI sidebar don't both earn their width — stack, map first. */
+    /* Below ~960px the map, KPI column, and radar don't all earn their width — stack, map first,
+       then KPI column, then radar, each full-width. Stacked columns have no stretch sibling to
+       size themselves against, so they each fall back to an explicit height here. */
     @media (max-width: 960px) {
-      .dash-top { flex-direction: column; }
+      .dash-top { flex-direction: column; align-items: stretch; }
       .kpi-sidebar { flex: none; }
+      .kpi-radar-card { flex: none; }
+      #dashMap { height: 340px; }
+      #kpiRadar svg { height: 220px; }
     }
 
-    /* Below ~460px a 3-column grid keeps all six chips the same size in two even rows instead of
-       2 columns running unnecessarily tall on a narrow phone. */
+    @media (max-width: 767px) {
+      #dashMap { height: 240px; }
+    }
+    /* Below ~460px: the ring/budget pair and the 6 chips each drop to fewer columns so nothing
+       gets too narrow to read on a phone. */
     @media (max-width: 460px) {
-      .kpi-row { grid-template-columns: repeat(3, 1fr); }
+      .kpi-row-bottom { grid-template-columns: repeat(2, 1fr); }
       .kpi .k-label { font-size: 9px; }
     }
 
     /* ============ Dashboard map ============ */
-    #dashMap { height: 340px; z-index: 1; }
-
-    @media (max-width: 767px) {
-      #dashMap { height: 240px; }
+    /* No fixed height at desktop widths — .dash-top-panel's flex-grow (set above) makes #dashMap
+       fill whatever height .dash-top's align-items:stretch gives the map panel, matching the KPI
+       column. min-height guards a near-empty KPI column (e.g. 0 findings) from producing a
+       too-short map. Scoped to >960px (not unconditional) — the stacked mobile/tablet layout
+       below sets its own explicit, smaller heights and would otherwise be clamped back up by
+       this rule winning on source order at equal specificity. */
+    #dashMap { z-index: 1; }
+    @media (min-width: 961px) {
+      #dashMap { min-height: 340px; }
     }
 
     .panel-h-btns { display: flex; gap: 8px; }
@@ -354,7 +481,7 @@
     }
 
     .map-popup { font-size: 12px; line-height: 1.5; }
-    .map-popup .mp-tag { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 12px; margin-bottom: 4px; }
+    .map-popup .mp-tag { font-family: 'Google Sans', sans-serif; font-weight: 700; font-size: 12px; margin-bottom: 4px; }
     .map-popup .mp-meta { color: var(--text-muted); margin: 3px 0 6px; }
     .map-popup a { color: var(--button-primary); font-weight: 600; }
 
@@ -373,16 +500,7 @@
       gap: 14px;
     }
 
-    /* Map is short-and-wide (a whole row width minus the KPI sidebar) rather than tall-and-narrow. */
-    .dash-map-panel #dashMap {
-      height: 380px;
-    }
-
     .dash-list-panel { margin-bottom: 0; }
-
-    @media (max-width: 640px) {
-      .dash-map-panel #dashMap { height: 260px; }
-    }
 
     /* ============ Segmented control (terminal filter + reading-mode toggles) ============
        Sliding-pill treatment (transitions.dev 16-tabs-sliding), adapted onto this app's
@@ -492,7 +610,7 @@
     /* Tag cell: tag on top, finding-type as muted subtext, optional photo-count chip */
     .c-tag .t-tag-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
     .c-tag .t-tag {
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'Google Sans', sans-serif;
       font-size: 13.5px;
       font-weight: 600;
       overflow: hidden;
@@ -553,7 +671,7 @@
 
     /* Age badge — days since inspection; escalates to warn/danger as an open finding ages */
     .age {
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'Google Sans', sans-serif;
       font-size: 13px;
       color: var(--text-muted);
     }
@@ -953,7 +1071,7 @@
       margin: 0;
       font-size: 14px;
       font-weight: 800;
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'Google Sans', sans-serif;
       white-space: nowrap;
     }
 
@@ -1157,6 +1275,13 @@
 
     .dlg-b { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 
+    /* Export dialog format picker */
+    .export-opts { display: flex; flex-direction: column; gap: 8px; }
+    .export-radio { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; }
+    .export-radio:hover { border-color: var(--button-primary); }
+    .export-radio input { margin-top: 2px; width: 15px; height: 15px; accent-color: var(--button-primary); cursor: pointer; flex: none; }
+    .export-radio > span { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+
     .dlg-f {
       padding: 12px 16px;
       border-top: 1px solid var(--card-border);
@@ -1287,28 +1412,48 @@
       <!-- LEFT: map -->
       <div class="panel dash-map-panel">
         <div class="panel-h">
-          <h2>Map</h2>
+          <h2>Map <span class="f-optnote" style="font-size:11px;">— double-click to add a finding here</span></h2>
           <div class="map-legend" id="mapLegend"></div>
         </div>
         <div id="dashMap"></div>
       </div>
 
-      <!-- RIGHT: completion ring + KPI chips, 2-column grid -->
+      <!-- MIDDLE: KPI column, natural-height cards (no forced stretch to the map). Ring, then
+           Budget, stacked full-width (see .kpi-top-pair) — % Complete on top, Budget below —
+           then all 6 status chips in a 3-col grid. -->
       <div class="kpi-sidebar">
-        <button type="button" class="kpi-ring-card" id="kpiRingCard" title="Repaired + Closed vs. all findings">
-          <div class="kpi-ring-wrap">
-            <svg class="kpi-ring" viewBox="0 0 100 100" aria-hidden="true">
-              <circle class="kpi-ring-track" cx="50" cy="50" r="42"></circle>
-              <circle class="kpi-ring-fill" id="kpiRingFill" cx="50" cy="50" r="42"></circle>
-            </svg>
-            <div class="kpi-ring-center">
-              <span class="kpi-ring-pct" id="kpiRingPct">0%</span>
-              <span class="kpi-ring-label">Complete</span>
+        <div class="kpi-top-pair">
+          <button type="button" class="kpi-ring-card" id="kpiRingCard" title="Repaired + Closed vs. all findings">
+            <div class="kpi-ring-wrap">
+              <svg class="kpi-ring" viewBox="0 0 100 100" aria-hidden="true">
+                <circle class="kpi-ring-track" cx="50" cy="50" r="42"></circle>
+                <circle class="kpi-ring-fill" id="kpiRingFill" cx="50" cy="50" r="42"></circle>
+              </svg>
+              <div class="kpi-ring-center">
+                <span class="kpi-ring-pct" id="kpiRingPct">0%</span>
+              </div>
             </div>
-          </div>
-          <div class="kpi-ring-fraction" id="kpiRingFraction">0 of 0</div>
-        </button>
-        <div class="kpi-row" id="kpiRow"></div>
+            <div class="kpi-ring-info">
+              <span class="kpi-ring-label">Complete</span>
+              <span class="kpi-ring-fraction" id="kpiRingFraction">0 of 0</span>
+            </div>
+          </button>
+          <button type="button" class="kpi-budget-card" id="kpiBudgetCard" title="Estimated cost to repair all unresolved findings">
+            <div class="kb-head">
+              <span class="kb-label">Outstanding Repair Budget</span>
+              <span class="kb-total" id="kbTotal">฿0</span>
+            </div>
+            <div class="kb-sub" id="kbSub">0 findings</div>
+            <div class="kb-sev" id="kbSev"></div>
+          </button>
+        </div>
+        <div class="kpi-row-bottom" id="kpiRowBottom"></div>
+      </div>
+
+      <!-- RIGHT: findings-by-type radar, its own column matching the map/KPI column height. -->
+      <div class="kpi-radar-card" id="kpiRadarCard">
+        <div class="kpi-radar-title">Findings by Type</div>
+        <div id="kpiRadar"></div>
       </div>
     </div>
 
@@ -1320,9 +1465,7 @@
           <div class="panel-h-btns">
             <button class="btn" data-variant="outline" id="btnTogglePhotos" type="button" aria-pressed="true">Hide photos</button>
             <button class="btn" data-variant="outline" id="btnImport" type="button">Import</button>
-            <button class="btn" data-variant="outline" id="btnLineList" type="button">Line List</button>
-            <button class="btn" data-variant="outline" id="btnSummaryPdf" type="button">Summary PDF</button>
-            <button class="btn" data-variant="outline" id="btnCsv" type="button">Export CSV</button>
+            <button class="btn" data-variant="outline" id="btnExport" type="button">Export</button>
             <button class="btn" id="btnNew" type="button">+ New Finding</button>
           </div>
         </div>
@@ -1344,6 +1487,7 @@
               <option>Open</option><option>Monitoring</option><option>Repair Planned</option>
               <option>Repaired</option><option>Closed</option>
               <option value="__overdue">Overdue only</option>
+              <option value="__outstanding">Outstanding (not resolved)</option>
               <option value="__complete">Complete (Repaired + Closed)</option>
             </select>
             <select id="filType" class="select"><option value="">All types</option></select>
@@ -1392,7 +1536,10 @@
     <div class="form-col" id="formColMain">
 
     <div class="panel">
-      <div class="panel-h"><h2 id="formTitle">New Finding</h2></div>
+      <div class="panel-h">
+        <h2 id="formTitle">New Finding</h2>
+        <button class="btn" data-variant="outline" id="btnLineList" type="button">Manage line list</button>
+      </div>
       <div class="panel-b">
         <div class="fgrid">
           <div>
@@ -1404,10 +1551,20 @@
             <div class="validation-alert" id="errTerminal">Terminal is required.</div>
           </div>
           <div>
-            <label class="f-label req" for="fTag">Pipe Tag / Line No.</label>
-            <input id="fTag" class="input" type="text" list="tagList" placeholder='e.g., 953-P-0001-10"-D1101-N'>
-            <datalist id="tagList"></datalist>
-            <div class="validation-alert" id="errTag">Pipe tag is required.</div>
+            <label class="f-label" for="fInspDate">Inspection Date</label>
+            <input id="fInspDate" class="input" type="date">
+          </div>
+          <div class="full">
+            <label class="f-label req" for="fLocationDesc">Location Description</label>
+            <input id="fLocationDesc" class="input" type="text" placeholder="e.g., Elbow downstream of P-101, pipe rack column 5">
+            <div class="validation-alert" id="errLocationDesc">Location description is required.</div>
+          </div>
+          <div>
+            <label class="f-label" for="fTag">Pipe Tag / Line No. <span class="f-optnote">— engineer can add later</span></label>
+            <div class="combo">
+              <input id="fTag" class="input" type="text" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder='e.g., 953-P-0001-10"-D1101-N'>
+              <ul class="combo-menu" id="tagCombo" role="listbox" hidden></ul>
+            </div>
           </div>
           <div>
             <label class="f-label" for="fPid">P&amp;ID No.</label>
@@ -1416,10 +1573,6 @@
           <div>
             <label class="f-label" for="fService">Service / Fluid</label>
             <input id="fService" class="input" type="text" placeholder="e.g., LPG, HSD, FO">
-          </div>
-          <div class="full">
-            <label class="f-label" for="fLocationDesc">Location Description</label>
-            <input id="fLocationDesc" class="input" type="text" placeholder="e.g., Elbow downstream of P-101, pipe rack column 5">
           </div>
         </div>
       </div>
@@ -1452,26 +1605,6 @@
           <div>
             <label class="f-label" for="fDefWid">Defect Width (mm)</label>
             <input id="fDefWid" class="input" type="number" step="1" placeholder="optional">
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-h"><h2>Planning &amp; SAP</h2></div>
-      <div class="panel-b">
-        <div class="fgrid">
-          <div>
-            <label class="f-label" for="fTargetDate">Target Repair Date</label>
-            <input id="fTargetDate" class="input" type="date">
-          </div>
-          <div>
-            <label class="f-label" for="fSapNotif">SAP Notification No.</label>
-            <input id="fSapNotif" class="input" type="text" placeholder="e.g., 110009490">
-          </div>
-          <div>
-            <label class="f-label" for="fSapOrder">SAP Order No.</label>
-            <input id="fSapOrder" class="input" type="text" placeholder="e.g., 110002019">
           </div>
         </div>
       </div>
@@ -1547,10 +1680,6 @@
             <input id="fReportNo" class="input" type="text" placeholder="Vendor report reference">
           </div>
           <div>
-            <label class="f-label" for="fInspDate">Inspection Date</label>
-            <input id="fInspDate" class="input" type="date">
-          </div>
-          <div>
             <label class="f-label" for="fMethod">Method</label>
             <select id="fMethod" class="select">
               <option value="">—</option>
@@ -1558,9 +1687,33 @@
               <option>PT</option><option>MT</option><option>Other</option>
             </select>
           </div>
-          <div class="full">
+          <div>
             <label class="f-label" for="fReportLink">Report Link (SharePoint)</label>
             <input id="fReportLink" class="input" type="url" placeholder="https://…  paste the SharePoint link to the source report">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><h2>Planning &amp; SAP</h2></div>
+      <div class="panel-b">
+        <div class="fgrid">
+          <div>
+            <label class="f-label" for="fTargetDate">Target Repair Date</label>
+            <input id="fTargetDate" class="input" type="date">
+          </div>
+          <div>
+            <label class="f-label" for="fSapNotif">SAP Notification No.</label>
+            <input id="fSapNotif" class="input" type="text" placeholder="e.g., 110009490">
+          </div>
+          <div>
+            <label class="f-label" for="fSapOrder">SAP Order No.</label>
+            <input id="fSapOrder" class="input" type="text" placeholder="e.g., 110002019">
+          </div>
+          <div>
+            <label class="f-label" for="fEstCost">Estimated Repair Cost (฿)</label>
+            <input id="fEstCost" class="input" type="number" step="1000" min="0" placeholder="e.g., 150000">
           </div>
         </div>
       </div>
@@ -1618,10 +1771,6 @@
                 <label class="f-label req" for="aDepth">Wall-Loss Depth (mm)</label>
                 <input id="aDepth" class="input" type="number" step="0.01" placeholder="e.g., 1.20">
               </div>
-              <div>
-                <label class="f-label" for="aCa">Corrosion Allowance, CA (mm)</label>
-                <input id="aCa" class="input" type="number" step="0.01" value="1.5">
-              </div>
             </div>
           </div>
 
@@ -1639,6 +1788,11 @@
                 <option value="external">External Wall Loss</option>
                 <option value="internal">Internal Wall Loss</option>
               </select>
+            </div>
+            <div>
+              <label class="f-label" for="aCa">Corrosion Allowance, CA (mm)</label>
+              <input id="aCa" class="input" type="number" step="0.01" value="1.5">
+              <div class="hint">Design/spec reserve for <em>future</em> corrosion — not the loss you measured.</div>
             </div>
           </div>
 
@@ -1735,10 +1889,6 @@
                 <label class="f-label req" for="qDepth">Wall-Loss Depth (mm)</label>
                 <input id="qDepth" class="input" type="number" step="0.01" placeholder="e.g., 1.20">
               </div>
-              <div>
-                <label class="f-label" for="qCa">Corrosion Allowance, CA (mm)</label>
-                <input id="qCa" class="input" type="number" step="0.01" value="1.5">
-              </div>
             </div>
           </div>
 
@@ -1756,6 +1906,11 @@
                 <option value="external">External Wall Loss</option>
                 <option value="internal">Internal Wall Loss</option>
               </select>
+            </div>
+            <div>
+              <label class="f-label" for="qCa">Corrosion Allowance, CA (mm)</label>
+              <input id="qCa" class="input" type="number" step="0.01" value="1.5">
+              <div class="hint">Design/spec reserve for <em>future</em> corrosion — not the loss you measured.</div>
             </div>
           </div>
 
@@ -1923,10 +2078,12 @@
   <div class="dlg-h">Import master line list</div>
   <div class="dlg-b">
     <p class="hint" style="margin:0;">
-      Upload a spreadsheet with one pipe tag per row. Matching tags pre-fill NPS/Schedule/Material
-      and P&amp;ID/Service/Location on new findings — column headers must match the template —
-      <a href="#" id="lineListImportTemplateLink" style="color:var(--button-primary);font-weight:600;">download the template</a>.
+      Upload a spreadsheet with one pipe tag per row. Matching tags pre-fill Terminal/NPS/Schedule/
+      Material and P&amp;ID/Service on new findings — column headers must match the template —
+      <a href="#" id="lineListImportTemplateLink" style="color:var(--button-primary);font-weight:600;">download the template</a>
+      (its <strong>Valid Values</strong> sheet lists the exact NPS/Schedule/Material spellings accepted).
       Required columns: <strong>Pipe Tag</strong>, <strong>NPS</strong>, <strong>Schedule</strong>, <strong>Material</strong>.
+      Pipe Tag/Terminal/P&amp;ID/Service are free text; Terminal (if given) must be KBY, SRC or BRP.
       Re-importing a tag already in the list updates it — no duplicates.
     </p>
     <input type="file" id="lineListImportFile" class="input" accept=".xlsx,.xls,.csv">
@@ -1946,12 +2103,13 @@
     <span class="hint" id="lineListCount" style="margin:0;">0 entries</span>
   </div>
   <div class="dlg-b">
+    <input id="lineListSearch" class="input" type="search" placeholder="Search pipe tag, terminal, NPS, material, P&amp;ID, service…" style="margin-bottom:2px;">
     <div class="tbl-scroll" style="max-height:50vh;">
       <table class="list">
         <thead>
           <tr>
-            <th>Pipe Tag</th><th>NPS</th><th>Schedule</th><th>Material</th>
-            <th>P&amp;ID</th><th>Service</th><th>Location</th><th></th>
+            <th>Pipe Tag</th><th>Terminal</th><th>NPS</th><th>Schedule</th><th>Material</th>
+            <th>P&amp;ID</th><th>Service</th><th></th>
           </tr>
         </thead>
         <tbody id="lineListTableBody"></tbody>
@@ -1961,6 +2119,33 @@
   <div class="dlg-f">
     <button class="btn" data-variant="outline" id="lineListManageImportBtn" type="button">Import…</button>
     <button class="btn" id="lineListManageClose" type="button">Close</button>
+  </div>
+</dialog>
+
+<!-- Export dialog: pick format + whether to include budget -->
+<dialog class="app-dlg" id="exportDlg">
+  <div class="dlg-h">Export findings</div>
+  <div class="dlg-b">
+    <p class="hint" id="exportScope" style="margin:0;">Exporting 0 findings</p>
+    <div class="export-opts">
+      <label class="export-radio">
+        <input type="radio" name="exportFmt" value="pdf" checked>
+        <span><strong>Summary PDF</strong><span class="hint" style="margin:0;">A4 landscape · map + photo thumbnails, management summary</span></span>
+      </label>
+      <label class="export-radio">
+        <input type="radio" name="exportFmt" value="csv">
+        <span><strong>CSV</strong><span class="hint" style="margin:0;">Spreadsheet · all fields</span></span>
+      </label>
+    </div>
+    <label class="switch-inline" style="margin-top:4px;">
+      <input type="checkbox" id="exportInclBudget">
+      <span>Include estimated repair budget</span>
+    </label>
+    <div class="hint" style="margin-top:2px;">Leave off when sending the file to a vendor.</div>
+  </div>
+  <div class="dlg-f">
+    <button class="btn" data-variant="outline" id="exportCancel" type="button">Cancel</button>
+    <button class="btn" id="exportRun" type="button">Export</button>
   </div>
 </dialog>
 
@@ -2004,6 +2189,19 @@ const FINDING_TYPES = [
   'Dent / Mechanical Damage',
   'Other'
 ];
+
+// Short axis labels for the findings-by-type radar (must fit at ~9px around a small chart).
+const FINDING_TYPE_SHORT = {
+  'External Corrosion': 'Ext Corr',
+  'Internal Corrosion': 'Int Corr',
+  'CUI (Corrosion Under Insulation)': 'CUI',
+  'CUS (Corrosion Under Support)': 'CUS',
+  'Coating / Painting Damage': 'Coating',
+  'Pipe Support Defect': 'Support',
+  'Leak': 'Leak',
+  'Dent / Mechanical Damage': 'Dent',
+  'Other': 'Other'
+};
 
 const STATUSES = ['Open', 'Monitoring', 'Repair Planned', 'Repaired', 'Closed'];
 const PHOTO_LIMIT_PER_KIND = 3; // As Found and After Repair each capped at 3 -> 6 total per finding
@@ -2324,6 +2522,7 @@ function applyFilters(rows) {
     if (filters.terminal && f.terminal !== filters.terminal) return false;
     if (filters.status === '__overdue') { if (!isOverdue(f)) return false; }
     else if (filters.status === '__complete') { if (f.status !== 'Repaired' && f.status !== 'Closed') return false; }
+    else if (filters.status === '__outstanding') { if (f.status === 'Repaired' || f.status === 'Closed') return false; }
     else if (filters.status && f.status !== filters.status) return false;
     if (filters.type && f.finding_type !== filters.type) return false;
     if (q) {
@@ -2350,11 +2549,11 @@ function renderKpis() {
     { label: 'Repaired', num: count('Repaired'), filter: 'Repaired' },
     { label: 'All', num: findings.length, filter: '' }
   ];
-  $('kpiRow').innerHTML = items.map(it =>
+  $('kpiRowBottom').innerHTML = items.map(it =>
     `<button type="button" class="kpi ${it.cls || ''} ${filters.status === it.filter && (it.filter !== '' || filters.status === '') ? '' : ''}" data-filter="${esc(it.filter)}">
        <span class="k-num">${it.num}</span><span class="k-label">${esc(it.label)}</span>
      </button>`).join('');
-  $('kpiRow').querySelectorAll('.kpi').forEach(btn => {
+  $('kpiRowBottom').querySelectorAll('.kpi').forEach(btn => {
     if (btn.dataset.filter === filters.status) btn.classList.add('active');
     btn.addEventListener('click', () => {
       filters.status = btn.dataset.filter;
@@ -2375,6 +2574,83 @@ function renderKpis() {
   $('kpiRingPct').textContent = `${pct}%`;
   $('kpiRingFraction').textContent = `${complete} of ${total}`;
   $('kpiRingCard').classList.toggle('active', filters.status === '__complete');
+
+  renderBudgetKpi();
+  renderTypeRadar();
+}
+
+// Outstanding repair budget: Σ estimated_cost over findings not yet Repaired/Closed, with a
+// High/Medium/Low split. Computed globally (like the KPI chips), independent of the active filter.
+function renderBudgetKpi() {
+  const isOut = f => f.status !== 'Repaired' && f.status !== 'Closed';
+  const out = findings.filter(isOut);
+  const sum = arr => arr.reduce((s, f) => s + (Number(f.estimated_cost) || 0), 0);
+  const noEst = out.filter(f => f.estimated_cost == null).length;
+  $('kbTotal').textContent = paFmtBahtShort(sum(out));
+  $('kbSub').textContent = `${out.length} finding${out.length === 1 ? '' : 's'}${noEst ? ` · ${noEst} not yet estimated` : ''}`;
+  const sev = s => paFmtBahtShort(sum(out.filter(f => f.severity === s)));
+  $('kbSev').innerHTML =
+    `<span class="kb-hi"><i></i>High <b>${sev('High')}</b></span>` +
+    `<span class="kb-md"><i></i>Med <b>${sev('Medium')}</b></span>` +
+    `<span class="kb-lo"><i></i>Low <b>${sev('Low')}</b></span>`;
+  $('kpiBudgetCard').classList.toggle('active', filters.status === '__outstanding');
+}
+
+// Findings-by-type radar: for each of the 9 FINDING_TYPES, Remaining (not Repaired/Closed) nested
+// inside Total (all of that type). Hand-drawn SVG (no charting lib), fixed axes for a stable shape.
+function renderTypeRadar() {
+  const el = $('kpiRadar');
+  const types = FINDING_TYPES;
+  const N = types.length;
+  const totalOf = t => findings.filter(f => f.finding_type === t).length;
+  const remainOf = t => findings.filter(f => f.finding_type === t && f.status !== 'Repaired' && f.status !== 'Closed').length;
+  const totals = types.map(totalOf);
+  const remains = types.map(remainOf);
+  const sumT = totals.reduce((a, b) => a + b, 0);
+  const sumR = remains.reduce((a, b) => a + b, 0);
+
+  if (!findings.length) {
+    el.innerHTML = `<div class="radar-empty">No findings yet</div>`;
+    return;
+  }
+
+  const cx = 120, cy = 100, maxR = 68;
+  // "nice" max so the outer ring isn't cramped (grid rings at 1/4..4/4 of it)
+  const rawMax = Math.max(1, ...totals);
+  const step = rawMax <= 4 ? 1 : rawMax <= 8 ? 2 : Math.ceil(rawMax / 4);
+  const maxVal = step * 4;
+  const RINGS = 4;
+  const ang = i => (-90 + i * (360 / N)) * Math.PI / 180;
+  const pt = (i, v) => {
+    const r = (v / maxVal) * maxR;
+    return [cx + r * Math.cos(ang(i)), cy + r * Math.sin(ang(i))];
+  };
+  const poly = vals => vals.map((v, i) => pt(i, v).map(n => n.toFixed(1)).join(',')).join(' ');
+
+  let grid = '';
+  for (let g = 1; g <= RINGS; g++) {
+    const rv = maxVal * g / RINGS;
+    grid += `<polygon class="radar-grid" points="${poly(types.map(() => rv))}"></polygon>`;
+  }
+  let axes = '', labels = '';
+  types.forEach((t, i) => {
+    const [ex, ey] = pt(i, maxVal);
+    axes += `<line class="radar-axis" x1="${cx}" y1="${cy}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}"></line>`;
+    const [lx, ly] = pt(i, maxVal + 0.9);
+    const a = ang(i);
+    const anchor = Math.abs(Math.cos(a)) < 0.3 ? 'middle' : (Math.cos(a) > 0 ? 'start' : 'end');
+    const dy = Math.sin(a) > 0.3 ? '0.7em' : (Math.sin(a) < -0.3 ? '-0.2em' : '0.3em');
+    labels += `<text class="radar-label" x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}" dy="${dy}">${esc(FINDING_TYPE_SHORT[t] || t)}</text>`;
+  });
+  const totalPoly = `<polygon class="radar-total" points="${poly(totals)}"></polygon>`;
+  const remainPoly = `<polygon class="radar-remain" points="${poly(remains)}"></polygon>`;
+  const remainDots = remains.map((v, i) => { const [x, y] = pt(i, v); return v > 0 ? `<circle class="radar-remain-dot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2"></circle>` : ''; }).join('');
+
+  el.innerHTML =
+    `<svg viewBox="0 0 240 200" role="img" aria-label="Findings by type, remaining vs total">` +
+    grid + axes + totalPoly + remainPoly + remainDots + labels +
+    `</svg>` +
+    `<div class="radar-legend"><span class="rl-remain"><i></i>Remaining <b>${sumR}</b></span><span class="rl-total"><i></i>Total <b>${sumT}</b></span></div>`;
 }
 
 /* ---------------- dashboard map ---------------- */
@@ -2397,12 +2673,16 @@ function ensureDashMap() {
   // scroll-zoom only after the user clicks the map — otherwise page scrolling gets hijacked
   dashMap.on('focus click', () => dashMap.scrollWheelZoom.enable());
   dashMap.on('blur', () => dashMap.scrollWheelZoom.disable());
+  // double-click drops a pin and offers "Add finding here" instead of zooming
+  dashMap.doubleClickZoom.disable();
+  dashMap.on('dblclick', (e) => showAddFindingPopup(e.latlng));
+  dashMap.on('popupclose', () => { if (dashAddMarker) { dashLayer.removeLayer(dashAddMarker); dashAddMarker = null; } });
   setTimeout(() => dashMap.invalidateSize(), 150);
 }
 
 function popupHtml(f) {
   return `<div class="map-popup">
-    <div class="mp-tag">${esc(f.pipe_tag)}</div>
+    <div class="mp-tag">${esc(f.pipe_tag || f.location_desc || '—')}</div>
     ${pillHtml(f.status)}${isOverdue(f) ? ' <span class="ov-badge">OVERDUE</span>' : ''}
     <div class="mp-meta">${esc(f.terminal)} — ${esc(f.finding_type)}</div>
     <a href="#/f/${esc(f.id)}">Open finding &#8594;</a>
@@ -2410,14 +2690,48 @@ function popupHtml(f) {
 }
 
 let dashMarkers = {}; // finding_id -> circleMarker, for row->pin highlighting
+let dashAddMarker = null;   // temporary pin dropped by a dbl-click "add finding here"
+let pendingNewCoords = null; // {lat,lng} carried from a map dbl-click into the next new-finding form
+
+// Double-click the dashboard map -> drop a temporary pin + a small popup that opens the New
+// Finding form pre-seeded with these coordinates. openForm(null) reads pendingNewCoords in its
+// map-init branch and calls setPin() to place the picker pin.
+function showAddFindingPopup(latlng) {
+  if (dashAddMarker) dashLayer.removeLayer(dashAddMarker);
+  dashAddMarker = L.circleMarker(latlng, {
+    radius: 8, color: '#156B95', fillColor: '#38bdf8', fillOpacity: 0.9, weight: 2
+  }).addTo(dashLayer);
+
+  // build as a DOM node so the button's handler wires cleanly (no id lookup across popups)
+  const node = document.createElement('div');
+  node.className = 'map-popup';
+  node.innerHTML = `<div class="mp-tag">Add a finding here?</div>
+    <div class="mp-meta mono">${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}</div>`;
+  const btn = document.createElement('button');
+  btn.className = 'btn';
+  btn.type = 'button';
+  btn.style.marginTop = '6px';
+  btn.textContent = 'Add finding here';
+  btn.addEventListener('click', () => {
+    pendingNewCoords = { lat: latlng.lat, lng: latlng.lng };
+    dashMap.closePopup();
+    location.hash = '#/new';
+  });
+  node.appendChild(btn);
+
+  L.popup({ closeButton: true }).setLatLng(latlng).setContent(node).openOn(dashMap);
+}
 
 function renderMap(rows) {
   ensureDashMap();
   if (!dashMap) return;
   // The container was display:none while another view was active; Leaflet's cached size is
   // stale (0×0), and fitBounds against a zero-size map computes a world-level zoom. Re-measure
-  // synchronously — show('viewList') has already run by the time renderMap is called.
+  // synchronously — show('viewList') has already run by the time renderMap is called. A second,
+  // deferred invalidate is cheap insurance against any layout not being fully settled yet
+  // (fonts/webfont swap, etc.) on the first paint.
   dashMap.invalidateSize();
+  setTimeout(() => dashMap.invalidateSize(), 100);
   dashLayer.clearLayers();
   dashMarkers = {};
   const pts = rows.filter(f => f.lat != null && f.lng != null);
@@ -2508,9 +2822,9 @@ function renderTable(rows) {
         <div class="c-tag-flex">
           ${thumbHtml}
           <div class="c-tag-text">
-            <div class="t-tag-row"><span class="t-tag" title="${esc(f.pipe_tag)}">${esc(f.pipe_tag)}</span>${photoChip}</div>
+            <div class="t-tag-row"><span class="t-tag" title="${esc(f.pipe_tag || f.location_desc || '')}">${esc(f.pipe_tag || f.location_desc || '—')}</span>${photoChip}</div>
             <div class="t-type" title="${esc(f.finding_type)}">${esc(f.finding_type)}</div>
-            ${f.location_desc ? `<div class="t-desc" title="${esc(f.location_desc)}"><span class="t-desc-label">Loc:</span> ${esc(f.location_desc)}</div>` : ''}
+            ${(f.pipe_tag && f.location_desc) ? `<div class="t-desc" title="${esc(f.location_desc)}"><span class="t-desc-label">Loc:</span> ${esc(f.location_desc)}</div>` : ''}
             ${f.description ? `<div class="t-desc" title="${esc(f.description)}"><span class="t-desc-label">Anomaly:</span> ${esc(f.description)}</div>` : ''}
           </div>
         </div>
@@ -2548,23 +2862,33 @@ function updateSelectionUI() {
     selectAll.indeterminate = selectedOnPage > 0 && selectedOnPage < idsOnPage.length;
   }
   const bar = $('selBar');
-  const btn = $('btnSummaryPdf');
+  const btn = $('btnExport');
   if (selectedIds.size > 0) {
     bar.hidden = false;
     $('selCount').textContent = `${selectedIds.size} selected`;
-    btn.textContent = `Summary PDF (${selectedIds.size})`;
+    btn.textContent = `Export (${selectedIds.size})`;
   } else {
     bar.hidden = true;
-    btn.textContent = 'Summary PDF';
+    btn.textContent = 'Export';
   }
 }
 
-// Tag autocomplete union: findings' own history plus the master line list, so a tag that's
-// only ever been imported (never appeared on a finding) is still discoverable/autocompletable
-// — otherwise a user would have to type it exactly by hand for applyTagMemory's lookup to fire.
-function refreshTagList() {
-  const tags = [...new Set([...findings.map(f => f.pipe_tag), ...lineList.map(r => r.pipe_tag)].filter(Boolean))];
-  $('tagList').innerHTML = tags.map(t => `<option value="${esc(t)}"></option>`).join('');
+// Tag combobox options: union of findings' own history and the master line list, each paired
+// with a location (for search) and a terminal (so the list can be scoped to whichever terminal
+// is selected on the form — a KBY finding has no business suggesting an SRC tag). Findings supply
+// the learned location (most recent wins); line-list-only tags show their service as the sub-line.
+function buildTagOptions() {
+  const byTag = new Map();
+  // findings newest-first so the first location seen per tag is the most recent
+  [...findings].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).forEach(f => {
+    if (!f.pipe_tag) return;
+    if (!byTag.has(f.pipe_tag)) byTag.set(f.pipe_tag, { location: f.location_desc || '', terminal: f.terminal || '' });
+  });
+  lineList.forEach(r => {
+    if (!r.pipe_tag) return;
+    if (!byTag.has(r.pipe_tag)) byTag.set(r.pipe_tag, { location: r.service || '', terminal: r.terminal || '' });
+  });
+  return [...byTag.entries()].map(([tag, o]) => ({ tag, location: o.location, terminal: o.terminal })).sort((a, b) => a.tag.localeCompare(b.tag));
 }
 
 function renderList() {
@@ -2572,7 +2896,6 @@ function renderList() {
   const rows = sortFindings(applyFilters(findings));
   renderTable(rows);
   renderMap(rows);
-  refreshTagList();
 }
 
 /* ---------------- CSV export (filtered register, Excel-friendly UTF-8 BOM) ---------------- */
@@ -2581,20 +2904,21 @@ const CSV_COLS = [
   'terminal', 'pipe_tag', 'pid_no', 'service', 'location_desc', 'finding_type', 'severity',
   'status', 'description', 'vendor', 'report_no', 'report_link', 'inspection_date', 'method',
   't_nominal', 't_measured', 'defect_length_mm', 'defect_width_mm', 'lat', 'lng',
-  'target_date', 'next_check_date', 'sap_notification', 'sap_order',
+  'target_date', 'next_check_date', 'sap_notification', 'sap_order', 'estimated_cost',
   'repair_method', 'repaired_date', 'closing_note', 'created_by_email', 'created_at'
 ];
 
-function exportCsv() {
-  const rows = applyFilters(findings);
-  if (!rows.length) { notify('Nothing to export with the current filters.', true); return; }
+function exportCsv(rows, includeBudget) {
+  if (!rows || !rows.length) { notify('Nothing to export with the current filters.', true); return; }
+  // estimated_cost (budget) is emitted only when the export explicitly opted in
+  const cols = includeBudget ? CSV_COLS : CSV_COLS.filter(c => c !== 'estimated_cost');
   const cell = (v) => {
     v = v == null ? '' : String(v);
     return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
   };
   const lines = [
-    CSV_COLS.join(','),
-    ...rows.map(f => CSV_COLS.map(c => cell(f[c])).join(','))
+    cols.join(','),
+    ...rows.map(f => cols.map(c => cell(f[c])).join(','))
   ];
   // \uFEFF BOM so Excel opens the file as UTF-8 (Thai text in descriptions survives)
   const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
@@ -2805,12 +3129,12 @@ function openImportDialog() {
 
 const LINE_LIST_IMPORT_COLS = [
   { header: 'Pipe Tag', field: 'pipe_tag', required: true },
+  { header: 'Terminal', field: 'terminal' },
   { header: 'NPS', field: 'nps', required: true },
   { header: 'Schedule', field: 'schedule', required: true },
   { header: 'Material', field: 'material', required: true },
   { header: 'P&ID No.', field: 'pid_no' },
-  { header: 'Service', field: 'service' },
-  { header: 'Location', field: 'location_desc' }
+  { header: 'Service', field: 'service' }
 ];
 
 let lineListValidRows = [];  // payloads ready to upsert, set after a file is parsed+validated
@@ -2872,6 +3196,11 @@ function validateLineListRow(raw) {
     p[col.field] = String(val);
   }
   if (!p.pipe_tag) reasons.push('Pipe Tag is required');
+  if (p.terminal) {
+    const term = p.terminal.toUpperCase();
+    if (!['KBY', 'SRC', 'BRP'].includes(term)) reasons.push('Terminal must be KBY, SRC or BRP');
+    else p.terminal = term;
+  }
   const nps = resolveNps(p.nps);
   if (!nps) reasons.push(`NPS "${p.nps || ''}" not recognized`);
   else p.nps = nps;
@@ -2899,6 +3228,7 @@ function renderLineListImportPreview(results) {
     return `<tr class="${ok ? '' : 'bad'}">
       <td class="${ok ? 'rowstat-ok' : 'rowstat-bad'}">${ok ? '✓' : '✕'}</td>
       <td>${esc(p.pipe_tag || '—')}</td>
+      <td>${esc(p.terminal || '—')}</td>
       <td>${esc(p.nps || '—')}</td>
       <td>${esc(p.schedule || '—')}</td>
       <td>${esc(p.material || '—')}</td>
@@ -2906,7 +3236,7 @@ function renderLineListImportPreview(results) {
     </tr>`;
   }).join('');
   box.innerHTML = head +
-    `<div class="import-tbl-scroll"><table class="import-tbl"><thead><tr><th></th><th>Pipe Tag</th><th>NPS</th><th>Schedule</th><th>Material</th><th>Problems</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>` +
+    `<div class="import-tbl-scroll"><table class="import-tbl"><thead><tr><th></th><th>Pipe Tag</th><th>Terminal</th><th>NPS</th><th>Schedule</th><th>Material</th><th>Problems</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>` +
     (results.length > 40 ? `<div class="hint">Showing first 40 of ${results.length} rows.</div>` : '');
   $('lineListImportConfirm').disabled = valid.length === 0;
   $('lineListImportConfirm').textContent = valid.length ? `Import ${valid.length} entr${valid.length === 1 ? 'y' : 'ies'}` : 'Import';
@@ -2951,11 +3281,33 @@ async function doLineListImport() {
 
 function downloadLineListTemplate() {
   const headers = LINE_LIST_IMPORT_COLS.map(c => c.header);
-  const example = ['953-P-0001-10"-D1101-N', '10"', '40', 'A106B',
-    '15-3-KBY-906-0117_Rev.Z2', 'Diesel B7', 'Elbow downstream of P-101'];
-  const ws = XLSX.utils.aoa_to_sheet([headers, example]);
+  // Several worked rows spanning different NPS/Schedule/Material combos — Pipe Tag/Terminal/
+  // P&ID/Service are free text (any value is fine); NPS/Schedule/Material must match one of the
+  // exact spellings on the "Valid Values" sheet below.
+  const examples = [
+    ['953-P-0001-10"-D1101-N', 'KBY', '10"', '40', 'A106B', '15-3-KBY-906-0117_Rev.Z2', 'Diesel B7'],
+    ['906200-P-6"-D311011-N', 'KBY', '6"', '80', 'API5LB', '', 'Jet A-1'],
+    ['953-P-009-4"-D1101-ET-80', 'SRC', '4"', '40', 'X52', '', ''],
+    ['906200-25-P-4404', 'BRP', '2"', '40', 'TP316', '', '']
+  ];
+  const lineListWs = XLSX.utils.aoa_to_sheet([headers, ...examples]);
+
+  // Reference sheet: every valid NPS (with its valid schedules) and every valid material
+  // (name + the shorter code, either spelling is accepted) — generated live from the same
+  // PA_PIPE_DATABASE/PA_MATERIALS the engine and resolveNps/resolveSchedule/resolveMaterialCode
+  // validate against, so this can never drift out of sync with what actually gets accepted.
+  const npsRows = [['NPS', 'Valid Schedules']];
+  Object.keys(PA_PIPE_DATABASE).forEach(nps => {
+    npsRows.push([nps, Object.keys(PA_PIPE_DATABASE[nps].schedules).join(', ')]);
+  });
+  npsRows.push([]);
+  npsRows.push(['Material Name', 'Material Code']);
+  PA_MATERIALS.filter(m => m.code !== 'MANUAL').forEach(m => npsRows.push([m.name, m.code]));
+  const valuesWs = XLSX.utils.aoa_to_sheet(npsRows);
+
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Line List');
+  XLSX.utils.book_append_sheet(wb, lineListWs, 'Line List');
+  XLSX.utils.book_append_sheet(wb, valuesWs, 'Valid Values');
   XLSX.writeFile(wb, 'line_list_import_template.xlsx');
 }
 
@@ -2974,25 +3326,46 @@ function openLineListImportDialog() {
 // Loads the master list into memory; called once during the list route's initial data load
 // and again after a successful import. Lazy-loaded defensively inside applyTagMemory() too,
 // since #/new and #/edit/ can be reached without visiting #/list first (see route()).
+// PostgREST silently caps any unlimited select() at 1000 rows server-side — page through in
+// 1000-row batches so a line list larger than that isn't quietly truncated (missing tags in the
+// combobox / management dialog, with no error to explain why).
 async function loadLineList() {
-  const { data, error } = await sb.from('line_list').select('*').order('pipe_tag');
-  if (!error) { lineList = data || []; refreshTagList(); }
+  const PAGE = 1000;
+  let all = [], from = 0;
+  for (;;) {
+    const { data, error } = await sb.from('line_list').select('*').order('pipe_tag').range(from, from + PAGE - 1);
+    if (error) { notify('Failed to load line list: ' + error.message, true); return; }
+    all = all.concat(data || []);
+    if (!data || data.length < PAGE) break;
+    from += PAGE;
+  }
+  lineList = all;
 }
 
 function renderLineListManageTable() {
   const body = $('lineListTableBody');
+  const q = ($('lineListSearch').value || '').trim().toLowerCase();
+  const rows = q ? lineList.filter(r =>
+    [r.pipe_tag, r.terminal, r.nps, r.schedule, r.material, r.pid_no, r.service]
+      .some(v => (v || '').toLowerCase().includes(q))
+  ) : lineList;
+
   if (!lineList.length) {
     body.innerHTML = `<tr class="empty-row"><td colspan="8">No line list entries yet — click Import to add some.</td></tr>`;
+  } else if (!rows.length) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="8">No entries match "${esc(q)}".</td></tr>`;
   } else {
-    body.innerHTML = lineList.map(r => `<tr data-id="${esc(r.id)}">
-      <td>${esc(r.pipe_tag)}</td><td>${esc(r.nps || '—')}</td><td>${esc(r.schedule || '—')}</td>
+    body.innerHTML = rows.map(r => `<tr data-id="${esc(r.id)}">
+      <td>${esc(r.pipe_tag)}</td><td>${esc(r.terminal || '—')}</td><td>${esc(r.nps || '—')}</td><td>${esc(r.schedule || '—')}</td>
       <td>${esc(r.material || '—')}</td><td>${esc(r.pid_no || '—')}</td>
-      <td>${esc(r.service || '—')}</td><td>${esc(r.location_desc || '—')}</td>
+      <td>${esc(r.service || '—')}</td>
       <td><button type="button" class="link-btn" data-del="${esc(r.id)}">Delete</button></td>
     </tr>`).join('');
     body.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => deleteLineListRow(btn.dataset.del)));
   }
-  $('lineListCount').textContent = `${lineList.length} entr${lineList.length === 1 ? 'y' : 'ies'}`;
+  $('lineListCount').textContent = q && rows.length !== lineList.length
+    ? `${rows.length} of ${lineList.length} entr${lineList.length === 1 ? 'y' : 'ies'}`
+    : `${lineList.length} entr${lineList.length === 1 ? 'y' : 'ies'}`;
 }
 
 async function deleteLineListRow(id) {
@@ -3003,12 +3376,12 @@ async function deleteLineListRow(id) {
     if (error) throw error;
     lineList = lineList.filter(r => r.id !== id);
     renderLineListManageTable();
-    refreshTagList();
     notify('Line list entry deleted.');
   } catch (e) { notify('Delete failed: ' + e.message, true); }
 }
 
 function openLineListManageDialog() {
+  $('lineListSearch').value = '';
   renderLineListManageTable();
   openDialog($('lineListManageDlg'));
 }
@@ -3016,8 +3389,8 @@ function openLineListManageDialog() {
 /* ---------------- form (new / edit) ---------------- */
 
 function clearValidation() {
-  ['fTerminal', 'fTag', 'fType'].forEach(id => $(id).removeAttribute('aria-invalid'));
-  ['errTerminal', 'errTag', 'errType'].forEach(id => $(id).style.display = 'none');
+  ['fTerminal', 'fLocationDesc', 'fType'].forEach(id => $(id).removeAttribute('aria-invalid'));
+  ['errTerminal', 'errLocationDesc', 'errType'].forEach(id => $(id).style.display = 'none');
 }
 
 function setPin(lat, lng, recenter) {
@@ -3252,9 +3625,8 @@ function recalcAssessment() {
   if (res.hasErrors) {
     assessResult = null;
     // Distinguish "not filled in yet" (neutral banner, no red) from "typed something invalid"
-    // (ERROR banner + targeted message) — same cold-load rule the calculator used. With the
-    // reading still blank, t_meas defaults to 0, which spuriously trips the CA >= t_meas check,
-    // so ca errors only count once a reading exists.
+    // (ERROR banner + targeted message) — same cold-load rule the calculator used. (CA >= t_meas
+    // is no longer an error — a thin wall below its reserve is a valid case; only ca < 0 errors.)
     const readingEmpty = aMode() === 'tmeas' ? $('aTmeas').value === '' : $('aDepth').value === '';
     const msg = (res.errors.tmeas || res.errors.depth) && !readingEmpty ? 'Check the UT reading (cannot exceed nominal thickness).'
       : (res.errors.ca && !readingEmpty) ? (typeof res.errors.ca === 'string' ? res.errors.ca : 'Check the corrosion allowance.')
@@ -3392,7 +3764,6 @@ function initAssessment() {
 
 let assessToggleTouched = false;
 
-// Per-tag memory: reuse metadata + pipe setup from the last finding with the same tag.
 // Per-tag memory: reuse metadata + pipe setup from the last finding with the same tag, falling
 // back to the master line list for tags that have never appeared on a finding before. A prior
 // finding's own recorded assessment always wins over the line list — it reflects what an
@@ -3420,7 +3791,7 @@ async function applyTagMemory() {
   if (lineRow) {
     if (!$('fPid').value && lineRow.pid_no) $('fPid').value = lineRow.pid_no;
     if (!$('fService').value && lineRow.service) $('fService').value = lineRow.service;
-    if (!$('fLocationDesc').value && lineRow.location_desc) $('fLocationDesc').value = lineRow.location_desc;
+    if (!$('fTerminal').value && lineRow.terminal) $('fTerminal').value = lineRow.terminal;
   }
 
   // engineering setup: prior finding's own assessment wins; line list is the fallback
@@ -3444,6 +3815,86 @@ async function applyTagMemory() {
     recalcAssessment();
     notify('Pre-filled pipe data from the master line list.');
   }
+}
+
+// Searchable combobox for #fTag: options come from buildTagOptions() (tag + learned location +
+// terminal), typing filters on tag OR location so a location-only search finds the tag, and the
+// list is scoped to whichever Terminal is currently selected (a KBY finding has no business
+// suggesting an SRC tag) — tags with no known terminal (never seen on a finding or line-list row)
+// still show, since scoping them out would just hide legitimately unknown tags. Free text is
+// always preserved (it's a plain <input>); selecting an option fires a native `change` so
+// applyTagMemory runs. Keeps #fTag as the source of truth — collectForm still just reads its .value.
+const TAG_COMBO_MAX = 50; // raised from 20 so a large tag list doesn't hide likely matches
+
+function initTagCombo() {
+  const input = $('fTag');
+  const menu = $('tagCombo');
+  let items = [];   // current filtered [{tag, location, terminal}]
+  let active = -1;  // highlighted index
+
+  const close = () => { menu.hidden = true; input.setAttribute('aria-expanded', 'false'); active = -1; };
+
+  // position:fixed menu — escape .panel's overflow:hidden (see the .combo-menu CSS comment).
+  // Re-measured on every open since the field can be anywhere in a scrolled form.
+  const position = () => {
+    const r = input.getBoundingClientRect();
+    menu.style.left = r.left + 'px';
+    menu.style.top = (r.bottom + 2) + 'px';
+    menu.style.width = r.width + 'px';
+  };
+
+  const render = () => {
+    if (!items.length) { menu.innerHTML = '<li class="combo-empty">No matching tags — type to add a new one.</li>'; }
+    else {
+      const shown = items.slice(0, matchCount > TAG_COMBO_MAX ? TAG_COMBO_MAX : items.length);
+      menu.innerHTML = shown.map((o, i) => `<li class="combo-item${i === active ? ' active' : ''}" role="option" data-i="${i}">
+        <div class="combo-tag">${esc(o.tag)}</div>${o.location ? `<div class="combo-loc">${esc(o.location)}</div>` : ''}
+      </li>`).join('') +
+        (matchCount > TAG_COMBO_MAX ? `<li class="combo-more">Showing ${TAG_COMBO_MAX} of ${matchCount} — keep typing to narrow</li>` : '');
+    }
+    position();
+    menu.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+  };
+
+  let matchCount = 0;
+  const openFiltered = () => {
+    const q = input.value.trim().toLowerCase();
+    const term = val('fTerminal');
+    const all = buildTagOptions().filter(o => !term || !o.terminal || o.terminal === term);
+    const matched = q ? all.filter(o => o.tag.toLowerCase().includes(q) || (o.location || '').toLowerCase().includes(q)) : all;
+    matchCount = matched.length;
+    items = matched.slice(0, TAG_COMBO_MAX);
+    active = -1;
+    render();
+  };
+
+  const choose = (i) => {
+    if (i < 0 || i >= items.length) return;
+    input.value = items[i].tag;
+    close();
+    input.dispatchEvent(new Event('change', { bubbles: true })); // fires applyTagMemory
+  };
+
+  input.addEventListener('focus', openFiltered);
+  input.addEventListener('input', openFiltered);
+  // changing Terminal re-scopes the tag list — re-filter if the menu happens to be open
+  $('fTerminal').addEventListener('change', () => { if (!menu.hidden) openFiltered(); });
+  window.addEventListener('resize', () => { if (!menu.hidden) position(); });
+  window.addEventListener('scroll', () => { if (!menu.hidden) position(); }, true);
+  input.addEventListener('keydown', (e) => {
+    if (menu.hidden) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); active = Math.min(active + 1, items.length - 1); render(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, 0); render(); }
+    else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); choose(active); }
+    else if (e.key === 'Escape') { close(); }
+  });
+  menu.addEventListener('mousedown', (e) => {
+    // mousedown (not click) so it fires before the input's blur closes the menu
+    const li = e.target.closest('.combo-item');
+    if (li) { e.preventDefault(); choose(Number(li.dataset.i)); }
+  });
+  input.addEventListener('blur', () => setTimeout(close, 120));
 }
 
 /* ---------------- quick calculator (#/calc — standalone what-if, nothing saves) ----------------
@@ -3593,7 +4044,7 @@ function openForm(f) {
   }
 
   $('fTerminal').value = f ? f.terminal : '';
-  $('fTag').value = f ? f.pipe_tag : '';
+  $('fTag').value = f ? (f.pipe_tag || '') : '';
   $('fPid').value = f ? (f.pid_no || '') : '';
   $('fService').value = f ? (f.service || '') : '';
   $('fLocationDesc').value = f ? (f.location_desc || '') : '';
@@ -3613,6 +4064,7 @@ function openForm(f) {
   $('fTargetDate').value = f ? (f.target_date || '') : '';
   $('fSapNotif').value = f ? (f.sap_notification || '') : '';
   $('fSapOrder').value = f ? (f.sap_order || '') : '';
+  $('fEstCost').value = f && f.estimated_cost != null ? f.estimated_cost : '';
 
   // Assessment section: auto-enable for wall-loss types (new) or when the finding carries a
   // reading / a saved assessment (edit). When editing, restore the last saved assessment inputs.
@@ -3646,6 +4098,10 @@ function openForm(f) {
         pickMarker = L.marker([f.lat, f.lng]).addTo(pickMap);
         pickMap.setView([f.lat, f.lng], 16);
       }
+    } else if (!f && pendingNewCoords) {
+      // seeded from a dashboard-map double-click — drop the picker pin at those coords
+      setPin(pendingNewCoords.lat, pendingNewCoords.lng, true);
+      pendingNewCoords = null;
     } else {
       $('fLat').value = ''; $('fLng').value = '';
       if (pickMap) pickMap.setView(DEFAULT_MAP_VIEW.center, DEFAULT_MAP_VIEW.zoom);
@@ -3670,7 +4126,7 @@ function collectForm() {
     }
   };
   need('fTerminal', 'errTerminal', !val('fTerminal'));
-  need('fTag', 'errTag', !val('fTag').trim());
+  need('fLocationDesc', 'errLocationDesc', !val('fLocationDesc').trim());
   need('fType', 'errType', !val('fType'));
   if (bad) return null;
 
@@ -3680,7 +4136,7 @@ function collectForm() {
 
   return {
     terminal: val('fTerminal'),
-    pipe_tag: val('fTag').trim(),
+    pipe_tag: sOrNull('fTag'),
     pid_no: sOrNull('fPid'),
     service: sOrNull('fService'),
     location_desc: sOrNull('fLocationDesc'),
@@ -3700,7 +4156,8 @@ function collectForm() {
     lng: nOrNull('fLng'),
     target_date: dOrNull('fTargetDate'),
     sap_notification: sOrNull('fSapNotif'),
-    sap_order: sOrNull('fSapOrder')
+    sap_order: sOrNull('fSapOrder'),
+    estimated_cost: nOrNull('fEstCost')
   };
 }
 
@@ -3835,7 +4292,7 @@ function renderDetail() {
   photoPasteTarget = 'found'; // Ctrl+V defaults to As Found until the user uses After-Repair's + Add
 
   $('detailHead').innerHTML =
-    `<h2>${esc(f.pipe_tag)}</h2>${pillHtml(f.status)}${isOverdue(f) ? '<span class="ov-badge">OVERDUE</span>' : ''}` +
+    `<h2>${esc(f.pipe_tag || f.location_desc || '—')}</h2>${pillHtml(f.status)}${isOverdue(f) ? '<span class="ov-badge">OVERDUE</span>' : ''}` +
     `<span class="dh-meta">${esc(f.terminal)} Terminal — ${esc(f.finding_type)}</span>`;
 
   const life = [];
@@ -3844,6 +4301,7 @@ function renderDetail() {
   if (f.next_check_date) life.push(dItem('Re-inspect By', `<span class="mono">${fmtDate(f.next_check_date)}</span>`));
   if (f.sap_notification) life.push(dItem('SAP Notification', `<span class="mono">${esc(f.sap_notification)}</span>`));
   if (f.sap_order) life.push(dItem('SAP Order', `<span class="mono">${esc(f.sap_order)}</span>`));
+  if (f.estimated_cost != null) life.push(dItem('Estimated Repair Cost', `<span class="mono">${esc(paFmtBaht(f.estimated_cost))}</span>`));
   if (f.repair_method) life.push(dItem('Repair Method', esc(f.repair_method)));
   if (f.repaired_date) life.push(dItem('Repaired Date', `<span class="mono">${fmtDate(f.repaired_date)}</span>`));
   if (f.closing_note) life.push(dItem('Closing Note', esc(f.closing_note)));
@@ -4382,7 +4840,7 @@ async function buildFindingPdf() {
     doc.setFont('GoogleSans', 'bold'); doc.setFontSize(11); doc.setTextColor(PDF_NAVY);
     doc.text('PIPING ABNORMAL FINDING REPORT', PW - M, 8.5, { align: 'right' });
     doc.setFont('GoogleSans', 'normal'); doc.setFontSize(7.5); doc.setTextColor('#64748b');
-    doc.text(`TAG: ${f.pipe_tag}   •   ${paFmtDate(now)}`, PW - M, 13.5, { align: 'right' });
+    doc.text(`TAG: ${f.pipe_tag || f.location_desc || '—'}   •   ${paFmtDate(now)}`, PW - M, 13.5, { align: 'right' });
     doc.setDrawColor(PDF_NAVY); doc.setLineWidth(0.8);
     doc.line(M, HEADER_H - 1, PW - M, HEADER_H - 1);
 
@@ -4503,7 +4961,8 @@ async function buildFindingPdf() {
     const inp = assess.inputs || {};
     const r = assessRes;
     const erf_no = r.mawp_no > 0 ? (r.P_input / r.mawp_no) : 9.99;
-    const erf_with = r.mawp_with > 0 ? (r.P_input / r.mawp_with) : 9.99;
+    // null mawp_with (remaining wall already at/below CA) -> n/a, not a pegged 9.99
+    const erf_with = r.mawp_with == null ? null : (r.mawp_with > 0 ? (r.P_input / r.mawp_with) : 9.99);
     const schLabel = (PA_PIPE_DATABASE[inp.nps] && PA_PIPE_DATABASE[inp.nps].schedules[inp.schedule])
       ? PA_PIPE_DATABASE[inp.nps].schedules[inp.schedule].label : (inp.schedule || '—');
 
@@ -4603,8 +5062,8 @@ async function buildFindingPdf() {
         ['Design pressure P', `${fmtN(r.P_input, 2)} ${r.pUnit}`, '—', ''],
         ['MAWP (no CA — current)', `${fmtN(r.mawp_no, 2)} ${r.pUnit}`, '>= P', r.mawp_no >= r.P_input ? 'PASS' : 'CHECK'],
         ['ERF (no CA — current)', fmtN(erf_no, 3), '<= 1.0', erf_no <= 1.0 ? 'PASS' : 'CHECK'],
-        ['MAWP (with CA reserved)', `${fmtN(r.mawp_with, 2)} ${r.pUnit}`, '>= P', r.mawp_with >= r.P_input ? 'PASS' : 'CHECK'],
-        ['ERF (with CA reserved)', fmtN(erf_with, 3), '<= 1.0', erf_with <= 1.0 ? 'PASS' : 'CHECK'],
+        ['MAWP (with CA reserved)', r.mawp_with == null ? 'n/a — wall below CA' : `${fmtN(r.mawp_with, 2)} ${r.pUnit}`, '>= P', r.mawp_with == null ? '—' : (r.mawp_with >= r.P_input ? 'PASS' : 'CHECK')],
+        ['ERF (with CA reserved)', erf_with == null ? 'n/a' : fmtN(erf_with, 3), '<= 1.0', erf_with == null ? '—' : (erf_with <= 1.0 ? 'PASS' : 'CHECK')],
         [{ content: 'REMAINING LIFE', colSpan: 4, styles: { fillColor: '#e2e8f0', fontStyle: 'bold', fontSize: 7 } }],
         ['Corrosion allowance CA', `${fmtN(r.ca, 2)} mm`, '—', ''],
         ['Corrosion rate CR', r.CR > 0 ? `${fmtN(r.CR, 3)} mm/yr` : '—', '—', ''],
@@ -4872,17 +5331,15 @@ async function exportFindingPdf() {
 
 /* ---------------- Management-summary PDF (the currently filtered register as one table) ---------------- */
 
-async function exportSummaryPdf() {
+// rows are resolved by the export dialog (selection else filter); includeBudget threads through
+// to the report chrome + table.
+async function exportSummaryPdf(rows, includeBudget) {
   if (!window.jspdf) { notify('PDF engine not loaded — check your connection and reload.', true); return; }
-  // A non-empty selection (checkboxes in the register) narrows the report to just those
-  // findings; with nothing selected it falls back to the whole filtered set, as before.
-  const filtered = sortFindings(applyFilters(findings));
-  const rows = selectedIds.size ? filtered.filter(f => selectedIds.has(f.id)) : filtered;
-  if (!rows.length) { notify('No findings to summarize with the current filters.', true); return; }
-  const btn = $('btnSummaryPdf');
+  if (!rows || !rows.length) { notify('No findings to summarize with the current filters.', true); return; }
+  const btn = $('btnExport');
   setBusy(btn, true, 'Building…');
   try {
-    const blob = await buildSummaryPdf(rows);
+    const blob = await buildSummaryPdf(rows, includeBudget);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener';
     document.body.appendChild(a); a.click(); a.remove();
@@ -4894,7 +5351,31 @@ async function exportSummaryPdf() {
   }
 }
 
-async function buildSummaryPdf(rows) {
+// The export dialog: one button -> pick format + opt-in budget.
+function openExportDialog() {
+  const filtered = sortFindings(applyFilters(findings));
+  const n = selectedIds.size ? selectedIds.size : filtered.length;
+  if (!n) { notify('Nothing to export with the current filters.', true); return; }
+  $('exportScope').textContent = selectedIds.size
+    ? `Exporting ${selectedIds.size} selected finding${selectedIds.size === 1 ? '' : 's'}`
+    : `Exporting ${filtered.length} finding${filtered.length === 1 ? '' : 's'} — current filter`;
+  const pdfRadio = document.querySelector('input[name="exportFmt"][value="pdf"]');
+  if (pdfRadio) pdfRadio.checked = true;
+  $('exportInclBudget').checked = false;
+  openDialog($('exportDlg'));
+}
+
+function runExport() {
+  const fmt = (document.querySelector('input[name="exportFmt"]:checked') || {}).value || 'pdf';
+  const includeBudget = $('exportInclBudget').checked;
+  const filtered = sortFindings(applyFilters(findings));
+  const rows = selectedIds.size ? filtered.filter(f => selectedIds.has(f.id)) : filtered;
+  closeDialog($('exportDlg'));
+  if (fmt === 'csv') exportCsv(rows, includeBudget);
+  else exportSummaryPdf(rows, includeBudget);
+}
+
+async function buildSummaryPdf(rows, includeBudget) {
   {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
@@ -4903,12 +5384,16 @@ async function buildSummaryPdf(rows) {
     const HEADER_H = 13, FOOTER_H = 14;
     const DANGER = '#dc2626';
     const now = new Date();
+    // Baht for the PDF: the ฿ glyph (U+0E3F) isn't WinAnsi-safe and jsPDF drops it, so use "THB".
+    const thb = n => (n == null || !isFinite(n)) ? '—' : 'THB ' + Math.round(n).toLocaleString('en-US');
+    const thbNum = n => (n == null || !isFinite(n)) ? '—' : Math.round(n).toLocaleString('en-US');
     const logo = (typeof OR_LOGO_DATAURL !== 'undefined' && OR_LOGO_DATAURL) || await fetchAsDataUrl('asset/RGB_OR_Full color.png', 3000);
     const logoIm = logo ? await loadImg(logo) : null;
 
     const term = filters.terminal || 'All terminals';
     const stat = filters.status === '__overdue' ? 'Overdue only'
       : filters.status === '__complete' ? 'Complete only'
+      : filters.status === '__outstanding' ? 'Outstanding only'
       : (filters.status || 'All statuses');
     const cnt = (s) => rows.filter(f => f.status === s).length;
     const overdue = rows.filter(isOverdue).length;
@@ -4960,18 +5445,35 @@ async function buildSummaryPdf(rows) {
     if (overdue) { doc.setFont('GoogleSans', 'bold'); doc.setTextColor(DANGER); doc.text(`${overdue} OVERDUE`, PW - M, y, { align: 'right' }); doc.setTextColor(PDF_TEXT); doc.setFont('GoogleSans', 'normal'); }
     y += 6;
 
+    // Budget headline (opt-in) — outstanding = not yet Repaired/Closed, with a severity split.
+    if (includeBudget) {
+      const out = rows.filter(f => f.status !== 'Repaired' && f.status !== 'Closed');
+      const sum = arr => arr.reduce((s, f) => s + (Number(f.estimated_cost) || 0), 0);
+      const sev = s => thb(sum(out.filter(f => f.severity === s)));
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(9); doc.setTextColor(PDF_NAVY);
+      doc.text(`Outstanding repair budget: ${thb(sum(out))}`, M, y);
+      doc.setFont('GoogleSans', 'normal'); doc.setTextColor(PDF_MUTED);
+      doc.text(`High ${sev('High')}  ·  Medium ${sev('Medium')}  ·  Low ${sev('Low')}`, M + 90, y);
+      doc.setTextColor(PDF_TEXT);
+      y += 6;
+    }
+
     // Type column carries the finding type plus, on their own wrapped lines, the Location
     // Description and Anomaly Description (when present) — folded in here rather than as two
     // more narrow columns, which would squeeze Map/Photo below a useful size.
     const body = rows.map((f, i) => {
       const typeLines = [f.finding_type];
-      if (f.location_desc) typeLines.push(`Loc: ${f.location_desc}`);
+      // Location is the tag-column label when there's no Line No. yet — don't repeat it here.
+      if (f.pipe_tag && f.location_desc) typeLines.push(`Loc: ${f.location_desc}`);
       if (f.description) typeLines.push(`Anomaly: ${f.description}`);
-      return [
-        String(i + 1), f.terminal, f.pipe_tag, typeLines.join('\n'), f.status, f.severity || '—',
+      const cells = [
+        String(i + 1), f.terminal, f.pipe_tag || f.location_desc || '—', typeLines.join('\n'), f.status, f.severity || '—',
         (dueDateOf(f) ? paFmtDate(dueDateOf(f)) : '—') + (isOverdue(f) ? '  (OVERDUE)' : ''),
-        (ageDays(f) != null ? ageDays(f) + 'd' : '—'), '', ''
+        (ageDays(f) != null ? ageDays(f) + 'd' : '—')
       ];
+      if (includeBudget) cells.push(thbNum(f.estimated_cost)); // before Map/Photo (unit in the header)
+      cells.push('', ''); // Map, Photo
+      return cells;
     });
 
     // Fit an image into a cell, letterboxed and centered, capped by BOTH the column width and
@@ -4991,27 +5493,36 @@ async function buildSummaryPdf(rows) {
       doc.setTextColor(PDF_TEXT);
     }
 
+    // With the opt-in Est. Cost column, Map/Photo shift right by one; index everything off that.
+    const MAP_COL = includeBudget ? 9 : 8;
+    const PHOTO_COL = includeBudget ? 10 : 9;
+    const head = ['#', 'Terminal', 'Pipe Tag', 'Type', 'Status', 'Sev.', 'Due', 'Age'];
+    if (includeBudget) head.push('Est. Cost (THB)');
+    head.push('Map', 'Photo');
+    const colStyles = {
+      0: { cellWidth: 8, halign: 'right', valign: 'middle' },
+      1: { cellWidth: 17, valign: 'middle' },
+      2: { cellWidth: 42, fontStyle: 'bold', valign: 'middle' }, // long tags (e.g. 953-P-009-10"-D1101-ET-80) need real room
+      4: { cellWidth: 20, valign: 'middle' },
+      5: { cellWidth: 18, valign: 'middle' }, // "Medium" needs more room than the other two severities
+      6: { cellWidth: 22, valign: 'middle' },
+      7: { cellWidth: 11, valign: 'middle' },
+      // Map/Photo slightly narrower when budget is on to make room for the Est. Cost column.
+      [MAP_COL]: { cellWidth: includeBudget ? 28 : 32 },
+      [PHOTO_COL]: { cellWidth: includeBudget ? 28 : 32 }
+      // column 3 (Type + Loc/Anomaly sub-lines) is left unset -> autoTable gives it whatever
+      // width remains; text is drawn manually in didDrawCell so its own valign doesn't matter.
+    };
+    if (includeBudget) colStyles[8] = { cellWidth: 22, halign: 'right', valign: 'middle', fontStyle: 'bold' };
     doc.autoTable({
       startY: y,
-      head: [['#', 'Terminal', 'Pipe Tag', 'Type', 'Status', 'Sev.', 'Due', 'Age', 'Map', 'Photo']],
+      head: [head],
       body,
       theme: 'grid',
       styles: { font: 'GoogleSans', fontSize: 8, cellPadding: 1.6, lineColor: '#e2e8f0', lineWidth: 0.1, textColor: '#0f172a', overflow: 'linebreak', minCellHeight: 26, valign: 'top' },
       headStyles: { fillColor: PDF_NAVY, textColor: '#ffffff', fontStyle: 'bold', fontSize: 8, valign: 'middle', cellPadding: { top: 2.2, right: 1.6, bottom: 2.2, left: 1.6 }, minCellHeight: 0 },
       alternateRowStyles: { fillColor: '#f8fafc' },
-      columnStyles: {
-        0: { cellWidth: 8, halign: 'right', valign: 'middle' },
-        1: { cellWidth: 17, valign: 'middle' },
-        2: { cellWidth: 42, fontStyle: 'bold', valign: 'middle' }, // long tags (e.g. 953-P-009-10"-D1101-ET-80) need real room
-        4: { cellWidth: 20, valign: 'middle' },
-        5: { cellWidth: 18, valign: 'middle' }, // "Medium" needs more room than the other two severities
-        6: { cellWidth: 22, valign: 'middle' },
-        7: { cellWidth: 11, valign: 'middle' },
-        8: { cellWidth: 32 },
-        9: { cellWidth: 32 }
-        // column 3 (Type + Loc/Anomaly sub-lines) is left unset -> autoTable gives it whatever
-        // width remains; text is drawn manually in didDrawCell so its own valign doesn't matter.
-      },
+      columnStyles: colStyles,
       margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
       didParseCell: (data) => {
         if (data.section !== 'body') return;
@@ -5022,12 +5533,13 @@ async function buildSummaryPdf(rows) {
       didDrawCell: (data) => {
         if (data.section !== 'body') return;
         const i = data.row.index;
-        if (data.column.index === 8) {
+        if (i < 0 || !rows[i]) return; // autotable fires a spanning row (index -1) at a page break
+        if (data.column.index === MAP_COL) {
           const img = mapImgs[i];
           if (img) drawFitted(img, 'JPEG', MAP_PX.w / MAP_PX.h, data.cell);
           else drawEmptyNote('No location', data.cell);
         }
-        if (data.column.index === 9) {
+        if (data.column.index === PHOTO_COL) {
           const ph = photoImgs[i];
           if (ph) drawFitted(ph.dataUrl, 'JPEG', ph.ratio, data.cell);
           else drawEmptyNote('No photo', data.cell);
@@ -5134,6 +5646,11 @@ function initApp() {
     $('filStatus').value = '__complete';
     renderList();
   });
+  $('kpiBudgetCard').addEventListener('click', () => {
+    filters.status = '__outstanding';
+    $('filStatus').value = '__outstanding';
+    renderList();
+  });
   $('filType').addEventListener('change', () => { filters.type = val('filType'); renderList(); });
   $('filSearch').addEventListener('input', () => {
     filters.q = val('filSearch');
@@ -5163,7 +5680,9 @@ function initApp() {
     localStorage.setItem('hideRowPhotos', hidden ? '1' : '0');
     applyPhotoToggle(hidden);
   });
-  $('btnCsv').addEventListener('click', exportCsv);
+  $('btnExport').addEventListener('click', openExportDialog);
+  $('exportCancel').addEventListener('click', () => closeDialog($('exportDlg')));
+  $('exportRun').addEventListener('click', runExport);
   $('btnImport').addEventListener('click', openImportDialog);
   $('importCancel').addEventListener('click', () => closeDialog($('importDlg')));
   $('importTemplateLink').addEventListener('click', (e) => { e.preventDefault(); downloadImportTemplate(); });
@@ -5172,12 +5691,12 @@ function initApp() {
 
   $('btnLineList').addEventListener('click', openLineListManageDialog);
   $('lineListManageClose').addEventListener('click', () => closeDialog($('lineListManageDlg')));
+  $('lineListSearch').addEventListener('input', renderLineListManageTable);
   $('lineListManageImportBtn').addEventListener('click', openLineListImportDialog);
   $('lineListImportCancel').addEventListener('click', () => closeDialog($('lineListImportDlg')));
   $('lineListImportTemplateLink').addEventListener('click', (e) => { e.preventDefault(); downloadLineListTemplate(); });
   $('lineListImportFile').addEventListener('change', (e) => { if (e.target.files[0]) parseLineListImportFile(e.target.files[0]); });
   $('lineListImportConfirm').addEventListener('click', doLineListImport);
-  $('btnSummaryPdf').addEventListener('click', exportSummaryPdf);
   $('chkSelectAll').addEventListener('change', (e) => {
     lastRenderedRows.forEach(f => { if (e.target.checked) selectedIds.add(f.id); else selectedIds.delete(f.id); });
     renderTable(lastRenderedRows);
@@ -5196,6 +5715,7 @@ function initApp() {
   $('btnSave').addEventListener('click', () => saveForm(false));
   $('btnSaveAnother').addEventListener('click', () => saveForm(true));
   $('fTag').addEventListener('change', applyTagMemory);
+  initTagCombo();
   $('btnDelete').addEventListener('click', deleteFinding);
   $('btnClearLoc').addEventListener('click', clearPin);
   const coordChanged = () => {
