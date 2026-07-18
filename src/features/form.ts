@@ -25,9 +25,9 @@ import {
 } from '../core/state';
 import { loadFindings, buildTagOptions } from './dashboard';
 import { loadLineList } from './import-export';
-// show()/addDetailPhotos()/renderPhotoGroups() still live in app.ts (router + detail view,
-// not yet extracted) — imported back from the hub for now; re-pointed when detail.ts is split out.
-import { show, addDetailPhotos, renderPhotoGroups } from '../app';
+// show() is the router's view-switcher — stays in app.ts (the hub).
+import { show } from '../app';
+import { addDetailPhotos, renderPhotoGroups } from './detail';
 
 /* ---------------- form (new / edit) ---------------- */
 
