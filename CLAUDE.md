@@ -6,6 +6,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Do NOT push to git automatically**: Never run `git push` after code edits unless the user explicitly requests a push. The user prefers to review changes locally and push manually.
 
+## Build system — Vite + Vanilla-TS (branch `refactor/vite-migration`, Phase 1)
+
+> **Status:** On `refactor/vite-migration` the app is a **Vite + Vanilla-TypeScript** build (no framework). `main` is still the original no-build monolith until this branch is merged. **Everything below the "What this is" heading still describes the app's behavior accurately** — only the delivery mechanism changed (the "no-build / inline `<script>` / CDN `<script>` tags" framing is superseded on this branch).
+>
+> **Commands:** `npm run dev` (Vite dev server, replaces the old `file://` workflow) · `npm run build` (→ `dist/`) · `npm run preview` (serves `dist/` on :4173) · `npm run typecheck` (`tsc --noEmit`) · `npm run test` (Vitest — the engine parity gate).
+>
+> **Module map (`src/`):**
+> - `engine/` — the ASME B31.3 engine, **strictly typed**: `compute.ts` (`computeB313` + re-exports), `pipe-data.ts` (`PA_PIPE_DATABASE`/`PA_MATERIALS`, extracted **verbatim** from the old `asset/shared.js`), `format.ts` (`paFmt*`), `fonts.ts` (base64 Google Sans + `registerGoogleSansFonts`/`registerGoogleSansWebFont`), `branding.ts` (`OR_LOGO_DATAURL` + `downscaleImage`). `compute.test.ts` is the **numeric-identity gate**: it evaluates the original `asset/shared.js` in a VM sandbox and asserts `computeB313` is bit-identical across a large matrix — **must stay 0 mismatches**.
+> - `workbench/assess-view.ts` — the assessment view layer (ported from `asset/assess-ui.js`), strictly typed.
+> - `types/models.ts` — `B313Inputs`/`B313Result` (strict) + persistence row types (loose, index-signatured).
+> - `core/supabase.ts` — the bundled Supabase client (`sb`), replacing the old `window.supabase` UMD global.
+> - `app.ts` — **the entire old inline `<script>` ported 1:1 as one ES module** (top-level `const`/`let`/`function` share module scope, resolving names exactly as the old global scope did). Carries `// @ts-nocheck` for now — verified behaviorally (engine parity + Playwright), typed as it is split into feature modules. **Next increment:** split into `core/` (state/constants/dom/router) + `features/` (dashboard/form/detail/calc/import-export/line-list) behind a shared mutable `state` object — do it against the green build, removing `@ts-nocheck` per module so `tsc` catches missing imports.
+> - `main.ts` — entry: styles (Basecoat → theme → app CSS), Leaflet CSS, Basecoat JS, `registerGoogleSansWebFont()`, then `initApp` on `DOMContentLoaded`. `index.html` is now just the body markup + `<script type="module" src="/src/main.ts">`.
+> - `styles/{theme,app}.css` — the design system + the extracted page CSS.
+>
+> **Dependencies are on npm (pinned, no CDN tags):** basecoat-css 1.0.1, leaflet 1.9.4, @supabase/supabase-js 2.49.4, jspdf 2.5.2, jspdf-autotable 3.8.4, xlsx 0.18.5. **Dynamic loading:** `jspdf` + `jspdf-autotable` + `xlsx` are `await import()`-ed at their call sites, so Rollup emits them as **lazy chunks** (verified out of the entry bundle — they load only on Export/Import). `jspdf-autotable` uses the functional form `autoTable(doc, {...})`. Leaflet's default marker icons are repointed to bundled asset URLs (the standard Vite fix). `asset/` is **retained**: `asset/shared.js` is the frozen parity baseline the Vitest gate reads; `asset/RGB_OR_Full color.png` is the header logo.
+>
+> **Deploy (Render, at merge):** switch the static site to build command `npm run build`, publish directory `dist/`; pin Node via `.nvmrc`. Runtime no longer fetches library CDNs (only Supabase API + Esri tiles).
+
 ## What this is
 
 Pipe Assessor is a **no-build, single-page static web app**: **`index.html`** is the Findings Tracker dashboard (the Render root) — a Supabase-backed register of abnormal inspection findings tracked from Open until repaired/closed, with the **full ASME B31.3 assessment workbench built in**. The workbench evaluates pipe wall-thickness integrity per **ASME B31.3** (required thickness / MAWP) and **ASME PCC-2** (repair category advice), with API 574 structural minimums as a secondary check — a field engineer enters the measured wall loss and gets a live status (OK / MONITOR / REPAIR), cross-section diagram, results table, repair advisor, substituted equations, remaining-life estimate, and a generated PDF engineering report. The whole app requires sign-in and a network connection (Supabase + CDNs); offline it degrades to a login screen with a "check your connection" notice.

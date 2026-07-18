@@ -19,9 +19,24 @@
 
 <hr>
 
+<h2>Developing</h2>
+<p>
+    On the <code>refactor/vite-migration</code> branch the app is a <strong>Vite + Vanilla-TypeScript</strong> build. Install dependencies once with <code>npm install</code>, then:
+</p>
+<ul>
+    <li><code>npm run dev</code> — start the Vite dev server (hot reload).</li>
+    <li><code>npm run build</code> — produce the production bundle in <code>dist/</code>.</li>
+    <li><code>npm run preview</code> — serve the built <code>dist/</code> locally.</li>
+    <li><code>npm run typecheck</code> — run the TypeScript checker.</li>
+    <li><code>npm run test</code> — run the ASME B31.3 engine numeric-identity test (Vitest).</li>
+</ul>
+<p>
+    The heavy libraries (jsPDF, SheetJS) are loaded on demand, so they only download when a report or spreadsheet is actually generated. Full functionality requires sign-in and a network connection (Supabase). See <code>CLAUDE.md</code> for the module layout.
+</p>
+
 <h2>Usage</h2>
 <p>
-    The application is a single <code>index.html</code> file and can be run directly in any modern web browser. Simply open the file and follow these steps:
+    In the app, follow these steps:
 </p>
 <ol>
     <li><strong>Header Meta:</strong> Enter the pipe's identifying information, such as <strong>Tag</strong>, <strong>Location</strong>, and <strong>P&amp;ID</strong>.</li>
