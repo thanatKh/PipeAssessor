@@ -1,0 +1,1319 @@
+    /* Brand tokens, base styles, .wrap, and the header suite live in asset/theme.css. */
+    /* match the calculator's page width (theme.css default 1500px) */
+
+    /* Header additions specific to this page */
+    .header-actions { gap: 10px; }
+
+    .hdr-user {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 640px) {
+      .header-info h1 { font-size: 16px; }
+      .hdr-logo { height: 26px; }
+      .hdr-logo-chip { padding: 6px 10px; }
+      .hdr-user { display: none; }
+      .hdr-btn { padding: 7px 10px; font-size: 11.5px; }
+    }
+
+    body:not(.authed) .authed-only { display: none !important; }
+
+    /* ============ Views ============ */
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* .panel and friends (the app's one card-container system, shared with the assessment
+       workbench) now live in asset/theme.css — single source, not re-inlined per page. */
+
+    /* ============ Login ============ */
+    .login-wrap {
+      max-width: 380px;
+      margin: 8vh auto 0;
+    }
+
+    .login-wrap .panel-b { display: flex; flex-direction: column; gap: 12px; }
+
+    .login-title { font-size: 16px; font-weight: 800; margin: 0; }
+    .login-sub { font-size: 11.5px; color: var(--text-muted); margin: 2px 0 0; }
+
+    .login-err {
+      display: none;
+      font-size: 11.5px;
+      color: var(--danger-text);
+      background: var(--danger-bg);
+      border: 1px solid var(--danger-border);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+
+    /* ============ Labels / fields ============ */
+    label.f-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .req::after { content: " *"; color: var(--danger-color); }
+
+    /* muted "(engineer can add later)" note on an optional label */
+    .f-optnote { font-weight: 400; color: var(--text-light); text-transform: none; letter-spacing: 0; }
+
+    /* ============ Searchable combobox (Pipe Tag / Line No.) ============
+       position:fixed (not absolute) — .combo lives inside .panel, which uses
+       overflow:hidden to clip its own rounded corners; an absolutely-positioned menu was
+       being clipped to just the sliver of the card visible below the input (~2 rows) instead
+       of overlaying the rest of the page. Fixed positioning escapes that ancestor clip entirely;
+       initTagCombo() sets top/left/width from the input's getBoundingClientRect() on open. */
+    .combo { position: relative; }
+    .combo-menu {
+      position: fixed;
+      margin: 0;
+      padding: 4px;
+      list-style: none;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+      max-height: 360px;
+      overflow-y: auto;
+      z-index: 500;
+    }
+    .combo-menu[hidden] { display: none; }
+    .combo-item {
+      padding: 6px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .combo-item.active, .combo-item:hover { background: var(--button-ghost-hover); }
+    .combo-tag { font-family: 'Google Sans', sans-serif; font-size: 12.5px; color: var(--text-color); }
+    .combo-loc { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+    .combo-empty { padding: 6px 8px; font-size: 11px; color: var(--text-light); }
+    .combo-more { padding: 6px 8px; font-size: 10.5px; color: var(--text-light); border-top: 1px solid var(--card-border); margin-top: 4px; text-align: center; }
+
+    .hint { font-size: 11px; color: var(--text-light); margin-top: 6px; }
+
+    kbd {
+      font-family: 'Google Sans', sans-serif;
+      font-size: 10px;
+      padding: 1px 5px;
+      border: 1px solid var(--card-border);
+      border-bottom-width: 2px;
+      border-radius: 4px;
+      background: var(--bg-color);
+      color: var(--text-muted);
+    }
+
+    .validation-alert {
+      display: none;
+      font-size: 11px;
+      color: var(--danger-text);
+      margin-top: 6px;
+    }
+
+    /* ============ Dashboard top: map left, KPI column right ============
+       Mutual max-height: align-items:stretch makes both columns match whichever is naturally
+       taller — the KPI column's own accumulated card heights (Ring+Budget pair, 6 chips, radar)
+       normally set that height, and the map (flex-grown, no fixed height) fills it. Individual
+       KPI cards inside the column stay content-sized (see .kpi-sidebar below) — only the
+       column's *aggregate* height participates in the stretch, not each card individually. */
+    .dash-top {
+      display: flex;
+      gap: 14px;
+      align-items: stretch;
+      margin-bottom: 14px;
+    }
+
+    .dash-top .dash-map-panel {
+      flex: 1 1 auto;
+      min-width: 0;
+      margin-bottom: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .dash-top .dash-map-panel #dashMap { flex: 1 1 auto; }
+
+    /* ============ KPI column: natural-height cards stacked vertically ============
+       Ring + Budget sit side by side as a compact pair (both short); the 6 status chips follow
+       in a 2-col grid. The cards themselves are not stretched to fill extra space — the column's
+       total (sum of its cards + gaps) is simply read by the sibling map/radar panels via
+       align-items:stretch on .dash-top above. */
+    .kpi-sidebar {
+      flex: 0 0 340px;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Ring + Budget stacked full-width (not side-by-side) — each card spans the sidebar's full
+       width (equivalent to the old two 1fr columns combined), Ring on top, Budget below. */
+    .kpi-top-pair { display: flex; flex-direction: column; gap: 8px; }
+    /* All 6 status chips, 3 across x 2 rows. */
+    .kpi-row-bottom { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+    /* Budget KPI card — same card shell as the ring card, currency-sum content. Natural height
+       (see .dash-top comment) — content flows top to bottom instead of being vertically centered
+       in a forced-tall cell. */
+    .kpi-budget-card {
+      display: block;
+      width: 100%;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+      color: var(--text-color);
+      outline: none; /* see .kpi-ring-card's reset — real outline re-added for :focus-visible only */
+    }
+    .kpi-budget-card:hover { border-color: var(--button-primary); }
+    .kpi-budget-card.active { border-color: var(--button-primary); box-shadow: 0 0 0 1px var(--button-primary); }
+    .kpi-budget-card:focus-visible { outline: 2px solid var(--button-primary); outline-offset: 2px; }
+    .kb-head { display: flex; flex-direction: column; gap: 2px; }
+    .kb-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); }
+    .kb-total { font-family: 'Google Sans', sans-serif; font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 700; color: var(--text-color); }
+    .kb-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .kb-sev { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 8px; }
+    .kb-sev span { font-size: 11px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; }
+    .kb-sev i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .kb-sev .kb-hi i { background: var(--danger-color); }
+    .kb-sev .kb-md i { background: var(--warn-color); }
+    .kb-sev .kb-lo i { background: var(--ok-color); }
+    .kb-sev b { font-family: 'Google Sans', sans-serif; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text-color); }
+
+    /* Findings-by-type radar — its own column, third sibling in .dash-top, matching the map/KPI
+       column height via align-items:stretch (see .dash-top comment). The SVG grows to fill
+       whatever height that stretch gives the card, so it reads clearly at any dashboard height. */
+    .kpi-radar-card {
+      flex: 0 0 300px;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 10px 12px 8px;
+    }
+    .kpi-radar-title { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); margin-bottom: 4px; }
+    #kpiRadar { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    #kpiRadar svg { display: block; width: 100%; flex: 1 1 auto; min-height: 220px; }
+    .radar-grid { fill: none; stroke: var(--card-border); stroke-width: 0.8; }
+    .radar-axis { stroke: var(--card-border); stroke-width: 0.8; }
+    .radar-label { font-size: 9px; fill: var(--text-muted); }
+    .radar-total { fill: var(--button-primary); fill-opacity: 0.14; stroke: var(--button-primary); stroke-width: 1.4; }
+    .radar-remain { fill: var(--warn-color); fill-opacity: 0.26; stroke: var(--warn-color); stroke-width: 1.4; }
+    .radar-remain-dot { fill: var(--warn-color); }
+    .radar-legend { display: flex; justify-content: center; gap: 14px; margin-top: 4px; font-size: 11px; color: var(--text-muted); }
+    .radar-legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .radar-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+    .radar-legend .rl-remain i { background: var(--warn-color); }
+    .radar-legend .rl-total i { background: var(--button-primary); }
+    .radar-legend b { font-variant-numeric: tabular-nums; color: var(--text-color); }
+    .radar-empty { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--text-light); text-align: center; padding: 8px 0; }
+
+    /* Stacked full-width above the budget card (see .kpi-top-pair) — horizontal layout (ring
+       left, percentage + fraction right) so the card reads well at full sidebar width instead
+       of leaving empty space either side of a centered ring. */
+    .kpi-ring-card {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 14px;
+      width: 100%;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+      color: var(--text-color);
+      /* Reset first so a plain mouse-click focus never shows the browser's raw default outline
+         (it doesn't reliably respect :focus-visible on <button> across engines) — the deliberate
+         outline below is added back only for :focus-visible (keyboard nav). */
+      outline: none;
+    }
+
+    .kpi-ring-card:hover { border-color: var(--button-primary); }
+
+    .kpi-ring-card.active {
+      border-color: var(--button-primary);
+      box-shadow: 0 0 0 1px var(--button-primary);
+    }
+
+    /* Deliberate focus treatment — keyboard-nav only, see the outline:none reset above. */
+    .kpi-ring-card:focus-visible {
+      outline: 2px solid var(--button-primary);
+      outline-offset: 2px;
+    }
+
+    /* Ring + center label overlap via CSS Grid (both children in the same 1x1 cell) rather than
+       position:absolute — no positioning-context bookkeeping needed for one simple overlay. */
+    .kpi-ring-wrap {
+      display: grid;
+      grid-template-areas: "ring";
+      place-items: center;
+      width: 76px;
+      height: 76px;
+      flex: none;
+    }
+
+    .kpi-ring-wrap > * { grid-area: ring; }
+
+    .kpi-ring {
+      width: 76px;
+      height: 76px;
+      transform: rotate(-90deg); /* start the fill at 12 o'clock */
+    }
+
+    .kpi-ring-track, .kpi-ring-fill {
+      fill: none;
+      stroke-width: 9;
+    }
+
+    .kpi-ring-track { stroke: var(--card-border); }
+
+    .kpi-ring-fill {
+      stroke: var(--ok-color);
+      stroke-linecap: round;
+      /* stroke-dasharray/-dashoffset set inline per render (circumference math needs the JS value) */
+      transition: stroke-dashoffset 0.5s ease;
+    }
+
+    .kpi-ring-center {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      /* keep the label clear of the ring's stroke on both sides (76px ring - 2*9px stroke) */
+      width: 54px;
+    }
+
+    .kpi-ring-pct {
+      font-family: 'Google Sans', sans-serif;
+      font-variant-numeric: tabular-nums;
+      font-size: 17px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    /* Text block to the right of the ring (see .kpi-ring-card row layout) — same eyebrow-label +
+       value hierarchy as the budget card's .kb-head/.kb-total below it. */
+    .kpi-ring-info { display: flex; flex-direction: column; gap: 2px; }
+
+    .kpi-ring-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: var(--text-muted);
+    }
+
+    .kpi-ring-fraction {
+      font-family: 'Google Sans', sans-serif;
+      font-variant-numeric: tabular-nums;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-color);
+    }
+
+    /* ============ KPI chips: 2 in the tall column-4 stack, 4 across the row below ============ */
+    .kpi {
+      min-width: 0;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+      color: var(--text-color);
+      outline: none; /* see .kpi-ring-card's identical reset — real outline added back below, focus-visible only */
+    }
+
+    .kpi:hover { border-color: var(--button-primary); }
+
+    .kpi.active {
+      border-color: var(--button-primary);
+      box-shadow: 0 0 0 1px var(--button-primary);
+    }
+
+    .kpi:focus-visible {
+      outline: 2px solid var(--button-primary);
+      outline-offset: 2px;
+    }
+
+    .kpi .k-num {
+      display: block;
+      font-family: 'Google Sans', sans-serif;
+      font-variant-numeric: tabular-nums;
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .kpi .k-label {
+      display: block;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    .kpi.k-overdue .k-num { color: var(--danger-color); }
+
+    /* Below ~960px the map, KPI column, and radar don't all earn their width — stack, map first,
+       then KPI column, then radar, each full-width. Stacked columns have no stretch sibling to
+       size themselves against, so they each fall back to an explicit height here. */
+    @media (max-width: 960px) {
+      .dash-top { flex-direction: column; align-items: stretch; }
+      .kpi-sidebar { flex: none; }
+      .kpi-radar-card { flex: none; }
+      #dashMap { height: 340px; }
+      #kpiRadar svg { height: 220px; }
+    }
+
+    @media (max-width: 767px) {
+      #dashMap { height: 240px; }
+    }
+    /* Below ~460px: the ring/budget pair and the 6 chips each drop to fewer columns so nothing
+       gets too narrow to read on a phone. */
+    @media (max-width: 460px) {
+      .kpi-row-bottom { grid-template-columns: repeat(2, 1fr); }
+      .kpi .k-label { font-size: 9px; }
+    }
+
+    /* ============ Dashboard map ============ */
+    /* No fixed height at desktop widths — .dash-top-panel's flex-grow (set above) makes #dashMap
+       fill whatever height .dash-top's align-items:stretch gives the map panel, matching the KPI
+       column. min-height guards a near-empty KPI column (e.g. 0 findings) from producing a
+       too-short map. Scoped to >960px (not unconditional) — the stacked mobile/tablet layout
+       below sets its own explicit, smaller heights and would otherwise be clamped back up by
+       this rule winning on source order at equal specificity. */
+    #dashMap { z-index: 1; }
+    @media (min-width: 961px) {
+      #dashMap { min-height: 340px; }
+    }
+
+    .panel-h-btns { display: flex; gap: 8px; }
+
+    .map-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .map-legend .lg-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .map-legend .lg-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.2);
+      flex: none;
+    }
+
+    .map-legend .lg-dot.lg-overdue {
+      background: transparent;
+      border: 2px dashed #dc2626;
+      box-shadow: none;
+    }
+
+    .map-popup { font-size: 12px; line-height: 1.5; }
+    .map-popup .mp-tag { font-family: 'Google Sans', sans-serif; font-weight: 700; font-size: 12px; margin-bottom: 4px; }
+    .map-popup .mp-meta { color: var(--text-muted); margin: 3px 0 6px; }
+    .map-popup a { color: var(--button-primary); font-weight: 600; }
+
+    /* Leaflet's own popup chrome isn't theme-aware by default — it stays a plain white card
+       (confirmed the popup box itself, not just its text, renders pure white by default).
+       Theme it to match the app's card surface. */
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+      background: var(--card-bg);
+      color: var(--text-color);
+    }
+
+    /* ============ Dashboard: register full-width below the map+KPI row ============ */
+    .dash-split {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .dash-list-panel { margin-bottom: 0; }
+
+    /* ============ Segmented control (terminal filter + reading-mode toggles) ============
+       Sliding-pill treatment (transitions.dev 16-tabs-sliding), adapted onto this app's
+       existing .seg-btn.active model instead of the snippet's own aria-selected-driven
+       markup — the three .seg-row groups (terminal filter, #aModeSeg, #qModeSeg) already
+       have their own click handlers that toggle .active; positionSegPill() just reads
+       whichever button is .active and slides a shared <span class="seg-pill"> under it. */
+    :root {
+      --tabs-dur: 250ms;
+      --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .seg-row {
+      position: relative;
+      display: inline-flex;
+      gap: 2px;
+      padding: 3px;
+      background: var(--bg-color);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+
+    .seg-pill {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      height: calc(100% - 6px);
+      width: 0;
+      background: var(--card-bg);
+      border-radius: 6px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
+      transform: translateX(0);
+      transition: transform var(--tabs-dur) var(--tabs-ease), width var(--tabs-dur) var(--tabs-ease);
+      will-change: transform, width;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .seg-btn {
+      position: relative;
+      z-index: 1;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: color var(--tabs-dur) var(--tabs-ease);
+    }
+
+    .seg-btn:hover { color: var(--text-color); }
+
+    .seg-btn.active {
+      color: var(--button-primary);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .seg-pill, .seg-btn { transition: none !important; }
+    }
+
+    /* ============ Filters ============ */
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .filters .select, .filters .input { height: 34px; font-size: 12px; }
+    .filters .select { width: auto; min-width: 120px; }
+    .filters .input { flex: 1 1 160px; min-width: 140px; }
+
+    /* ============ Findings table ============ */
+    .tbl-scroll { overflow-x: auto; }
+
+    table.list {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+    }
+
+    table.list th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      padding: 10px 10px;
+      border-bottom: 1px solid var(--card-border);
+      white-space: nowrap;
+    }
+
+    table.list td {
+      padding: 11px 10px;
+      border-bottom: 1px solid var(--card-border);
+      vertical-align: middle;
+    }
+
+    table.list tbody tr { cursor: pointer; }
+    table.list tbody tr:hover { background: var(--button-ghost-hover); }
+    table.list tbody tr:last-child td { border-bottom: none; }
+
+    /* Tag cell: tag on top, finding-type as muted subtext, optional photo-count chip */
+    .c-tag .t-tag-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .c-tag .t-tag {
+      font-family: 'Google Sans', sans-serif;
+      font-size: 13.5px;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+    .c-tag .t-type {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      margin-top: 1px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .c-tag .t-photos {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 11px;
+      color: var(--text-light);
+      flex: none;
+    }
+
+    /* Register thumbnail: the earliest "as found" photo, sized to actually be readable at a
+       glance (not just a presence indicator). Hidden below 640px regardless of the toggle — the
+       mobile table is already tight on width (see the fixed-layout rules above) and the
+       camera-count chip on the tag itself still signals whether photos exist. The "Hide
+       photos" toggle (#btnTogglePhotos) sets body.hide-row-photos, remembered in localStorage. */
+    .c-tag-flex { display: flex; align-items: center; gap: 12px; }
+    .c-tag-text { min-width: 0; }
+    .row-thumb {
+      width: 112px;
+      height: 112px;
+      border-radius: 8px;
+      object-fit: cover;
+      flex: none;
+      border: 1px solid var(--card-border);
+      background: var(--bg-color);
+    }
+    .row-thumb-empty { visibility: hidden; }
+    body.hide-row-photos .row-thumb { display: none; }
+    @media (max-width: 640px) {
+      .row-thumb { display: none; }
+    }
+
+    /* Location/Anomaly description subtext under the finding type — muted, single-line
+       ellipsis each so a long free-text field never blows out the row height. */
+    .t-desc {
+      font-size: 11.5px;
+      color: var(--text-light);
+      margin-top: 1px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .t-desc .t-desc-label { font-weight: 600; }
+
+    /* Age badge — days since inspection; escalates to warn/danger as an open finding ages */
+    .age {
+      font-family: 'Google Sans', sans-serif;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .age.age-warn { color: var(--warn-color); font-weight: 600; }
+    .age.age-old { color: var(--danger-color); font-weight: 700; }
+
+    /* Resolved findings recede visually — they're not what the tool is trying to surface */
+    tr.row-dim { opacity: 0.55; }
+    tr.row-dim:hover { opacity: 1; }
+
+    /* Row flashed when its map pin is clicked */
+    @keyframes row-flash {
+      0%, 100% { background: transparent; }
+      30% { background: var(--plan-bg); }
+    }
+    tr.row-flash { animation: row-flash 1.1s ease; }
+
+    /* Below ~640px there isn't room for Status/Tag/Terminal/Age/Due at their natural widths, and
+       an auto-layout table lets a long pipe tag wrap across lines instead of shrinking. Pin a
+       fixed layout with per-column widths so the tag cell is bounded and truncates (title attr
+       carries the full value) instead of blowing up row height. */
+    @media (max-width: 640px) {
+      table.list { table-layout: fixed; }
+      table.list th:nth-child(1), table.list td:nth-child(1) { width: 26px; }
+      table.list th:nth-child(2), table.list td:nth-child(2) { width: 94px; }
+      /* Terminal is redundant with the KBY/SRC/BRP segmented filter right above the table, and
+         the tag itself usually encodes it — drop the column here so Pipe Tag gets breathing room. */
+      table.list th:nth-child(4), table.list td:nth-child(4) { display: none; }
+      table.list th:nth-child(5), table.list td:nth-child(5) { width: 34px; }
+      table.list th:nth-child(6), table.list td:nth-child(6) { width: 80px; }
+      table.list th, table.list td { padding: 8px 4px; }
+      table.list th:first-child, table.list td:first-child { padding-left: 0; }
+      /* Scoped to table.list (not a bare .pill) both to beat the base .pill rule's font-size
+         regardless of source order (equal specificity otherwise means whichever is declared
+         LAST in the stylesheet wins, not whichever is "more specific to mobile" — the base
+         rule sits after this block) and so this doesn't also shrink status pills elsewhere
+         (detail page, assessment card) that happen to render under 640px. */
+      table.list .pill { font-size: 9px; padding: 2px 5px; letter-spacing: 0; }
+      table.list .ov-badge { font-size: 9.5px; }
+    }
+
+    /* ============ Row selection (Summary PDF) ============ */
+    .c-check { width: 30px; }
+    .row-check {
+      width: 15px;
+      height: 15px;
+      cursor: pointer;
+      accent-color: var(--button-primary);
+      vertical-align: middle;
+    }
+    .sel-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--button-primary);
+      background: var(--plan-bg);
+      border: 1px solid var(--plan-border);
+      border-radius: 6px;
+      padding: 6px 12px;
+      margin: 10px 14px 0;
+    }
+    .link-btn {
+      background: none;
+      border: none;
+      padding: 0;
+      font: inherit;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-decoration: underline;
+      cursor: pointer;
+      margin-left: auto;
+    }
+    .link-btn:hover { color: var(--button-primary); }
+
+    .empty-row td {
+      text-align: center;
+      color: var(--text-light);
+      padding: 28px 10px;
+      font-size: 12px;
+      cursor: default;
+    }
+    tr.empty-row:hover { background: transparent !important; }
+
+    @media (max-width: 767px) {
+      .col-md { display: none; }
+    }
+
+    /* ============ Status pills ============ */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      padding: 3px 10px;
+      border-radius: 999px; /* pill: radius = height/2 by design */
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .st-open     { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-text); }
+    .st-mon      { background: var(--warn-bg);   border-color: var(--warn-border);   color: var(--warn-text); }
+    .st-plan     { background: var(--plan-bg);   border-color: var(--plan-border);   color: var(--plan-text); }
+    .st-rep      { background: var(--ok-bg);     border-color: var(--ok-border);     color: var(--ok-text); }
+    .st-closed   { background: var(--closed-bg); border-color: var(--closed-border); color: var(--closed-text); }
+
+    .ov-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      color: var(--danger-color);
+      white-space: nowrap;
+    }
+
+    .ov-badge::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--danger-color);
+    }
+
+    /* ============ Toolbar rows ============ */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    /* Detail page: keep "All findings" + Export/Edit reachable while scrolling a long
+       two-column detail view instead of having to scroll back up. Stacks directly below the
+       app header (also position:sticky, theme.css) using its real measured height
+       (--app-header-h, kept in sync by syncHeaderHeight()) rather than top:0, which would
+       collide with — not stack under — the header. */
+    #viewDetail .toolbar,
+    #viewForm .toolbar {
+      position: sticky;
+      top: var(--app-header-h, 64px);
+      z-index: 20;
+      background: var(--bg-color);
+      padding: 10px 0;
+      margin: 0 0 12px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--button-primary);
+      text-decoration: none;
+    }
+    .back-link:hover { text-decoration: underline; }
+
+    /* ============ Form ============ */
+    .fgrid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .fgrid .full { grid-column: 1 / -1; }
+
+    @media (max-width: 700px) {
+      .fgrid { grid-template-columns: 1fr; }
+    }
+
+    #fMap {
+      height: 260px;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      z-index: 1;
+    }
+
+    .coord-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+    .coord-row > div { flex: 1 1 130px; }
+
+    /* ============ Inline assessment section ============ */
+    .switch-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .switch-inline input { width: 15px; height: 15px; accent-color: var(--button-primary); cursor: pointer; }
+
+    /* collapsed state: body hidden when the toggle is off (driven by a class on the panel) */
+    #assessPanel:not(.on) #aBody { display: none; }
+
+    .p-row { display: flex; gap: 6px; }
+    .p-row .input { flex: 1 1 auto; min-width: 0; }
+    .p-row .select { width: auto; flex: none; }
+
+    .a-reading {
+      margin: 4px 0 12px;
+      padding: 12px;
+      background: var(--bg-color);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+    }
+
+    .a-advanced { margin-top: 6px; }
+    .a-advanced summary {
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--button-primary);
+      padding: 4px 0;
+    }
+
+    /* Two-column form workbench: finding data entry left, live assessment right.
+       minmax(0, …) so the workbench SVG/equations can shrink instead of forcing overflow. */
+    .form-split {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+      gap: 14px;
+      align-items: start;
+      margin-bottom: 14px;
+    }
+
+    .form-col > .panel:last-child { margin-bottom: 0; }
+
+    @media (max-width: 960px) {
+      .form-split { grid-template-columns: 1fr; }
+    }
+
+    /* Quick calculator (#/calc): a single centered column */
+    .quick-calc-wrap {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    /* Lives inside #viewForm's sticky .toolbar now (back-link left, this right) — its own
+       justify-content is just "flow the two button groups together", not full-width spacing;
+       the outer .toolbar's space-between already handles the back-link/actions split. */
+    .form-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .form-actions .grp { display: flex; gap: 8px; }
+
+    .btn-danger-outline {
+      background: transparent;
+      border: 1px solid var(--danger-border);
+      color: var(--danger-color);
+    }
+    .btn-danger-outline:hover { background: var(--danger-bg); }
+
+    /* ============ Photos ============ */
+    .photo-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px;
+    }
+
+    /* Detail-page photos are the record itself — show them large and easy to read. */
+    #viewDetail .photo-grid {
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 12px;
+    }
+
+    /* Detail page: two columns (data | evidence) below the full-width header. */
+    .detail-split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+    .detail-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+    .detail-col > .panel { margin-bottom: 0; } /* spacing handled by the column gap */
+
+    @media (max-width: 960px) {
+      .detail-split { grid-template-columns: 1fr; }
+    }
+
+    /* Detail-page satellite location map */
+    #detailMap {
+      height: 340px;
+      z-index: 1;
+    }
+    @media (max-width: 767px) {
+      #detailMap { height: 260px; }
+      #viewDetail .photo-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    }
+
+    .photo-thumb {
+      position: relative;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      overflow: hidden;
+      aspect-ratio: 4 / 3;
+      background: var(--bg-color);
+    }
+
+    .photo-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      cursor: pointer;
+    }
+
+    .photo-remove {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(15, 23, 42, 0.65);
+      color: #fff;
+      font-size: 13px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .photo-remove:hover { background: var(--danger-color); }
+
+    .photo-kind-tag {
+      position: absolute;
+      left: 4px;
+      bottom: 4px;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(15, 23, 42, 0.65);
+      color: #fff;
+    }
+
+    .photo-empty { font-size: 11.5px; color: var(--text-light); }
+
+    .photo-group-h {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 0 0 8px;
+    }
+
+    .photo-group-h h3 {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+    }
+
+    .photo-group + .photo-group { margin-top: 16px; }
+
+    /* ============ Detail ============ */
+    /* Sticky toolbar's left side: back-link + the finding's identity (tag/status/terminal-type),
+       pinned together so the reader never loses context of which finding they're scrolled into. */
+    .toolbar-id-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .detail-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      min-width: 0;
+      padding-left: 14px;
+      border-left: 1px solid var(--card-border);
+    }
+
+    .detail-head h2 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 800;
+      font-family: 'Google Sans', sans-serif;
+      white-space: nowrap;
+    }
+
+    .detail-head .dh-meta {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    @media (max-width: 720px) {
+      .detail-head { padding-left: 0; border-left: none; flex-basis: 100%; }
+      .detail-head .dh-meta { white-space: normal; }
+    }
+
+    .dgrid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px 16px;
+    }
+
+    /* Not scoped to .dgrid .d-item — also used standalone as a section label above free text
+       (e.g. the Description heading in renderDetail) where there's no d-item ancestor. */
+    .d-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .dgrid .d-item .d-val {
+      font-size: 13px;
+      margin-top: 2px;
+      overflow-wrap: anywhere;
+    }
+
+    .d-desc {
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      margin: 0;
+    }
+
+    .status-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .status-actions .btn { font-size: 12px; }
+
+    /* ============ Assessment list ============ */
+    .assess-history-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin: 14px 0 4px;
+    }
+
+    /* Latest-snapshot header above the read-only workbench on the detail page */
+    .assess-latest-head {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-bottom: 10px;
+    }
+
+    .assess-item {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 16px;
+      align-items: center;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--card-border);
+      font-size: 12.5px;
+    }
+
+    .assess-item:first-child { padding-top: 0; }
+    .assess-item:last-child { border-bottom: none; padding-bottom: 0; }
+
+    .assess-item .kv { white-space: nowrap; }
+    .assess-item .kv b { font-weight: 600; color: var(--text-muted); font-size: 11px; }
+
+    .assess-meta {
+      width: 100%;
+      font-size: 11.5px;
+      color: var(--text-light);
+    }
+
+    /* ============ Timeline ============ */
+    .timeline { list-style: none; margin: 0; padding: 0; }
+
+    .timeline li {
+      position: relative;
+      padding: 0 0 14px 22px;
+      border-left: 2px solid var(--card-border);
+      margin-left: 6px;
+    }
+
+    .timeline li:last-child { padding-bottom: 2px; border-left-color: transparent; }
+
+    .timeline li::before {
+      content: "";
+      position: absolute;
+      left: -6px;
+      top: 2px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--button-primary);
+      border: 2px solid var(--card-bg);
+    }
+
+    .tl-title { font-size: 12.5px; font-weight: 600; }
+    .tl-meta { font-size: 11.5px; color: var(--text-light); margin-top: 1px; }
+    .tl-note { font-size: 12px; color: var(--text-muted); margin-top: 3px; white-space: pre-wrap; }
+
+    /* ============ Dialog ============ */
+    dialog.app-dlg {
+      position: fixed;
+      inset-block-start: 50%;
+      inset-inline-start: 50%;
+      top: 50%;
+      left: 50%;
+      translate: -50% -50%;
+      margin: 0;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      background: var(--card-bg);
+      color: var(--text-color);
+      padding: 0;
+      width: min(420px, calc(100vw - 32px));
+      max-height: calc(100vh - 32px);
+      overflow: auto;
+    }
+
+    dialog.app-dlg::backdrop { background: rgba(15, 23, 42, 0.5); }
+
+    /* ============ Modal open/close transition (transitions.dev 06-modal) ============
+       Native <dialog> already handles focus trap/backdrop/Esc; this only adds the
+       scale+fade. .is-open drives the open transition; .is-closing plays a softer,
+       quicker scale-down before JS calls dialog.close() once --modal-close-dur elapses
+       (see openDialog/closeDialog). Applies to both dialog.app-dlg and dialog#lightbox. */
+    :root {
+      --modal-open-dur: 250ms;
+      --modal-close-dur: 150ms;
+      --modal-scale: 0.96;
+      --modal-scale-close: 0.96;
+      --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    dialog.app-dlg, dialog#lightbox {
+      transform-origin: center;
+      transform: scale(var(--modal-scale));
+      opacity: 0;
+      transition: transform var(--modal-open-dur) var(--modal-ease),
+                  opacity var(--modal-open-dur) var(--modal-ease);
+      will-change: transform, opacity;
+    }
+    dialog.app-dlg.is-open, dialog#lightbox.is-open {
+      transform: scale(1);
+      opacity: 1;
+    }
+    dialog.app-dlg.is-closing, dialog#lightbox.is-closing {
+      transform: scale(var(--modal-scale-close));
+      opacity: 0;
+      transition: transform var(--modal-close-dur) var(--modal-ease),
+                  opacity var(--modal-close-dur) var(--modal-ease);
+    }
+    dialog.app-dlg::backdrop, dialog#lightbox::backdrop {
+      opacity: 0;
+      transition: opacity var(--modal-open-dur) var(--modal-ease);
+    }
+    dialog.app-dlg.is-open::backdrop, dialog#lightbox.is-open::backdrop {
+      opacity: 1;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      dialog.app-dlg, dialog#lightbox, dialog.app-dlg::backdrop, dialog#lightbox::backdrop {
+        transition: none !important;
+      }
+    }
+
+    #importDlg { width: min(640px, calc(100vw - 32px)); }
+    .import-summary { font-size: 12.5px; margin: 4px 0 8px; }
+    .import-summary .ok { color: var(--ok-color); font-weight: 600; }
+    .import-summary .bad { color: var(--danger-color); font-weight: 600; }
+    .import-tbl-scroll { max-height: 260px; overflow: auto; border: 1px solid var(--card-border); border-radius: 6px; }
+    table.import-tbl { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+    table.import-tbl th, table.import-tbl td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--card-border); white-space: nowrap; }
+    table.import-tbl th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); position: sticky; top: 0; background: var(--card-bg); }
+    table.import-tbl tr.bad td { background: var(--danger-bg); }
+    table.import-tbl .rowstat-ok { color: var(--ok-color); font-weight: 700; }
+    table.import-tbl .rowstat-bad { color: var(--danger-color); font-weight: 700; }
+    .import-reason { color: var(--danger-text); font-size: 11.5px; }
+
+    .dlg-h {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--card-border);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .dlg-b { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+    /* Export dialog format picker */
+    .export-opts { display: flex; flex-direction: column; gap: 8px; }
+    .export-radio { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; }
+    .export-radio:hover { border-color: var(--button-primary); }
+    .export-radio input { margin-top: 2px; width: 15px; height: 15px; accent-color: var(--button-primary); cursor: pointer; flex: none; }
+    .export-radio > span { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+
+    .dlg-f {
+      padding: 12px 16px;
+      border-top: 1px solid var(--card-border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    /* ============ Toast ============ */
+    :root {
+      --toast-open-dur: 250ms;
+      --toast-close-dur: 350ms;
+      --toast-ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    #toast {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%) translateY(8px);
+      background: #0f172a;
+      color: #f8fafc;
+      font-size: 12.5px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.3);
+      opacity: 0;
+      pointer-events: none;
+      /* Close (toast hiding) is the resting/base transition; .show overrides it with the
+         quicker open timing below — see transitions-polish's toast open/close split
+         (--duration-fast open / --duration-medium close, per its documented usage). */
+      transition: opacity var(--toast-close-dur) var(--toast-ease), transform var(--toast-close-dur) var(--toast-ease);
+      z-index: 1000;
+      max-width: calc(100vw - 32px);
+    }
+
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      transition: opacity var(--toast-open-dur) var(--toast-ease), transform var(--toast-open-dur) var(--toast-ease);
+    }
+    #toast.err { background: var(--danger-color); }
+
+    /* ============ Photo lightbox ============ */
+    dialog#lightbox {
+      position: fixed;
+      inset-block-start: 50%;
+      inset-inline-start: 50%;
+      top: 50%;
+      left: 50%;
+      translate: -50% -50%;
+      margin: 0;
+      border: none;
+      background: transparent;
+      padding: 0;
+      max-width: 92vw;
+      max-height: 92vh;
+    }
+    dialog#lightbox::backdrop { background: rgba(15, 23, 42, 0.8); }
+    dialog#lightbox img {
+      max-width: 92vw;
+      max-height: 92vh;
+      display: block;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .footer {
+      text-align: center;
+      font-size: 11.5px;
+      color: var(--text-light);
+      padding: 18px 20px 26px;
+    }
