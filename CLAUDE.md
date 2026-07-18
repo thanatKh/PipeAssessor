@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Do NOT push to git automatically**: Never run `git push` after code edits unless the user explicitly requests a push. The user prefers to review changes locally and push manually.
 
-## Build system — Vite + Vanilla-TS (branch `refactor/vite-migration`, Phase 1)
+## Build system — Vite + Vanilla-TS (Phase 1, merged to `main`)
 
-> **Status:** On `refactor/vite-migration` the app is a **Vite + Vanilla-TypeScript** build (no framework). `main` is still the original no-build monolith until this branch is merged. **Everything below the "What this is" heading still describes the app's behavior accurately** — only the delivery mechanism changed (the "no-build / inline `<script>` / CDN `<script>` tags" framing is superseded on this branch).
+> **Status:** the app is a **Vite + Vanilla-TypeScript** build (no framework) — the migration is merged into `main`. **Everything below the "What this is" heading still describes the app's *behavior* accurately, but its file-layout claims are stale**: `asset/theme.css` and `asset/assess-ui.js` (described below as the live source of truth) were **deleted** once ported to `src/styles/theme.css` and `src/workbench/assess-view.ts` — see the module map right below instead. `asset/shared.js` and `asset/RGB_OR_Full color.png` are the only two files still kept in `asset/` (the former is the frozen parity baseline `compute.test.ts` reads; the latter is the header/PDF logo). The "no-build / inline `<script>` / CDN `<script>` tags" framing throughout that section is likewise superseded — see the module map for the real current structure.
 >
 > **Commands:** `npm run dev` (Vite dev server, replaces the old `file://` workflow) · `npm run build` (→ `dist/`) · `npm run preview` (serves `dist/` on :4173) · `npm run typecheck` (`tsc --noEmit`) · `npm run test` (Vitest — the engine parity gate).
 >
@@ -30,7 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 >
 > **Thai text**: Google Sans (both web `@font-face` and the embedded PDF TTF) has **no Thai glyphs** — this is a real gap the browser/jsPDF don't paper over automatically. Web: `'Noto Sans Thai'` sits right after `'Google Sans'` in the `html, body` font stack (`theme.css`), imported via `@fontsource/noto-sans-thai` at weights 400/500/600/700 in `main.ts`; its `@font-face` rules are `unicode-range`-scoped to the Thai block (`U+0E01-0E5B`) so it never touches Latin/numeric rendering — the browser's normal per-character font fallback does the rest, no app code involved. PDF: jsPDF has no such automatic fallback, so `registerThaiPdfFont(doc)` (`src/engine/fonts.ts`) — called right after `registerGoogleSansFonts(doc)` in both PDF builders — fetches `src/assets/fonts/NotoSansThai.ttf` (Google's official variable TTF, OFL-1.1; `@fontsource` only ships woff/woff2, which jsPDF's `addFont` can't use) as a lazy Vite `?url` asset and **monkey-patches `doc.text()`** to auto-detect Thai codepoints per call and switch fonts just for that call — so none of the ~49 existing `doc.text()` call sites needed to change.
 >
-> **Deploy (Render, at merge):** switch the static site to build command `npm run build`, publish directory `dist/`; pin Node via `.nvmrc`. Runtime no longer fetches library CDNs (only Supabase API + Esri tiles).
+> **Deploy (Render):** the static site's build command needs to be set to `npm run build`, publish directory `dist/`, with Node pinned via `.nvmrc` — a one-time dashboard change on Render's side (not code) that hasn't happened yet as of this migration landing on `main`. Runtime no longer fetches library CDNs (only Supabase API + Esri tiles).
 
 ## What this is
 
