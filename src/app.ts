@@ -20,6 +20,9 @@ import { paFmtDate, paFmtDateTime, paFmtBaht, paFmtBahtShort } from './engine/fo
 import { downscaleImage, OR_LOGO_DATAURL } from './engine/branding';
 import { registerGoogleSansFonts } from './engine/fonts';
 import { paCreateAssessView, paAdvisorItems, PA_SCOPE_TEXT, paCrossSectionPng } from './workbench/assess-view';
+import {
+  filters, session, findings, lineList, current, currentPhotos, currentHistory, currentAssessments, editingId, pendingPhotos, pickMap, pickMarker, dashMap, dashLayer, photoCounts, photoThumbs, dashMarkers, dashAddMarker, pendingNewCoords, selectedIds, lastRenderedRows, importValidRows, lineListValidRows, photoPasteTarget, assessResult, severityTouched, lastLoadedAssessInputs, awFormView, assessToggleTouched, awQuickView, detailMap, detailMarker, dlgTarget, setSession, setFindings, setLineList, setCurrent, setCurrentPhotos, setCurrentHistory, setCurrentAssessments, setEditingId, setPendingPhotos, setPickMap, setPickMarker, setDashMap, setDashLayer, setPhotoCounts, setPhotoThumbs, setDashMarkers, setDashAddMarker, setPendingNewCoords, setSelectedIds, setLastRenderedRows, setImportValidRows, setLineListValidRows, setPhotoPasteTarget, setAssessResult, setSeverityTouched, setLastLoadedAssessInputs, setAwFormView, setAssessToggleTouched, setAwQuickView, setDetailMap, setDetailMarker, setDlgTarget,
+} from './core/state';
 
 // SheetJS (xlsx) is loaded on demand (import/export only) so it stays out of the initial bundle.
 let XLSX: any;
@@ -42,17 +45,6 @@ import {
   PHOTO_BUCKET, FINDING_TYPES, FINDING_TYPE_SHORT, STATUSES, PHOTO_LIMIT_PER_KIND, STATUS_META, STATUS_COLORS, DEFAULT_MAP_VIEW, SAT_TILES,
 } from './core/constants';
 // sb is imported from ./core/supabase (created once at module load).              // Supabase client
-let session = null;
-let findings = [];          // list cache
-let lineList = [];          // master line-list cache (pipe tag -> nps/schedule/material/metadata)
-let current = null;         // finding shown in detail view
-let currentPhotos = [];
-let currentHistory = [];
-let currentAssessments = [];
-let editingId = null;       // null = creating
-let pendingPhotos = [];     // [{file, previewUrl}] queued on the NEW form
-let pickMap = null, pickMarker = null;
-let dashMap = null, dashLayer = null;
 
 /* ---------------- helpers ---------------- */
 
@@ -140,8 +132,6 @@ async function route() {
 
 /* ---------------- data ---------------- */
 
-let photoCounts = {}; // finding_id -> number of photos, for the register's camera chip
-let photoThumbs = {}; // finding_id -> {storage_path, kind}, for the register's thumbnail
 
 async function loadFindings() {
   selectedIds.clear(); // fresh data -> drop any selection from a previous load (ids may be stale)
@@ -150,9 +140,9 @@ async function loadFindings() {
     sb.from('finding_photos').select('finding_id, storage_path, kind, created_at').order('created_at', { ascending: true })
   ]);
   if (fq.error) { notify('Load failed: ' + fq.error.message, true); return; }
-  findings = fq.data || [];
-  photoCounts = {};
-  photoThumbs = {}; // finding_id -> storage_path of its earliest "found" photo (falls back to any)
+  setFindings(fq.data || []);
+  setPhotoCounts({});
+  setPhotoThumbs({}); // finding_id -> storage_path of its earliest "found" photo (falls back to any)
   (pq.data || []).forEach(p => {
     photoCounts[p.finding_id] = (photoCounts[p.finding_id] || 0) + 1;
     const cur = photoThumbs[p.finding_id];
@@ -194,10 +184,10 @@ async function loadDetail(id) {
     sb.from('assessments').select('*').eq('finding_id', id).order('created_at', { ascending: false })
   ]);
   if (f.error) { notify('Finding not found.', true); return false; }
-  current = f.data;
-  currentPhotos = ph.data || [];
-  currentHistory = hi.data || [];
-  currentAssessments = as.data || [];
+  setCurrent(f.data);
+  setCurrentPhotos(ph.data || []);
+  setCurrentHistory(hi.data || []);
+  setCurrentAssessments(as.data || []);
   return true;
 }
 
@@ -207,7 +197,6 @@ function photoUrl(path) {
 
 /* ---------------- list view ---------------- */
 
-const filters = { terminal: '', status: '', type: '', q: '' };
 
 function applyFilters(rows) {
   const q = filters.q.trim().toLowerCase();
@@ -360,16 +349,16 @@ function ensureDashMap() {
     return;
   }
   if (dashMap) { setTimeout(() => dashMap.invalidateSize(), 80); return; }
-  dashMap = L.map(el, { center: DEFAULT_MAP_VIEW.center, zoom: DEFAULT_MAP_VIEW.zoom, scrollWheelZoom: false });
+  setDashMap(L.map(el, { center: DEFAULT_MAP_VIEW.center, zoom: DEFAULT_MAP_VIEW.zoom, scrollWheelZoom: false }));
   L.tileLayer(SAT_TILES.url, { maxZoom: SAT_TILES.maxZoom, attribution: SAT_TILES.attribution }).addTo(dashMap);
-  dashLayer = L.layerGroup().addTo(dashMap);
+  setDashLayer(L.layerGroup().addTo(dashMap));
   // scroll-zoom only after the user clicks the map — otherwise page scrolling gets hijacked
   dashMap.on('focus click', () => dashMap.scrollWheelZoom.enable());
   dashMap.on('blur', () => dashMap.scrollWheelZoom.disable());
   // double-click drops a pin and offers "Add finding here" instead of zooming
   dashMap.doubleClickZoom.disable();
   dashMap.on('dblclick', (e) => showAddFindingPopup(e.latlng));
-  dashMap.on('popupclose', () => { if (dashAddMarker) { dashLayer.removeLayer(dashAddMarker); dashAddMarker = null; } });
+  dashMap.on('popupclose', () => { if (dashAddMarker) { dashLayer.removeLayer(dashAddMarker); setDashAddMarker(null); } });
   setTimeout(() => dashMap.invalidateSize(), 150);
 }
 
@@ -382,18 +371,15 @@ function popupHtml(f) {
   </div>`;
 }
 
-let dashMarkers = {}; // finding_id -> circleMarker, for row->pin highlighting
-let dashAddMarker = null;   // temporary pin dropped by a dbl-click "add finding here"
-let pendingNewCoords = null; // {lat,lng} carried from a map dbl-click into the next new-finding form
 
 // Double-click the dashboard map -> drop a temporary pin + a small popup that opens the New
 // Finding form pre-seeded with these coordinates. openForm(null) reads pendingNewCoords in its
 // map-init branch and calls setPin() to place the picker pin.
 function showAddFindingPopup(latlng) {
   if (dashAddMarker) dashLayer.removeLayer(dashAddMarker);
-  dashAddMarker = L.circleMarker(latlng, {
+  setDashAddMarker(L.circleMarker(latlng, {
     radius: 8, color: '#156B95', fillColor: '#38bdf8', fillOpacity: 0.9, weight: 2
-  }).addTo(dashLayer);
+  }).addTo(dashLayer));
 
   // build as a DOM node so the button's handler wires cleanly (no id lookup across popups)
   const node = document.createElement('div');
@@ -406,7 +392,7 @@ function showAddFindingPopup(latlng) {
   btn.style.marginTop = '6px';
   btn.textContent = 'Add finding here';
   btn.addEventListener('click', () => {
-    pendingNewCoords = { lat: latlng.lat, lng: latlng.lng };
+    setPendingNewCoords({ lat: latlng.lat, lng: latlng.lng });
     dashMap.closePopup();
     location.hash = '#/new';
   });
@@ -426,7 +412,7 @@ function renderMap(rows) {
   dashMap.invalidateSize();
   setTimeout(() => dashMap.invalidateSize(), 100);
   dashLayer.clearLayers();
-  dashMarkers = {};
+  setDashMarkers({});
   const pts = rows.filter(f => f.lat != null && f.lng != null);
   pts.forEach(f => {
     const color = STATUS_COLORS[f.status] || '#64748b';
@@ -484,11 +470,9 @@ function ageHtml(f) {
 // Row selection for the Summary PDF (see exportSummaryPdf): a plain Set of finding ids,
 // persisted across re-renders/filter changes within the same list load, cleared whenever
 // loadFindings() pulls fresh data (stale ids could otherwise reference deleted rows).
-let selectedIds = new Set();
-let lastRenderedRows = [];
 
 function renderTable(rows) {
-  lastRenderedRows = rows;
+  setLastRenderedRows(rows);
   const body = $('listBody');
   if (!rows.length) {
     body.innerHTML = `<tr class="empty-row"><td colspan="6">${findings.length ? 'No findings match the current filters.' : 'No findings recorded yet — use “+ New Finding” to add the first one.'}</td></tr>`;
@@ -652,7 +636,6 @@ const IMPORT_COLS = [
   { header: 'Longitude', field: 'lng', type: 'num' }
 ];
 
-let importValidRows = []; // payloads ready to insert, set after a file is parsed+validated
 
 const normHeader = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -725,7 +708,7 @@ function validateImportRow(raw) {
 function renderImportPreview(results) {
   const valid = results.filter(r => r.payload);
   const invalid = results.filter(r => r.reasons);
-  importValidRows = valid.map(r => r.payload);
+  setImportValidRows(valid.map(r => r.payload));
   const box = $('importPreview');
   box.style.display = 'block';
   const head = `<div class="import-summary"><span class="ok">${valid.length} ready</span> · <span class="bad">${invalid.length} with problems</span> (of ${results.length} rows)</div>`;
@@ -750,7 +733,7 @@ function renderImportPreview(results) {
 async function parseImportFile(file) {
   await ensureXLSX();
   $('errImport').style.display = 'none';
-  importValidRows = [];
+  setImportValidRows([]);
   $('importConfirm').disabled = true;
   try {
     const buf = await file.arrayBuffer();
@@ -806,7 +789,7 @@ function openImportDialog() {
   $('importPreview').style.display = 'none';
   $('importPreview').innerHTML = '';
   $('errImport').style.display = 'none';
-  importValidRows = [];
+  setImportValidRows([]);
   $('importConfirm').disabled = true;
   $('importConfirm').textContent = 'Import';
   openDialog($('importDlg'));
@@ -832,7 +815,6 @@ const LINE_LIST_IMPORT_COLS = [
   { header: 'Service', field: 'service' }
 ];
 
-let lineListValidRows = [];  // payloads ready to upsert, set after a file is parsed+validated
 
 function lineListHeaderMap() {
   const m = {};
@@ -913,7 +895,7 @@ function validateLineListRow(raw) {
 function renderLineListImportPreview(results) {
   const valid = results.filter(r => r.payload);
   const invalid = results.filter(r => r.reasons);
-  lineListValidRows = valid.map(r => r.payload);
+  setLineListValidRows(valid.map(r => r.payload));
   const box = $('lineListImportPreview');
   box.style.display = 'block';
   const head = `<div class="import-summary"><span class="ok">${valid.length} ready</span> · <span class="bad">${invalid.length} with problems</span> (of ${results.length} rows)</div>`;
@@ -940,7 +922,7 @@ function renderLineListImportPreview(results) {
 async function parseLineListImportFile(file) {
   await ensureXLSX();
   $('errLineListImport').style.display = 'none';
-  lineListValidRows = [];
+  setLineListValidRows([]);
   $('lineListImportConfirm').disabled = true;
   try {
     const buf = await file.arrayBuffer();
@@ -1014,7 +996,7 @@ function openLineListImportDialog() {
   $('lineListImportPreview').style.display = 'none';
   $('lineListImportPreview').innerHTML = '';
   $('errLineListImport').style.display = 'none';
-  lineListValidRows = [];
+  setLineListValidRows([]);
   $('lineListImportConfirm').disabled = true;
   $('lineListImportConfirm').textContent = 'Import';
   openDialog($('lineListImportDlg'));
@@ -1036,7 +1018,7 @@ async function loadLineList() {
     if (!data || data.length < PAGE) break;
     from += PAGE;
   }
-  lineList = all;
+  setLineList(all);
 }
 
 function renderLineListManageTable() {
@@ -1071,7 +1053,7 @@ async function deleteLineListRow(id) {
   try {
     const { error } = await sb.from('line_list').delete().eq('id', id);
     if (error) throw error;
-    lineList = lineList.filter(r => r.id !== id);
+    setLineList(lineList.filter(r => r.id !== id));
     renderLineListManageTable();
     notify('Line list entry deleted.');
   } catch (e) { notify('Delete failed: ' + e.message, true); }
@@ -1094,7 +1076,7 @@ function setPin(lat, lng, recenter) {
   $('fLat').value = lat.toFixed(6);
   $('fLng').value = lng.toFixed(6);
   if (pickMap && typeof L !== 'undefined') {
-    if (!pickMarker) pickMarker = L.marker([lat, lng]).addTo(pickMap);
+    if (!pickMarker) setPickMarker(L.marker([lat, lng]).addTo(pickMap));
     else pickMarker.setLatLng([lat, lng]);
     if (recenter) pickMap.setView([lat, lng], Math.max(pickMap.getZoom(), 16));
   }
@@ -1103,7 +1085,7 @@ function setPin(lat, lng, recenter) {
 function clearPin() {
   $('fLat').value = '';
   $('fLng').value = '';
-  if (pickMarker && pickMap) { pickMap.removeLayer(pickMarker); pickMarker = null; }
+  if (pickMarker && pickMap) { pickMap.removeLayer(pickMarker); setPickMarker(null); }
 }
 
 function ensurePickMap() {
@@ -1118,7 +1100,7 @@ function ensurePickMap() {
     return;
   }
   if (pickMap) { setTimeout(() => pickMap.invalidateSize(), 80); return; }
-  pickMap = L.map(el, { center: DEFAULT_MAP_VIEW.center, zoom: DEFAULT_MAP_VIEW.zoom, scrollWheelZoom: true });
+  setPickMap(L.map(el, { center: DEFAULT_MAP_VIEW.center, zoom: DEFAULT_MAP_VIEW.zoom, scrollWheelZoom: true }));
   L.tileLayer(SAT_TILES.url, { maxZoom: SAT_TILES.maxZoom, attribution: SAT_TILES.attribution }).addTo(pickMap);
   pickMap.on('click', (e) => setPin(e.latlng.lat, e.latlng.lng, false));
   setTimeout(() => pickMap.invalidateSize(), 150);
@@ -1168,7 +1150,6 @@ async function addPendingFiles(files) {
 }
 
 // Which detail-page photo group a Ctrl+V paste targets (set when a group's "+ Add" is used).
-let photoPasteTarget = 'found';
 
 // Extract image files from a clipboard/DataTransfer; [] when the paste is plain text.
 function imageFilesFromClipboard(dt) {
@@ -1248,9 +1229,6 @@ function suggestSeverityFromType() {
   $('fSeverity').value = sev;
 }
 
-let assessResult = null;   // last valid computeB313 result, or null
-let severityTouched = false; // user manually picked a severity -> stop auto-suggesting
-let lastLoadedAssessInputs = null; // JSON of the restored assessment (edit) -> dedupe on save
 
 function aMode() {
   const b = document.querySelector('#aModeSeg .seg-btn.active');
@@ -1313,14 +1291,13 @@ function assessThickness() {
 }
 
 // The form's live workbench instance (paCreateAssessView), created in initAssessment().
-let awFormView = null;
 
 function recalcAssessment() {
-  if (!$('assessPanel').classList.contains('on')) { assessResult = null; return; }
+  if (!$('assessPanel').classList.contains('on')) { setAssessResult(null); return; }
   const res = computeB313(gatherAssessParams());
   const hint = $('aCalcHint');
   if (res.hasErrors) {
-    assessResult = null;
+    setAssessResult(null);
     // Distinguish "not filled in yet" (neutral banner, no red) from "typed something invalid"
     // (ERROR banner + targeted message) — same cold-load rule the calculator used. (CA >= t_meas
     // is no longer an error — a thin wall below its reserve is a valid case; only ca < 0 errors.)
@@ -1336,7 +1313,7 @@ function recalcAssessment() {
     if (awFormView) awFormView.render(res, { neutral: !msg, nps: $('aNps').value });
     return;
   }
-  assessResult = res;
+  setAssessResult(res);
   hint.style.display = 'none';
   if (awFormView) awFormView.render(res, { nps: $('aNps').value });
 
@@ -1396,7 +1373,7 @@ function resetAssessment() {
   $('aTmeasGrp').style.display = 'none';
   $('aDepthGrp').style.display = 'block';
   autofillAtnom();
-  assessResult = null;
+  setAssessResult(null);
   $('aCalcHint').style.display = 'none';
   if (awFormView) awFormView.render(null, { neutral: true });
 }
@@ -1407,7 +1384,7 @@ function initAssessment() {
 
   // Full workbench under the inputs (advisor + equations ship collapsed to keep the column
   // scannable). The drag handle writes back into whichever reading field is active.
-  awFormView = paCreateAssessView($('awForm'), {
+  setAwFormView(paCreateAssessView($('awForm'), {
     sections: ['status', 'svg', 'results', 'advisor', 'equations', 'scope'],
     collapsed: ['advisor', 'equations'],
     onDepthDrag: (depth_mm) => {
@@ -1419,7 +1396,7 @@ function initAssessment() {
       }
       recalcAssessment();
     }
-  });
+  }));
   awFormView.render(null, { neutral: true });
 
   $('aToggle').addEventListener('change', () => setAssessOn($('aToggle').checked));
@@ -1452,14 +1429,13 @@ function initAssessment() {
     suggestSeverityFromType();
     recalcAssessment();
   });
-  $('aToggle').addEventListener('change', () => { assessToggleTouched = true; });
+  $('aToggle').addEventListener('change', () => { setAssessToggleTouched(true); });
 
   $('fSeverity').addEventListener('change', () => {
-    severityTouched = true;
+    setSeverityTouched(true);
   });
 }
 
-let assessToggleTouched = false;
 
 // Per-tag memory: reuse metadata + pipe setup from the last finding with the same tag, falling
 // back to the master line list for tags that have never appeared on a finding before. A prior
@@ -1597,7 +1573,6 @@ function initTagCombo() {
 /* ---------------- quick calculator (#/calc — standalone what-if, nothing saves) ----------------
    Its own small input set (q-prefixed ids) + workbench instance, fully independent of the
    finding form so a what-if never clobbers a half-entered finding's assessment. */
-let awQuickView = null;
 
 function initQuickCalc() {
   $('qNps').innerHTML = Object.keys(PA_PIPE_DATABASE).map(n => `<option>${n}</option>`).join('');
@@ -1660,7 +1635,7 @@ function initQuickCalc() {
     awQuickView.render(res, { nps: $('qNps').value });
   };
 
-  awQuickView = paCreateAssessView($('awQuick'), {
+  setAwQuickView(paCreateAssessView($('awQuick'), {
     sections: ['status', 'svg', 'results', 'advisor', 'equations', 'scope'],
     collapsed: ['advisor', 'equations'],
     onDepthDrag: (depth_mm) => {
@@ -1669,7 +1644,7 @@ function initQuickCalc() {
       else $('qTmeas').value = (lastQuickRes.t_nom - depth_mm).toFixed(2);
       recalcQuick();
     }
-  });
+  }));
 
   const reset = () => {
     $('qNps').value = '4"';
@@ -1712,13 +1687,13 @@ function initQuickCalc() {
 }
 
 function openForm(f) {
-  editingId = f ? f.id : null;
+  setEditingId(f ? f.id : null);
   clearValidation();
-  pendingPhotos = [];
+  setPendingPhotos([]);
   renderPendingGrid();
-  severityTouched = false;
-  assessToggleTouched = false;
-  lastLoadedAssessInputs = null;
+  setSeverityTouched(false);
+  setAssessToggleTouched(false);
+  setLastLoadedAssessInputs(null);
   resetAssessment();
   setAssessOn(false);
 
@@ -1728,15 +1703,15 @@ function openForm(f) {
   // immediately via the same Photographic Record panel/logic the detail page uses.
   $('pendingPhotoPanel').style.display = f ? 'none' : 'block';
   $('editPhotoPanel').style.display = f ? 'block' : 'none';
-  photoPasteTarget = 'found'; // Ctrl+V defaults to As Found until a group's "+ Add" is clicked
+  setPhotoPasteTarget('found'); // Ctrl+V defaults to As Found until a group's "+ Add" is clicked
   if (f) {
     // `current` may not point at this finding (e.g. navigating straight from the dashboard
     // list to #/edit/<id> without visiting the detail page first) — load its photos explicitly
     // rather than assuming currentPhotos is already correct.
     sb.from('finding_photos').select('*').eq('finding_id', f.id).order('created_at', { ascending: true })
-      .then(({ data }) => { currentPhotos = data || []; renderPhotoGroups(); });
+      .then(({ data }) => { setCurrentPhotos(data || []); renderPhotoGroups(); });
   } else {
-    currentPhotos = [];
+    setCurrentPhotos([]);
     renderPhotoGroups();
   }
 
@@ -1753,7 +1728,7 @@ function openForm(f) {
   $('fType').value = f ? f.finding_type : '';
   syncCorrTypeFromFinding(); // corrosion type follows the finding type (a saved assessment overrides it below)
   $('fSeverity').value = f ? (f.severity || '') : '';
-  if (f && f.severity) severityTouched = true; // don't auto-overwrite a stored severity
+  if (f && f.severity) setSeverityTouched(true); // don't auto-overwrite a stored severity
   else suggestSeverityFromType(); // new finding: prefill from the finding type if one is already set
   $('fDescription').value = f ? (f.description || '') : '';
   $('fDefLen').value = f && f.defect_length_mm != null ? f.defect_length_mm : '';
@@ -1777,7 +1752,7 @@ function openForm(f) {
         if (data && data.length) {
           setAssessOn(true);
           loadAssessmentInto(data[0].inputs, false);
-          lastLoadedAssessInputs = JSON.stringify(collectAssessment() ? collectAssessment().inputs : data[0].inputs);
+          setLastLoadedAssessInputs(JSON.stringify(collectAssessment() ? collectAssessment().inputs : data[0].inputs));
           recalcAssessment();
         }
       });
@@ -1788,17 +1763,17 @@ function openForm(f) {
   // map: view is display:none until show() runs, so defer sizing to next tick
   setTimeout(() => {
     ensurePickMap();
-    if (pickMarker && pickMap) { pickMap.removeLayer(pickMarker); pickMarker = null; }
+    if (pickMarker && pickMap) { pickMap.removeLayer(pickMarker); setPickMarker(null); }
     if (f && f.lat != null && f.lng != null) {
       $('fLat').value = f.lat; $('fLng').value = f.lng;
       if (pickMap) {
-        pickMarker = L.marker([f.lat, f.lng]).addTo(pickMap);
+        setPickMarker(L.marker([f.lat, f.lng]).addTo(pickMap));
         pickMap.setView([f.lat, f.lng], 16);
       }
     } else if (!f && pendingNewCoords) {
       // seeded from a dashboard-map double-click — drop the picker pin at those coords
       setPin(pendingNewCoords.lat, pendingNewCoords.lng, true);
-      pendingNewCoords = null;
+      setPendingNewCoords(null);
     } else {
       $('fLat').value = ''; $('fLng').value = '';
       if (pickMap) pickMap.setView(DEFAULT_MAP_VIEW.center, DEFAULT_MAP_VIEW.zoom);
@@ -1986,7 +1961,7 @@ function dItem(label, valueHtml) {
 
 function renderDetail() {
   const f = current;
-  photoPasteTarget = 'found'; // Ctrl+V defaults to As Found until the user uses After-Repair's + Add
+  setPhotoPasteTarget('found'); // Ctrl+V defaults to As Found until the user uses After-Repair's + Add
 
   $('detailHead').innerHTML =
     `<h2>${esc(f.pipe_tag || f.location_desc || '—')}</h2>${pillHtml(f.status)}${isOverdue(f) ? '<span class="ov-badge">OVERDUE</span>' : ''}` +
@@ -2044,7 +2019,6 @@ function renderDetail() {
   renderTimeline();
 }
 
-let detailMap = null, detailMarker = null;
 
 // Satellite map on the detail page, centred on the finding's pin. Hidden when no coordinates.
 function renderDetailMap() {
@@ -2058,7 +2032,7 @@ function renderDetailMap() {
   $('detailMapLink').href = `https://www.google.com/maps?q=${f.lat},${f.lng}`;
   const el = $('detailMap');
   if (!detailMap) {
-    detailMap = L.map(el, { center: [f.lat, f.lng], zoom: 17, scrollWheelZoom: false });
+    setDetailMap(L.map(el, { center: [f.lat, f.lng], zoom: 17, scrollWheelZoom: false }));
     L.tileLayer(SAT_TILES.url, { maxZoom: SAT_TILES.maxZoom, attribution: SAT_TILES.attribution }).addTo(detailMap);
     detailMap.on('focus click', () => detailMap.scrollWheelZoom.enable());
     detailMap.on('blur', () => detailMap.scrollWheelZoom.disable());
@@ -2068,7 +2042,7 @@ function renderDetailMap() {
     detailMap.invalidateSize();
     detailMap.setView([f.lat, f.lng], 17);
     const color = STATUS_COLORS[f.status] || '#64748b';
-    if (!detailMarker) detailMarker = L.circleMarker([f.lat, f.lng], { radius: 9, weight: 3, color: '#ffffff', fillOpacity: 0.95 }).addTo(detailMap);
+    if (!detailMarker) setDetailMarker(L.circleMarker([f.lat, f.lng], { radius: 9, weight: 3, color: '#ffffff', fillOpacity: 0.95 }).addTo(detailMap));
     else detailMarker.setLatLng([f.lat, f.lng]);
     detailMarker.setStyle({ fillColor: color });
   }, 80);
@@ -2236,7 +2210,7 @@ function renderPhotoGroups() {
         await sb.storage.from(PHOTO_BUCKET).remove([btn.dataset.path]);
         const { error } = await sb.from('finding_photos').delete().eq('id', btn.dataset.id);
         if (error) throw error;
-        currentPhotos = currentPhotos.filter(p => p.id !== btn.dataset.id);
+        setCurrentPhotos(currentPhotos.filter(p => p.id !== btn.dataset.id));
         renderPhotoGroups();
         notify('Photo deleted.');
       } catch (e) { notify('Delete failed: ' + e.message, true); }
@@ -2266,7 +2240,7 @@ async function addDetailPhotos(files, kind, findingId) {
     catch (e) { failed++; console.warn('upload failed', e); }
   }
   const { data } = await sb.from('finding_photos').select('*').eq('finding_id', id).order('created_at', { ascending: true });
-  currentPhotos = data || [];
+  setCurrentPhotos(data || []);
   renderPhotoGroups();
   renderDlgRepairedPhotos(); // no-op if the status-change dialog isn't showing the Repaired target
   const limitNote = skipped ? ` (${skipped} skipped — ${PHOTO_LIMIT_PER_KIND} max reached)` : '';
@@ -2290,10 +2264,9 @@ function renderTimeline() {
 
 /* ---------------- status-change dialog ---------------- */
 
-let dlgTarget = null;
 
 function openStatusDialog(target) {
-  dlgTarget = target;
+  setDlgTarget(target);
   $('dlgTitle').textContent = `${current.status} → ${target}`;
   $('dlgNote').value = '';
   $('errDlg').style.display = 'none';
@@ -2350,7 +2323,7 @@ function renderDlgRepairedPhotos() {
         await sb.storage.from(PHOTO_BUCKET).remove([btn.dataset.path]);
         const { error } = await sb.from('finding_photos').delete().eq('id', btn.dataset.id);
         if (error) throw error;
-        currentPhotos = currentPhotos.filter(p => p.id !== btn.dataset.id);
+        setCurrentPhotos(currentPhotos.filter(p => p.id !== btn.dataset.id));
         renderDlgRepairedPhotos();
         renderPhotoGroups();
         notify('Photo deleted.');
@@ -3318,7 +3291,7 @@ function initApp() {
   // must not re-render and wipe the user's unsaved input.
   sb.auth.onAuthStateChange((event, s) => {
     const wasAuthed = !!session;
-    session = s;
+    setSession(s);
     updateAuthUI();
     if (event === 'INITIAL_SESSION' || wasAuthed !== !!s) route();
   });
@@ -3431,16 +3404,16 @@ function initApp() {
   // the full assessment workbench lives on the edit form now (the calculator page is retired)
   $('btnAssess').addEventListener('click', () => { if (current) location.hash = '#/edit/' + current.id; });
   // clicking a group's "+ Add" also makes that group the target for the next Ctrl+V paste
-  $('btnAddFound').addEventListener('click', () => { photoPasteTarget = 'found'; $('fileFound').click(); });
-  $('btnAddRepaired').addEventListener('click', () => { photoPasteTarget = 'repaired'; $('fileRepaired').click(); });
+  $('btnAddFound').addEventListener('click', () => { setPhotoPasteTarget('found'); $('fileFound').click(); });
+  $('btnAddRepaired').addEventListener('click', () => { setPhotoPasteTarget('repaired'); $('fileRepaired').click(); });
   $('fileFound').addEventListener('change', (e) => { addDetailPhotos([...e.target.files], 'found'); e.target.value = ''; });
   $('fileRepaired').addEventListener('change', (e) => { addDetailPhotos([...e.target.files], 'repaired'); e.target.value = ''; });
 
   // Same wiring for the edit form's Photographic Record panel — uploads against editingId
   // explicitly (not current.id: `current` may point at a different finding than the one being
   // edited if the user navigated straight from the dashboard list rather than via its detail page).
-  $('btnAddFound2').addEventListener('click', () => { photoPasteTarget = 'found'; $('fileFound2').click(); });
-  $('btnAddRepaired2').addEventListener('click', () => { photoPasteTarget = 'repaired'; $('fileRepaired2').click(); });
+  $('btnAddFound2').addEventListener('click', () => { setPhotoPasteTarget('found'); $('fileFound2').click(); });
+  $('btnAddRepaired2').addEventListener('click', () => { setPhotoPasteTarget('repaired'); $('fileRepaired2').click(); });
   $('fileFound2').addEventListener('change', (e) => { addDetailPhotos([...e.target.files], 'found', editingId); e.target.value = ''; });
   $('fileRepaired2').addEventListener('change', (e) => { addDetailPhotos([...e.target.files], 'repaired', editingId); e.target.value = ''; });
   $('fileDlgRepaired').addEventListener('change', (e) => { addDetailPhotos([...e.target.files], 'repaired'); e.target.value = ''; });
