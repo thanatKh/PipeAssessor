@@ -1,0 +1,463 @@
+// @ts-nocheck — Phase 1: ported 1:1 from the app monolith, verified behaviorally (engine
+// parity + Playwright), not via types yet. Same posture as app.ts; strict typing added
+// incrementally per module.
+/* ============================================================================
+   Dashboard: data loading (findings + detail), the map (Leaflet), the KPI
+   cards + budget + type radar, the register table + filters + selection, and
+   CSV export helpers shared with import-export. Extracted from the app monolith.
+   ============================================================================ */
+import L from 'leaflet';
+import { $, esc, notify, fmtDate, isOverdue, dueDateOf, pillHtml } from '../core/dom';
+import { FINDING_TYPES, FINDING_TYPE_SHORT, STATUS_COLORS, DEFAULT_MAP_VIEW, SAT_TILES, PHOTO_BUCKET } from '../core/constants';
+import { paFmtBahtShort } from '../engine/format';
+import { sb } from '../core/supabase';
+import {
+  findings, setFindings, lineList, filters, selectedIds, setSelectedIds,
+  current, setCurrent, currentPhotos, setCurrentPhotos, currentHistory, setCurrentHistory,
+  currentAssessments, setCurrentAssessments, photoCounts, setPhotoCounts, photoThumbs, setPhotoThumbs,
+  dashMap, setDashMap, dashLayer, setDashLayer, dashMarkers, setDashMarkers,
+  dashAddMarker, setDashAddMarker, pendingNewCoords, setPendingNewCoords, lastRenderedRows, setLastRenderedRows,
+} from '../core/state';
+
+export async function loadFindings() {
+  selectedIds.clear(); // fresh data -> drop any selection from a previous load (ids may be stale)
+  const [fq, pq] = await Promise.all([
+    sb.from('findings').select('*').order('created_at', { ascending: false }),
+    sb.from('finding_photos').select('finding_id, storage_path, kind, created_at').order('created_at', { ascending: true })
+  ]);
+  if (fq.error) { notify('Load failed: ' + fq.error.message, true); return; }
+  setFindings(fq.data || []);
+  setPhotoCounts({});
+  setPhotoThumbs({}); // finding_id -> storage_path of its earliest "found" photo (falls back to any)
+  (pq.data || []).forEach(p => {
+    photoCounts[p.finding_id] = (photoCounts[p.finding_id] || 0) + 1;
+    const cur = photoThumbs[p.finding_id];
+    if (!cur || (cur.kind !== 'found' && p.kind === 'found')) photoThumbs[p.finding_id] = p;
+  });
+}
+
+/* Days since the inspection date (falls back to created_at) — how long the finding has existed. */
+export function ageDays(f) {
+  const base = f.inspection_date || f.created_at;
+  if (!base) return null;
+  const ms = Date.now() - new Date(base).getTime();
+  if (isNaN(ms)) return null;
+  return Math.max(0, Math.floor(ms / 86400000));
+}
+
+/* Sort priority: overdue first, then nearest due date (nulls last), then newest — surfaces
+   exactly what needs attention instead of burying it under recently-added rows. */
+export const STATUS_RANK = { 'Open': 0, 'Repair Planned': 1, 'Monitoring': 2, 'Repaired': 3, 'Closed': 4 };
+export function sortFindings(rows) {
+  return rows.slice().sort((a, b) => {
+    const ao = isOverdue(a), bo = isOverdue(b);
+    if (ao !== bo) return ao ? -1 : 1;
+    const ad = dueDateOf(a), bd = dueDateOf(b);
+    if (ad && bd && ad !== bd) return ad < bd ? -1 : 1;
+    if (ad && !bd) return -1;
+    if (!ad && bd) return 1;
+    const ar = STATUS_RANK[a.status] ?? 9, br = STATUS_RANK[b.status] ?? 9;
+    if (ar !== br) return ar - br;
+    return (b.created_at || '').localeCompare(a.created_at || '');
+  });
+}
+
+export async function loadDetail(id) {
+  const [f, ph, hi, as] = await Promise.all([
+    sb.from('findings').select('*').eq('id', id).single(),
+    sb.from('finding_photos').select('*').eq('finding_id', id).order('created_at', { ascending: true }),
+    sb.from('status_history').select('*').eq('finding_id', id).order('changed_at', { ascending: false }),
+    sb.from('assessments').select('*').eq('finding_id', id).order('created_at', { ascending: false })
+  ]);
+  if (f.error) { notify('Finding not found.', true); return false; }
+  setCurrent(f.data);
+  setCurrentPhotos(ph.data || []);
+  setCurrentHistory(hi.data || []);
+  setCurrentAssessments(as.data || []);
+  return true;
+}
+
+export function photoUrl(path) {
+  return sb.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
+/* ---------------- list view ---------------- */
+
+
+export function applyFilters(rows) {
+  const q = filters.q.trim().toLowerCase();
+  return rows.filter(f => {
+    if (filters.terminal && f.terminal !== filters.terminal) return false;
+    if (filters.status === '__overdue') { if (!isOverdue(f)) return false; }
+    else if (filters.status === '__complete') { if (f.status !== 'Repaired' && f.status !== 'Closed') return false; }
+    else if (filters.status === '__outstanding') { if (f.status === 'Repaired' || f.status === 'Closed') return false; }
+    else if (filters.status && f.status !== filters.status) return false;
+    if (filters.type && f.finding_type !== filters.type) return false;
+    if (q) {
+      const hay = [f.pipe_tag, f.description, f.location_desc, f.report_no, f.sap_notification, f.sap_order, f.pid_no, f.service]
+        .map(x => (x || '').toLowerCase()).join(' ');
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+// Circumference of the ring's r=42 circle (2 * PI * 42) — stroke-dasharray/-dashoffset are set
+// in absolute SVG units, not percentages, so this constant drives the fill math below.
+export const KPI_RING_CIRCUMFERENCE = 2 * Math.PI * 42;
+
+export function renderKpis() {
+  const count = (st) => findings.filter(f => f.status === st).length;
+  const overdue = findings.filter(isOverdue).length;
+  const items = [
+    { label: 'Open', num: count('Open'), filter: 'Open' },
+    { label: 'Monitoring', num: count('Monitoring'), filter: 'Monitoring' },
+    { label: 'Repair Planned', num: count('Repair Planned'), filter: 'Repair Planned' },
+    { label: 'Overdue', num: overdue, filter: '__overdue', cls: 'k-overdue' },
+    { label: 'Repaired', num: count('Repaired'), filter: 'Repaired' },
+    { label: 'All', num: findings.length, filter: '' }
+  ];
+  $('kpiRowBottom').innerHTML = items.map(it =>
+    `<button type="button" class="kpi ${it.cls || ''} ${filters.status === it.filter && (it.filter !== '' || filters.status === '') ? '' : ''}" data-filter="${esc(it.filter)}">
+       <span class="k-num">${it.num}</span><span class="k-label">${esc(it.label)}</span>
+     </button>`).join('');
+  $('kpiRowBottom').querySelectorAll('.kpi').forEach(btn => {
+    if (btn.dataset.filter === filters.status) btn.classList.add('active');
+    btn.addEventListener('click', () => {
+      filters.status = btn.dataset.filter;
+      $('filStatus').value = filters.status;
+      renderList();
+    });
+  });
+
+  // Completion ring: Repaired + Closed vs. all findings. A finding is "resolved" once its
+  // repair is confirmed OR the record is formally closed out — matches the register's own
+  // dimmed/"row-dim" treatment for these two statuses.
+  const total = findings.length;
+  const complete = count('Repaired') + count('Closed');
+  const pct = total > 0 ? Math.round((complete / total) * 100) : 0;
+  const offset = KPI_RING_CIRCUMFERENCE * (1 - (total > 0 ? complete / total : 0));
+  $('kpiRingFill').style.strokeDasharray = `${KPI_RING_CIRCUMFERENCE}`;
+  $('kpiRingFill').style.strokeDashoffset = `${offset}`;
+  $('kpiRingPct').textContent = `${pct}%`;
+  $('kpiRingFraction').textContent = `${complete} of ${total}`;
+  $('kpiRingCard').classList.toggle('active', filters.status === '__complete');
+
+  renderBudgetKpi();
+  renderTypeRadar();
+}
+
+// Outstanding repair budget: Σ estimated_cost over findings not yet Repaired/Closed, with a
+// High/Medium/Low split. Computed globally (like the KPI chips), independent of the active filter.
+export function renderBudgetKpi() {
+  const isOut = f => f.status !== 'Repaired' && f.status !== 'Closed';
+  const out = findings.filter(isOut);
+  const sum = arr => arr.reduce((s, f) => s + (Number(f.estimated_cost) || 0), 0);
+  const noEst = out.filter(f => f.estimated_cost == null).length;
+  $('kbTotal').textContent = paFmtBahtShort(sum(out));
+  $('kbSub').textContent = `${out.length} finding${out.length === 1 ? '' : 's'}${noEst ? ` · ${noEst} not yet estimated` : ''}`;
+  const sev = s => paFmtBahtShort(sum(out.filter(f => f.severity === s)));
+  $('kbSev').innerHTML =
+    `<span class="kb-hi"><i></i>High <b>${sev('High')}</b></span>` +
+    `<span class="kb-md"><i></i>Med <b>${sev('Medium')}</b></span>` +
+    `<span class="kb-lo"><i></i>Low <b>${sev('Low')}</b></span>`;
+  $('kpiBudgetCard').classList.toggle('active', filters.status === '__outstanding');
+}
+
+// Findings-by-type radar: for each of the 9 FINDING_TYPES, Remaining (not Repaired/Closed) nested
+// inside Total (all of that type). Hand-drawn SVG (no charting lib), fixed axes for a stable shape.
+export function renderTypeRadar() {
+  const el = $('kpiRadar');
+  const types = FINDING_TYPES;
+  const N = types.length;
+  const totalOf = t => findings.filter(f => f.finding_type === t).length;
+  const remainOf = t => findings.filter(f => f.finding_type === t && f.status !== 'Repaired' && f.status !== 'Closed').length;
+  const totals = types.map(totalOf);
+  const remains = types.map(remainOf);
+  const sumT = totals.reduce((a, b) => a + b, 0);
+  const sumR = remains.reduce((a, b) => a + b, 0);
+
+  if (!findings.length) {
+    el.innerHTML = `<div class="radar-empty">No findings yet</div>`;
+    return;
+  }
+
+  const cx = 120, cy = 100, maxR = 68;
+  // "nice" max so the outer ring isn't cramped (grid rings at 1/4..4/4 of it)
+  const rawMax = Math.max(1, ...totals);
+  const step = rawMax <= 4 ? 1 : rawMax <= 8 ? 2 : Math.ceil(rawMax / 4);
+  const maxVal = step * 4;
+  const RINGS = 4;
+  const ang = i => (-90 + i * (360 / N)) * Math.PI / 180;
+  const pt = (i, v) => {
+    const r = (v / maxVal) * maxR;
+    return [cx + r * Math.cos(ang(i)), cy + r * Math.sin(ang(i))];
+  };
+  const poly = vals => vals.map((v, i) => pt(i, v).map(n => n.toFixed(1)).join(',')).join(' ');
+
+  let grid = '';
+  for (let g = 1; g <= RINGS; g++) {
+    const rv = maxVal * g / RINGS;
+    grid += `<polygon class="radar-grid" points="${poly(types.map(() => rv))}"></polygon>`;
+  }
+  let axes = '', labels = '';
+  types.forEach((t, i) => {
+    const [ex, ey] = pt(i, maxVal);
+    axes += `<line class="radar-axis" x1="${cx}" y1="${cy}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}"></line>`;
+    const [lx, ly] = pt(i, maxVal + 0.9);
+    const a = ang(i);
+    const anchor = Math.abs(Math.cos(a)) < 0.3 ? 'middle' : (Math.cos(a) > 0 ? 'start' : 'end');
+    const dy = Math.sin(a) > 0.3 ? '0.7em' : (Math.sin(a) < -0.3 ? '-0.2em' : '0.3em');
+    labels += `<text class="radar-label" x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}" dy="${dy}">${esc(FINDING_TYPE_SHORT[t] || t)}</text>`;
+  });
+  const totalPoly = `<polygon class="radar-total" points="${poly(totals)}"></polygon>`;
+  const remainPoly = `<polygon class="radar-remain" points="${poly(remains)}"></polygon>`;
+  const remainDots = remains.map((v, i) => { const [x, y] = pt(i, v); return v > 0 ? `<circle class="radar-remain-dot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2"></circle>` : ''; }).join('');
+
+  el.innerHTML =
+    `<svg viewBox="0 0 240 200" role="img" aria-label="Findings by type, remaining vs total">` +
+    grid + axes + totalPoly + remainPoly + remainDots + labels +
+    `</svg>` +
+    `<div class="radar-legend"><span class="rl-remain"><i></i>Remaining <b>${sumR}</b></span><span class="rl-total"><i></i>Total <b>${sumT}</b></span></div>`;
+}
+
+/* ---------------- dashboard map ---------------- */
+
+export function ensureDashMap() {
+  const el = $('dashMap');
+  if (typeof L === 'undefined') {
+    el.style.display = 'flex';
+    el.style.alignItems = 'center';
+    el.style.justifyContent = 'center';
+    el.style.fontSize = '11px';
+    el.style.color = 'var(--text-light)';
+    el.textContent = 'Map unavailable — check your connection.';
+    return;
+  }
+  if (dashMap) { setTimeout(() => dashMap.invalidateSize(), 80); return; }
+  setDashMap(L.map(el, { center: DEFAULT_MAP_VIEW.center, zoom: DEFAULT_MAP_VIEW.zoom, scrollWheelZoom: false }));
+  L.tileLayer(SAT_TILES.url, { maxZoom: SAT_TILES.maxZoom, attribution: SAT_TILES.attribution }).addTo(dashMap);
+  setDashLayer(L.layerGroup().addTo(dashMap));
+  // scroll-zoom only after the user clicks the map — otherwise page scrolling gets hijacked
+  dashMap.on('focus click', () => dashMap.scrollWheelZoom.enable());
+  dashMap.on('blur', () => dashMap.scrollWheelZoom.disable());
+  // double-click drops a pin and offers "Add finding here" instead of zooming
+  dashMap.doubleClickZoom.disable();
+  dashMap.on('dblclick', (e) => showAddFindingPopup(e.latlng));
+  dashMap.on('popupclose', () => { if (dashAddMarker) { dashLayer.removeLayer(dashAddMarker); setDashAddMarker(null); } });
+  setTimeout(() => dashMap.invalidateSize(), 150);
+}
+
+export function popupHtml(f) {
+  return `<div class="map-popup">
+    <div class="mp-tag">${esc(f.pipe_tag || f.location_desc || '—')}</div>
+    ${pillHtml(f.status)}${isOverdue(f) ? ' <span class="ov-badge">OVERDUE</span>' : ''}
+    <div class="mp-meta">${esc(f.terminal)} — ${esc(f.finding_type)}</div>
+    <a href="#/f/${esc(f.id)}">Open finding &#8594;</a>
+  </div>`;
+}
+
+
+// Double-click the dashboard map -> drop a temporary pin + a small popup that opens the New
+// Finding form pre-seeded with these coordinates. openForm(null) reads pendingNewCoords in its
+// map-init branch and calls setPin() to place the picker pin.
+export function showAddFindingPopup(latlng) {
+  if (dashAddMarker) dashLayer.removeLayer(dashAddMarker);
+  setDashAddMarker(L.circleMarker(latlng, {
+    radius: 8, color: '#156B95', fillColor: '#38bdf8', fillOpacity: 0.9, weight: 2
+  }).addTo(dashLayer));
+
+  // build as a DOM node so the button's handler wires cleanly (no id lookup across popups)
+  const node = document.createElement('div');
+  node.className = 'map-popup';
+  node.innerHTML = `<div class="mp-tag">Add a finding here?</div>
+    <div class="mp-meta mono">${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}</div>`;
+  const btn = document.createElement('button');
+  btn.className = 'btn';
+  btn.type = 'button';
+  btn.style.marginTop = '6px';
+  btn.textContent = 'Add finding here';
+  btn.addEventListener('click', () => {
+    setPendingNewCoords({ lat: latlng.lat, lng: latlng.lng });
+    dashMap.closePopup();
+    location.hash = '#/new';
+  });
+  node.appendChild(btn);
+
+  L.popup({ closeButton: true }).setLatLng(latlng).setContent(node).openOn(dashMap);
+}
+
+export function renderMap(rows) {
+  ensureDashMap();
+  if (!dashMap) return;
+  // The container was display:none while another view was active; Leaflet's cached size is
+  // stale (0×0), and fitBounds against a zero-size map computes a world-level zoom. Re-measure
+  // synchronously — show('viewList') has already run by the time renderMap is called. A second,
+  // deferred invalidate is cheap insurance against any layout not being fully settled yet
+  // (fonts/webfont swap, etc.) on the first paint.
+  dashMap.invalidateSize();
+  setTimeout(() => dashMap.invalidateSize(), 100);
+  dashLayer.clearLayers();
+  setDashMarkers({});
+  const pts = rows.filter(f => f.lat != null && f.lng != null);
+  pts.forEach(f => {
+    const color = STATUS_COLORS[f.status] || '#64748b';
+    if (isOverdue(f)) {
+      // dashed red halo reads over any pin fill (a red ring on the red Open pin would vanish)
+      dashLayer.addLayer(L.circleMarker([f.lat, f.lng], {
+        radius: 14, fill: false, color: '#dc2626', weight: 2, dashArray: '4,4', interactive: false
+      }));
+    }
+    const pin = L.circleMarker([f.lat, f.lng], {
+      radius: 8, fillColor: color, fillOpacity: 0.95, color: '#ffffff', weight: 2
+    });
+    pin.bindPopup(popupHtml(f));
+    // clicking a pin flashes + scrolls to its table row (the reverse of row->pin hover)
+    pin.on('click', () => flashRow(f.id));
+    dashLayer.addLayer(pin);
+    dashMarkers[f.id] = pin;
+  });
+  if (pts.length) {
+    dashMap.fitBounds(L.latLngBounds(pts.map(f => [f.lat, f.lng])).pad(0.25), { maxZoom: 17 });
+  } else {
+    dashMap.setView(DEFAULT_MAP_VIEW.center, DEFAULT_MAP_VIEW.zoom);
+  }
+}
+
+/* row -> pin: emphasize the marker while hovering its row */
+export function highlightPin(id, on) {
+  const m = dashMarkers[id];
+  if (!m) return;
+  m.setRadius(on ? 12 : 8);
+  m.setStyle({ weight: on ? 3 : 2 });
+  if (on) m.bringToFront();
+}
+
+/* pin -> row: scroll the row into view and flash it */
+export function flashRow(id) {
+  const tr = document.querySelector(`#listBody tr[data-id="${CSS.escape(id)}"]`);
+  if (!tr) return;
+  tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  tr.classList.remove('row-flash');
+  void tr.offsetWidth; // restart the animation
+  tr.classList.add('row-flash');
+}
+
+export const CAMERA_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+
+export function ageHtml(f) {
+  const d = ageDays(f);
+  if (d == null) return '<span class="age">—</span>';
+  const active = f.status !== 'Repaired' && f.status !== 'Closed';
+  const cls = active && d >= 180 ? 'age age-old' : active && d >= 90 ? 'age age-warn' : 'age';
+  return `<span class="${cls}" title="Days since inspection">${d}d</span>`;
+}
+
+// Row selection for the Summary PDF (see exportSummaryPdf): a plain Set of finding ids,
+// persisted across re-renders/filter changes within the same list load, cleared whenever
+// loadFindings() pulls fresh data (stale ids could otherwise reference deleted rows).
+
+export function renderTable(rows) {
+  setLastRenderedRows(rows);
+  const body = $('listBody');
+  if (!rows.length) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="6">${findings.length ? 'No findings match the current filters.' : 'No findings recorded yet — use “+ New Finding” to add the first one.'}</td></tr>`;
+    updateSelectionUI();
+    return;
+  }
+  body.innerHTML = rows.map(f => {
+    const due = dueDateOf(f);
+    const dueHtml = isOverdue(f)
+      ? `<span class="ov-badge">${fmtDate(due)}</span>`
+      : `<span class="mono" style="font-size:12px;">${fmtDate(due)}</span>`;
+    const np = photoCounts[f.id] || 0;
+    const photoChip = np ? `<span class="t-photos">${CAMERA_SVG}${np}</span>` : '';
+    const thumb = photoThumbs[f.id];
+    const thumbHtml = thumb
+      ? `<img class="row-thumb" src="${esc(photoUrl(thumb.storage_path))}" alt="" loading="lazy">`
+      : `<span class="row-thumb row-thumb-empty"></span>`;
+    const dim = (f.status === 'Repaired' || f.status === 'Closed') ? ' row-dim' : '';
+    const checked = selectedIds.has(f.id) ? ' checked' : '';
+    return `<tr data-id="${esc(f.id)}" class="${dim.trim()}">
+      <td class="c-check"><input type="checkbox" class="row-check" data-sel="${esc(f.id)}"${checked}></td>
+      <td>${pillHtml(f.status)}</td>
+      <td class="c-tag">
+        <div class="c-tag-flex">
+          ${thumbHtml}
+          <div class="c-tag-text">
+            <div class="t-tag-row"><span class="t-tag" title="${esc(f.pipe_tag || f.location_desc || '')}">${esc(f.pipe_tag || f.location_desc || '—')}</span>${photoChip}</div>
+            <div class="t-type" title="${esc(f.finding_type)}">${esc(f.finding_type)}</div>
+            ${(f.pipe_tag && f.location_desc) ? `<div class="t-desc" title="${esc(f.location_desc)}"><span class="t-desc-label">Loc:</span> ${esc(f.location_desc)}</div>` : ''}
+            ${f.description ? `<div class="t-desc" title="${esc(f.description)}"><span class="t-desc-label">Anomaly:</span> ${esc(f.description)}</div>` : ''}
+          </div>
+        </div>
+      </td>
+      <td style="font-size:12px;">${esc(f.terminal)}</td>
+      <td>${ageHtml(f)}</td>
+      <td>${dueHtml}</td>
+    </tr>`;
+  }).join('');
+  body.querySelectorAll('tr[data-id]').forEach(tr => {
+    const id = tr.dataset.id;
+    tr.addEventListener('click', (e) => { if (e.target.closest('.c-check')) return; location.hash = '#/f/' + id; });
+    tr.addEventListener('mouseenter', () => highlightPin(id, true));
+    tr.addEventListener('mouseleave', () => highlightPin(id, false));
+  });
+  body.querySelectorAll('.row-check[data-sel]').forEach(chk => {
+    chk.addEventListener('click', (e) => e.stopPropagation());
+    chk.addEventListener('change', () => {
+      const id = chk.dataset.sel;
+      if (chk.checked) selectedIds.add(id); else selectedIds.delete(id);
+      updateSelectionUI();
+    });
+  });
+  updateSelectionUI();
+}
+
+// Syncs the header "select all" checkbox (checked/indeterminate) and the selection bar
+// (count + Summary PDF button label) to the current selectedIds / rendered-rows state.
+export function updateSelectionUI() {
+  const selectAll = $('chkSelectAll');
+  const idsOnPage = lastRenderedRows.map(f => f.id);
+  const selectedOnPage = idsOnPage.filter(id => selectedIds.has(id)).length;
+  if (selectAll) {
+    selectAll.checked = idsOnPage.length > 0 && selectedOnPage === idsOnPage.length;
+    selectAll.indeterminate = selectedOnPage > 0 && selectedOnPage < idsOnPage.length;
+  }
+  const bar = $('selBar');
+  const btn = $('btnExport');
+  if (selectedIds.size > 0) {
+    bar.hidden = false;
+    $('selCount').textContent = `${selectedIds.size} selected`;
+    btn.textContent = `Export (${selectedIds.size})`;
+  } else {
+    bar.hidden = true;
+    btn.textContent = 'Export';
+  }
+}
+
+// Tag combobox options: union of findings' own history and the master line list, each paired
+// with a location (for search) and a terminal (so the list can be scoped to whichever terminal
+// is selected on the form — a KBY finding has no business suggesting an SRC tag). Findings supply
+// the learned location (most recent wins); line-list-only tags show their service as the sub-line.
+export function buildTagOptions() {
+  const byTag = new Map();
+  // findings newest-first so the first location seen per tag is the most recent
+  [...findings].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).forEach(f => {
+    if (!f.pipe_tag) return;
+    if (!byTag.has(f.pipe_tag)) byTag.set(f.pipe_tag, { location: f.location_desc || '', terminal: f.terminal || '' });
+  });
+  lineList.forEach(r => {
+    if (!r.pipe_tag) return;
+    if (!byTag.has(r.pipe_tag)) byTag.set(r.pipe_tag, { location: r.service || '', terminal: r.terminal || '' });
+  });
+  return [...byTag.entries()].map(([tag, o]) => ({ tag, location: o.location, terminal: o.terminal })).sort((a, b) => a.tag.localeCompare(b.tag));
+}
+
+export function renderList() {
+  renderKpis();
+  const rows = sortFindings(applyFilters(findings));
+  renderTable(rows);
+  renderMap(rows);
+}
+
