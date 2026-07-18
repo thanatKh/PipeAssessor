@@ -18,7 +18,7 @@ import { sb, PA_SUPABASE_URL, PA_SUPABASE_KEY } from './core/supabase';
 import { computeB313, PA_PIPE_DATABASE, PA_MATERIALS, paDefaultScheduleForNps } from './engine/compute';
 import { paFmtDate, paFmtDateTime, paFmtBaht, paFmtBahtShort } from './engine/format';
 import { downscaleImage, OR_LOGO_DATAURL } from './engine/branding';
-import { registerGoogleSansFonts } from './engine/fonts';
+import { registerGoogleSansFonts, registerThaiPdfFont } from './engine/fonts';
 import { paCreateAssessView, paAdvisorItems, PA_SCOPE_TEXT, paCrossSectionPng } from './workbench/assess-view';
 import {
   filters, session, findings, lineList, current, currentPhotos, currentHistory, currentAssessments, editingId, pendingPhotos, pickMap, pickMarker, dashMap, dashLayer, photoCounts, photoThumbs, dashMarkers, dashAddMarker, pendingNewCoords, selectedIds, lastRenderedRows, importValidRows, lineListValidRows, photoPasteTarget, assessResult, severityTouched, lastLoadedAssessInputs, awFormView, assessToggleTouched, awQuickView, detailMap, detailMarker, dlgTarget, setSession, setFindings, setLineList, setCurrent, setCurrentPhotos, setCurrentHistory, setCurrentAssessments, setEditingId, setPendingPhotos, setPickMap, setPickMarker, setDashMap, setDashLayer, setPhotoCounts, setPhotoThumbs, setDashMarkers, setDashAddMarker, setPendingNewCoords, setSelectedIds, setLastRenderedRows, setImportValidRows, setLineListValidRows, setPhotoPasteTarget, setAssessResult, setSeverityTouched, setLastLoadedAssessInputs, setAwFormView, setAssessToggleTouched, setAwQuickView, setDetailMap, setDetailMarker, setDlgTarget,
@@ -2472,6 +2472,7 @@ async function buildFindingPdf() {
   const { jsPDF } = await import('jspdf'); const { default: autoTable } = await import('jspdf-autotable');
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   registerGoogleSansFonts(doc); // asset/shared.js — use doc.setFont('GoogleSans', ...) below
+  await registerThaiPdfFont(doc); // auto-switches doc.text() to Noto Sans Thai for Thai codepoints
   const PW = 210, PH = 297, M = 14, CW = PW - 2 * M;
   const HEADER_H = 18, FOOTER_H = 16;
   let y = 0, secNum = 0, figNum = 0;
@@ -3050,6 +3051,7 @@ async function buildSummaryPdf(rows, includeBudget) {
     const { jsPDF } = await import('jspdf'); const { default: autoTable } = await import('jspdf-autotable');
     const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
     registerGoogleSansFonts(doc); // asset/shared.js — use doc.setFont('GoogleSans', ...) below
+    await registerThaiPdfFont(doc); // auto-switches doc.text() to Noto Sans Thai for Thai codepoints
     const PW = 297, PH = 210, M = 12; // landscape A4 — extra width for the Map + Photo columns
     const HEADER_H = 13, FOOTER_H = 14;
     const DANGER = '#dc2626';

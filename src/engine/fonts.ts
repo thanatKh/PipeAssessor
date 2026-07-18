@@ -43,3 +43,61 @@ export function registerGoogleSansWebFont(): void {
   style.textContent = css;
   (document.head || document.documentElement).appendChild(style);
 }
+
+
+/* ============================================================================
+   Thai PDF text support — Noto Sans Thai (OFL-1.1, Google's official variable
+   TTF, src/assets/fonts/NotoSansThai.ttf). Google Sans has no Thai glyphs, so
+   without this, Thai text in a finding (location, notes, etc.) renders as
+   missing/garbled glyphs in the exported PDF. Lazy: fetched only when a PDF is
+   actually built (via Vite's ?url asset import), same dynamic-loading posture
+   as jsPDF itself — never bundled into the eager entry chunk.
+   ============================================================================ */
+import notoSansThaiUrl from '../assets/fonts/NotoSansThai.ttf?url';
+
+const THAI_RANGE = /[ก-๛]/;
+
+let thaiFontB64: string | null = null;
+async function ensureThaiFont(): Promise<string> {
+  if (thaiFontB64) return thaiFontB64;
+  const buf = await (await fetch(notoSansThaiUrl)).arrayBuffer();
+  let binary = '';
+  const bytes = new Uint8Array(buf);
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  thaiFontB64 = btoa(binary);
+  return thaiFontB64;
+}
+
+/* Registers NotoSansThai into the jsPDF instance and wraps doc.text so any string
+   containing Thai codepoints (U+0E01-U+0E5B) is drawn with it instead of whatever
+   font is currently set — Latin/numeric-only strings are completely unaffected,
+   so none of the app's 49 existing doc.text() call sites need to change. Call
+   once per doc, after registerGoogleSansFonts(doc). */
+export async function registerThaiPdfFont(doc: any): Promise<void> {
+  const b64 = await ensureThaiFont();
+  doc.addFileToVFS('NotoSansThai.ttf', b64);
+  doc.addFont('NotoSansThai.ttf', 'NotoSansThai', 'normal');
+  doc.addFont('NotoSansThai.ttf', 'NotoSansThai', 'bold'); // single weight; jsPDF needs a 'bold' entry to satisfy setFont('...', 'bold') calls
+
+  const originalText = doc.text.bind(doc);
+  const originalSetFont = doc.setFont.bind(doc);
+  let currentFont = 'GoogleSans';
+  let currentStyle = 'normal';
+  doc.setFont = (name: string, style?: string) => {
+    if (name !== 'NotoSansThai') { currentFont = name; currentStyle = style || 'normal'; }
+    return originalSetFont(name, style);
+  };
+  doc.text = (text: any, ...rest: any[]) => {
+    const isThai = typeof text === 'string' && THAI_RANGE.test(text);
+    if (isThai) {
+      originalSetFont('NotoSansThai', currentStyle === 'bold' ? 'bold' : 'normal');
+      const result = originalText(text, ...rest);
+      originalSetFont(currentFont, currentStyle);
+      return result;
+    }
+    return originalText(text, ...rest);
+  };
+}
