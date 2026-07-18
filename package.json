@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource/noto-sans-thai": "^5.2.8",
     "@supabase/supabase-js": "2.49.4",
     "basecoat-css": "1.0.1",
     "jspdf": "2.5.2",
