@@ -13,7 +13,7 @@ import { STATUS_COLORS } from '../core/constants';
 import { computeB313, PA_PIPE_DATABASE } from '../engine/compute';
 import { paFmtDate, paFmtDateTime } from '../engine/format';
 import { OR_LOGO_DATAURL } from '../engine/branding';
-import { registerGoogleSansFonts, registerThaiPdfFont } from '../engine/fonts';
+import { registerGoogleSansFonts } from '../engine/fonts';
 import { PA_SCOPE_TEXT, paCrossSectionPng } from '../workbench/assess-view';
 import { resolveAdvisor } from '../workbench/repair-advisor';
 import {
@@ -106,8 +106,7 @@ export async function buildFindingPdf() {
   const f = current;
   const { jsPDF } = await import('jspdf'); const { default: autoTable } = await import('jspdf-autotable');
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  registerGoogleSansFonts(doc); // src/legacy/shared.js — use doc.setFont('GoogleSans', ...) below
-  await registerThaiPdfFont(doc); // auto-switches doc.text() to Noto Sans Thai for Thai codepoints
+  await registerGoogleSansFonts(doc); // loads Sarabun (Latin + Thai in one face) under the 'GoogleSans' jsPDF font name — use doc.setFont('GoogleSans', ...) below
   const PW = 210, PH = 297, M = 14, CW = PW - 2 * M;
   const HEADER_H = 18, FOOTER_H = 16;
   let y = 0, secNum = 0, figNum = 0;
@@ -241,8 +240,8 @@ export async function buildFindingPdf() {
   row('Finding Type', f.finding_type);
   row('Severity', f.severity);
   if (f.is_leaking) row('Leaking', 'Yes');
-  if (f.t_nominal != null) row('Nominal Thickness', `${f.t_nominal} mm`);
-  if (f.t_measured != null) row('Measured Min. Thickness', `${f.t_measured} mm`);
+  if (f.t_nominal != null) row('Nominal Thickness', `${fmtN(f.t_nominal, 2)} mm`);
+  if (f.t_measured != null) row('Measured Min. Thickness', `${fmtN(f.t_measured, 2)} mm`);
   if (f.defect_length_mm != null || f.defect_width_mm != null)
     row('Defect L x W', `${f.defect_length_mm != null ? f.defect_length_mm : '—'} x ${f.defect_width_mm != null ? f.defect_width_mm : '—'} mm`);
   row('Description', f.description);
@@ -706,8 +705,7 @@ export async function buildSummaryPdf(rows, includeBudget) {
   {
     const { jsPDF } = await import('jspdf'); const { default: autoTable } = await import('jspdf-autotable');
     const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
-    registerGoogleSansFonts(doc); // src/legacy/shared.js — use doc.setFont('GoogleSans', ...) below
-    await registerThaiPdfFont(doc); // auto-switches doc.text() to Noto Sans Thai for Thai codepoints
+    await registerGoogleSansFonts(doc); // loads Sarabun (Latin + Thai in one face) under the 'GoogleSans' jsPDF font name — use doc.setFont('GoogleSans', ...) below
     const PW = 297, PH = 210, M = 12; // landscape A4 — extra width for the Map + Photo columns
     const HEADER_H = 13, FOOTER_H = 14;
     const DANGER = '#dc2626';
@@ -830,7 +828,7 @@ export async function buildSummaryPdf(rows, includeBudget) {
     const colStyles = {
       0: { cellWidth: 8, halign: 'right', valign: 'middle' },
       1: { cellWidth: 17, valign: 'middle' },
-      2: { cellWidth: 42, fontStyle: 'bold', valign: 'middle' }, // long tags (e.g. 953-P-009-10"-D1101-ET-80) need real room
+      2: { cellWidth: 55, fontStyle: 'bold', valign: 'middle' }, // long tags (e.g. 953-P-009-10"-D1101-ET-80) need real room to avoid wrapping to a 2nd line
       4: { cellWidth: 20, valign: 'middle' },
       5: { cellWidth: 18, valign: 'middle' }, // "Medium" needs more room than the other two severities
       6: { cellWidth: 22, valign: 'middle' },

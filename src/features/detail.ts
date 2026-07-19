@@ -71,8 +71,8 @@ export function renderDetail() {
   d.push(dItem('Method', esc(f.method || '—')));
   d.push(dItem('Severity', esc(f.severity || '—')));
   if (f.is_leaking) d.push(dItem('Leaking', '<span class="ov-badge">ACTIVELY LEAKING</span>'));
-  if (f.t_nominal != null) d.push(dItem('Nominal Thk.', `<span class="mono">${f.t_nominal} mm</span>`));
-  if (f.t_measured != null) d.push(dItem('Measured Min.', `<span class="mono">${f.t_measured} mm</span>`));
+  if (f.t_nominal != null) d.push(dItem('Nominal Thk.', `<span class="mono">${fmtN(f.t_nominal, 2)} mm</span>`));
+  if (f.t_measured != null) d.push(dItem('Measured Min.', `<span class="mono">${fmtN(f.t_measured, 2)} mm</span>`));
   if (f.defect_length_mm != null || f.defect_width_mm != null)
     d.push(dItem('Defect L × W', `<span class="mono">${f.defect_length_mm != null ? f.defect_length_mm : '—'} × ${f.defect_width_mm != null ? f.defect_width_mm : '—'} mm</span>`));
   if (f.lat != null && f.lng != null)
@@ -374,6 +374,7 @@ export function openStatusDialog(target) {
                  <h3>After Repair photos</h3>
                  <button class="btn" data-variant="outline" id="dlgAddRepairedPhoto" type="button">+ Add</button>
                </div>
+               <span class="hint" style="margin:0;">Tip: paste a screenshot with <kbd>Ctrl</kbd>+<kbd>V</kbd></span>
                <div class="photo-grid" id="dlgRepairedGrid"></div>
                <div class="photo-empty" id="dlgRepairedEmpty">No after-repair photos yet.</div>
              </div>`;
@@ -443,8 +444,7 @@ export async function confirmStatusChange() {
       return;
     }
   } else if (target === 'Closed') {
-    if (!note) { err.textContent = 'A closing note is required to close a finding.'; err.style.display = 'block'; return; }
-    patch.closing_note = note;
+    if (note) patch.closing_note = note;
   }
 
   const btn = $('dlgConfirm');

@@ -22,7 +22,7 @@ import {
   lastLoadedAssessInputs, setLastLoadedAssessInputs,
   awFormView, setAwFormView, assessToggleTouched, setAssessToggleTouched,
   awQuickView, setAwQuickView, photoPasteTarget, setPhotoPasteTarget,
-  findings, lineList, pendingNewCoords, setPendingNewCoords, setCurrentPhotos,
+  findings, lineList, pendingNewCoords, setPendingNewCoords, setCurrentPhotos, dlgTarget,
 } from '../core/state';
 import { loadFindings, buildTagOptions } from './dashboard';
 import { loadLineList } from './import-export';
@@ -134,7 +134,12 @@ export async function onPastePhoto(e) {
   if (!session) return;
   const files = imageFilesFromClipboard(e.clipboardData);
   if (!files.length) return; // not an image paste — let normal text paste happen
-  if ($('viewForm').classList.contains('active')) {
+  // The status-change dialog's "After Repair photos" uploader sits on top of the detail view —
+  // check it first so a paste while the dialog is open doesn't fall through to the page beneath.
+  if ($('statusDlg').open && dlgTarget === 'Repaired') {
+    e.preventDefault();
+    addDetailPhotos(files, 'repaired'); // shows its own progress/result toast, refreshes the dialog grid
+  } else if ($('viewForm').classList.contains('active')) {
     e.preventDefault();
     if (editingId) {
       addDetailPhotos(files, photoPasteTarget, editingId); // shows its own progress/result toast
@@ -737,11 +742,8 @@ export function openForm(f) {
   $('fPid').value = f ? (f.pid_no || '') : '';
   $('fService').value = f ? (f.service || '') : '';
   $('fLocationDesc').value = f ? (f.location_desc || '') : '';
-  $('fVendor').value = f ? (f.vendor || '') : '';
-  $('fReportNo').value = f ? (f.report_no || '') : '';
   $('fReportLink').value = f ? (f.report_link || '') : '';
   $('fInspDate').value = f ? (f.inspection_date || '') : '';
-  $('fMethod').value = f ? (f.method || '') : '';
   $('fType').value = f ? f.finding_type : '';
   $('fIsLeaking').checked = f ? !!f.is_leaking : false;
   syncCorrTypeFromFinding(); // corrosion type follows the finding type (a saved assessment overrides it below)
@@ -834,11 +836,8 @@ export function collectForm() {
     pid_no: sOrNull('fPid'),
     service: sOrNull('fService'),
     location_desc: sOrNull('fLocationDesc'),
-    vendor: sOrNull('fVendor'),
-    report_no: sOrNull('fReportNo'),
     report_link: sOrNull('fReportLink'),
     inspection_date: dOrNull('fInspDate'),
-    method: sOrNull('fMethod'),
     finding_type: val('fType'),
     severity: sOrNull('fSeverity'),
     is_leaking: $('fIsLeaking').checked,
@@ -952,16 +951,10 @@ export async function saveForm(addAnother) {
     if (addAnother) {
       // keep the report context, reload the list cache so the new row appears, then a fresh form
       await loadFindings();
-      const keep = {
-        terminal: val('fTerminal'), vendor: val('fVendor'),
-        reportNo: val('fReportNo'), inspDate: val('fInspDate'), method: val('fMethod')
-      };
+      const keep = { terminal: val('fTerminal'), inspDate: val('fInspDate') };
       openForm(null);
       $('fTerminal').value = keep.terminal;
-      $('fVendor').value = keep.vendor;
-      $('fReportNo').value = keep.reportNo;
       $('fInspDate').value = keep.inspDate;
-      $('fMethod').value = keep.method;
       window.scrollTo({ top: 0, behavior: 'smooth' });
       notify('Saved. Ready for the next finding on this report.');
     } else {
