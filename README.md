@@ -15,13 +15,13 @@
 
 <h2>Features</h2>
 <ul>
-    <li><strong>Findings dashboard:</strong> a satellite map + KPI summary (completion ring, outstanding repair budget, status counts, findings-by-type radar) alongside a filterable, searchable register of every finding.</li>
+    <li><strong>Findings dashboard:</strong> a satellite map (colorable by status, finding type, or severity, with a live count per legend entry) + KPI summary (completion ring, outstanding repair budget, status counts) alongside a filterable, searchable register of every finding.</li>
     <li><strong>Full lifecycle tracking:</strong> each finding moves through Open, Monitoring, Repair Planned, Repaired, and Closed, with a full status-change history and overdue tracking against target/re-inspection dates.</li>
     <li><strong>ASME B31.3 assessment workbench:</strong> dual input modes (wall-loss depth or measured minimum thickness, auto-derived from each other), required-thickness and MAWP calculations, a cross-section visualization, and a live OK / MONITOR / REPAIR status.</li>
-    <li><strong>ASME PCC-2 repair advisor:</strong> repair category recommendations (composite wraps, welded sleeves, mechanical clamps, etc.) based on the assessment result.</li>
+    <li><strong>Repair Advisor:</strong> a standalone recommendation panel covering every finding type (not just wall loss) — precise ASME PCC-2 categories when a numeric assessment is available, tailored guidance otherwise, with a safety-first overlay when a finding is marked actively leaking.</li>
     <li><strong>Remaining-life estimate:</strong> given a corrosion rate, estimates time remaining until the pipe reaches its minimum required thickness.</li>
     <li><strong>Photo records:</strong> as-found and after-repair photos per finding, with camera capture support on mobile.</li>
-    <li><strong>PDF reports:</strong> a per-finding engineering report (assessment inputs, results, governing equations, PCC-2 recommendation, site map, photos, history) and a management-summary PDF across the filtered register.</li>
+    <li><strong>PDF reports:</strong> a per-finding engineering report (assessment inputs, results, governing equations, repair advisor, site map, photos, history) and a management-summary PDF across the filtered register.</li>
     <li><strong>Excel/CSV import and export:</strong> bulk-import findings and the master pipe-tag line list from a spreadsheet; export the register to CSV or PDF.</li>
     <li><strong>Quick calculator:</strong> a standalone what-if workbench (reachable from the header) for a one-off calculation that doesn't save anything.</li>
 </ul>

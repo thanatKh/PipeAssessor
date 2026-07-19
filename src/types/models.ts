@@ -100,6 +100,7 @@ export interface Finding {
   finding_type: string | null;
   status: FindingStatus;
   severity: string | null;
+  is_leaking: boolean | null;
   estimated_cost: number | null;
   target_date: string | null;
   next_check_date: string | null;

@@ -15,7 +15,7 @@
   <div class="wrap">
     <div class="header-brand">
       <a class="hdr-logo-chip" href="#/list" title="Go to dashboard">
-        <img class="hdr-logo" src="asset/RGB_OR_Full%20color.png" alt="OR Logo" width="80" height="42"/>
+        <img class="hdr-logo" src="/RGB_OR_Full%20color.png" alt="OR Logo" width="80" height="42"/>
       </a>
       <div class="header-info">
         <h1>Pipe Assessor</h1>
@@ -65,8 +65,13 @@
       <div class="panel dash-map-panel">
         <div class="panel-h">
           <h2>Map <span class="f-optnote" style="font-size:11px;">— double-click to add a finding here</span></h2>
-          <div class="map-legend" id="mapLegend"></div>
+          <select id="mapColorBy" class="select" style="width:auto; height:26px; font-size:11px; padding:2px 22px 2px 8px;">
+            <option value="status">Color by: Status</option>
+            <option value="type">Color by: Type</option>
+            <option value="severity">Color by: Severity</option>
+          </select>
         </div>
+        <div class="map-legend" id="mapLegend"></div>
         <div id="dashMap"></div>
       </div>
 
@@ -101,12 +106,6 @@
         </div>
         <div class="kpi-row-bottom" id="kpiRowBottom"></div>
       </div>
-
-      <!-- RIGHT: findings-by-type radar, its own column matching the map/KPI column height. -->
-      <div class="kpi-radar-card" id="kpiRadarCard">
-        <div class="kpi-radar-title">Findings by Type</div>
-        <div id="kpiRadar"></div>
-      </div>
     </div>
 
     <div class="dash-split">
@@ -126,14 +125,13 @@
           <button class="link-btn" id="btnSelClear" type="button">Clear selection</button>
         </div>
         <div class="panel-b" style="padding-bottom: 10px;">
-          <div class="seg-row" id="segTerminal" role="tablist" aria-label="Terminal filter">
-            <span class="seg-pill" aria-hidden="true"></span>
-            <button class="seg-btn active" data-t="" type="button">All</button>
-            <button class="seg-btn" data-t="KBY" type="button">KBY</button>
-            <button class="seg-btn" data-t="SRC" type="button">SRC</button>
-            <button class="seg-btn" data-t="BRP" type="button">BRP</button>
-          </div>
           <div class="filters">
+            <select id="filTerminal" class="select">
+              <option value="">All terminals</option>
+              <option value="KBY">KBY</option>
+              <option value="SRC">SRC</option>
+              <option value="BRP">BRP</option>
+            </select>
             <select id="filStatus" class="select">
               <option value="">All statuses</option>
               <option>Open</option><option>Monitoring</option><option>Repair Planned</option>
@@ -245,6 +243,13 @@
               <option value="">—</option>
               <option>Low</option><option>Medium</option><option>High</option>
             </select>
+          </div>
+          <div>
+            <label class="f-label">&nbsp;</label>
+            <label class="switch-inline" style="height:38px;">
+              <input type="checkbox" id="fIsLeaking">
+              <span>Actively Leaking</span>
+            </label>
           </div>
           <div class="full">
             <label class="f-label" for="fDescription">Anomaly Description</label>
@@ -375,6 +380,13 @@
 
     <!-- ================= ASSESSMENT (full ASME B31.3 workbench, right column) ================= -->
     <div class="form-col form-col-assess" id="formColAssess">
+      <div class="panel" id="repairAdvisorPanel">
+        <div class="panel-h">
+          <h2>Repair Advisor</h2>
+          <a href="#" id="advisorAssessLink" class="back-link" style="display:none;">ดูผลการประเมิน ASME B31.3 ฉบับเต็ม</a>
+        </div>
+        <div class="panel-b" id="raBody"></div>
+      </div>
       <div class="panel" id="assessPanel">
         <div class="panel-h">
           <h2>ASME B31.3 Assessment</h2>
@@ -386,7 +398,7 @@
         <div class="panel-b" id="aBody">
           <p class="hint" id="aIntro" style="margin-top:0;">
             Enter the pipe data and the UT reading — the full B31.3 result (status, cross-section, results,
-            repair advisor, equations) computes live below and is saved onto the finding.
+            equations) computes live below and is saved onto the finding.
           </p>
           <div class="fgrid">
             <div>
@@ -411,8 +423,8 @@
           <div class="a-reading">
             <div class="seg-row" id="aModeSeg" role="tablist" aria-label="Reading type">
               <span class="seg-pill" aria-hidden="true"></span>
-              <button class="seg-btn" data-mode="tmeas" type="button">Measured thickness</button>
               <button class="seg-btn active" data-mode="depth" type="button">Wall-loss depth</button>
+              <button class="seg-btn" data-mode="tmeas" type="button">Measured thickness</button>
             </div>
             <div class="fgrid">
               <div id="aTmeasGrp" style="display:none;">
@@ -481,7 +493,7 @@
           <div class="validation-alert" id="aCalcHint" style="display:none; margin-top:10px;"></div>
 
           <!-- Full workbench (status banner, cross-section, results, advisor, equations) is
-               injected here by paCreateAssessView (asset/assess-ui.js) in initAssessment(). -->
+               injected here by paCreateAssessView (src/workbench/assess-view.ts) in initAssessment(). -->
           <div id="awForm" style="margin-top:14px;"></div>
         </div>
       </div>
@@ -529,8 +541,8 @@
           <div class="a-reading">
             <div class="seg-row" id="qModeSeg" role="tablist" aria-label="Reading type">
               <span class="seg-pill" aria-hidden="true"></span>
-              <button class="seg-btn" data-mode="tmeas" type="button">Measured thickness</button>
               <button class="seg-btn active" data-mode="depth" type="button">Wall-loss depth</button>
+              <button class="seg-btn" data-mode="tmeas" type="button">Measured thickness</button>
             </div>
             <div class="fgrid">
               <div id="qTmeasGrp" style="display:none;">
@@ -631,6 +643,11 @@
             <div class="dgrid" id="lifecycleGrid" style="margin-bottom: 12px;"></div>
             <div class="status-actions" id="statusActions"></div>
           </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-h"><h2>Repair Advisor</h2></div>
+          <div class="panel-b" id="raDetailBody"></div>
         </div>
 
         <div class="panel">

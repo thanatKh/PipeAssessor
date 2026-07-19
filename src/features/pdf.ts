@@ -14,7 +14,8 @@ import { computeB313, PA_PIPE_DATABASE } from '../engine/compute';
 import { paFmtDate, paFmtDateTime } from '../engine/format';
 import { OR_LOGO_DATAURL } from '../engine/branding';
 import { registerGoogleSansFonts, registerThaiPdfFont } from '../engine/fonts';
-import { paAdvisorItems, PA_SCOPE_TEXT, paCrossSectionPng } from '../workbench/assess-view';
+import { PA_SCOPE_TEXT, paCrossSectionPng } from '../workbench/assess-view';
+import { resolveAdvisor } from '../workbench/repair-advisor';
 import {
   findings, filters, selectedIds, current, currentPhotos, currentHistory, currentAssessments, photoThumbs,
 } from '../core/state';
@@ -105,7 +106,7 @@ export async function buildFindingPdf() {
   const f = current;
   const { jsPDF } = await import('jspdf'); const { default: autoTable } = await import('jspdf-autotable');
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  registerGoogleSansFonts(doc); // asset/shared.js — use doc.setFont('GoogleSans', ...) below
+  registerGoogleSansFonts(doc); // src/legacy/shared.js — use doc.setFont('GoogleSans', ...) below
   await registerThaiPdfFont(doc); // auto-switches doc.text() to Noto Sans Thai for Thai codepoints
   const PW = 210, PH = 297, M = 14, CW = PW - 2 * M;
   const HEADER_H = 18, FOOTER_H = 16;
@@ -113,7 +114,7 @@ export async function buildFindingPdf() {
 
   // preload images (each degrades independently). Logo is the embedded base64 from shared.js
   // (offline-safe — same source as the calculator report), with a file fetch as a fallback.
-  const logo = (typeof OR_LOGO_DATAURL !== 'undefined' && OR_LOGO_DATAURL) || await fetchAsDataUrl('asset/RGB_OR_Full color.png', 3000);
+  const logo = (typeof OR_LOGO_DATAURL !== 'undefined' && OR_LOGO_DATAURL) || await fetchAsDataUrl('/RGB_OR_Full color.png', 3000);
   const logoIm = logo ? await loadImg(logo) : null;
   const mapImg = (f.lat != null && f.lng != null) ? await composeMapPng(f.lat, f.lng, 17, 1000, 500) : null;
   // latest assessment re-computed from its saved inputs (single engine source) + its cross-section
@@ -239,12 +240,53 @@ export async function buildFindingPdf() {
   section('Anomaly');
   row('Finding Type', f.finding_type);
   row('Severity', f.severity);
+  if (f.is_leaking) row('Leaking', 'Yes');
   if (f.t_nominal != null) row('Nominal Thickness', `${f.t_nominal} mm`);
   if (f.t_measured != null) row('Measured Min. Thickness', `${f.t_measured} mm`);
   if (f.defect_length_mm != null || f.defect_width_mm != null)
     row('Defect L x W', `${f.defect_length_mm != null ? f.defect_length_mm : '—'} x ${f.defect_width_mm != null ? f.defect_width_mm : '—'} mm`);
   row('Description', f.description);
   y += 4;
+
+  // --- Repair Advisor: always rendered, regardless of whether a B31.3 assessment exists —
+  // resolveAdvisor picks precise numeric guidance for wall-loss types with a valid assessRes,
+  // or type-specific generic guidance otherwise (see src/workbench/repair-advisor.ts). ---
+  const advisor = resolveAdvisor(f.finding_type, assessRes, f.is_leaking);
+  if (advisor) {
+    section('Repair Advisor');
+    doc.setFont('GoogleSans', 'italic'); doc.setFontSize(7.5); doc.setTextColor(PDF_MUTED);
+    const summaryLines = doc.splitTextToSize(advisor.summary, CW);
+    ensure(summaryLines.length * 3.4 + 2);
+    doc.text(summaryLines, M, y);
+    y += summaryLines.length * 3.4 + 2;
+    doc.setTextColor(PDF_TEXT);
+    doc.setFontSize(8);
+    advisor.items.forEach(item => {
+      const leadText = item.title ? `${item.title} ` : '';
+      const bodyLines = doc.splitTextToSize(`• ${leadText}${item.body}`, CW - 2);
+      ensure(bodyLines.length * 3.6 + item.sub.length * 3.6 + 2);
+      doc.setFont('GoogleSans', 'normal'); doc.setTextColor(PDF_TEXT);
+      doc.text(bodyLines, M, y);
+      y += bodyLines.length * 3.6;
+      item.sub.forEach(s => {
+        const subLines = doc.splitTextToSize(`    - ${s}`, CW - 6);
+        ensure(subLines.length * 3.6);
+        doc.text(subLines, M + 2, y);
+        y += subLines.length * 3.6;
+      });
+      y += 1.5;
+    });
+    if (advisor.standardsNote) {
+      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(7);
+      const noteLines = doc.splitTextToSize(advisor.standardsNote, CW);
+      ensure(noteLines.length * 3.2 + 2);
+      doc.setTextColor(PDF_MUTED);
+      doc.text(noteLines, M, y);
+      doc.setTextColor(PDF_TEXT);
+      y += noteLines.length * 3.2;
+    }
+    y += 3;
+  }
 
   section('Lifecycle & SAP References');
   row('Current Status', f.status + (isOverdue(f) ? '  (OVERDUE)' : ''));
@@ -487,26 +529,6 @@ export async function buildFindingPdf() {
     });
     y += 1;
 
-    // --- PCC-2 recommendation (shared paAdvisorItems — same content as the workbench) ---
-    section('ASME PCC-2 Repair Recommendation');
-    doc.setFontSize(8);
-    paAdvisorItems(r).forEach(item => {
-      const leadText = item.title ? `${item.title} ` : '';
-      const bodyLines = doc.splitTextToSize(`• ${leadText}${item.body}`, CW - 2);
-      ensure(bodyLines.length * 3.6 + item.sub.length * 3.6 + 2);
-      doc.setFont('GoogleSans', 'normal'); doc.setTextColor(PDF_TEXT);
-      doc.text(bodyLines, M, y);
-      y += bodyLines.length * 3.6;
-      item.sub.forEach(s => {
-        const subLines = doc.splitTextToSize(`    - ${s}`, CW - 6);
-        ensure(subLines.length * 3.6);
-        doc.text(subLines, M + 2, y);
-        y += subLines.length * 3.6;
-      });
-      y += 1.5;
-    });
-    y += 3;
-
     // --- scope & limitations (assessment-scoped disclaimer) ---
     doc.setFont('GoogleSans', 'italic'); doc.setFontSize(7.5);
     const scopeLines = doc.splitTextToSize(PA_SCOPE_TEXT, CW);
@@ -684,7 +706,7 @@ export async function buildSummaryPdf(rows, includeBudget) {
   {
     const { jsPDF } = await import('jspdf'); const { default: autoTable } = await import('jspdf-autotable');
     const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
-    registerGoogleSansFonts(doc); // asset/shared.js — use doc.setFont('GoogleSans', ...) below
+    registerGoogleSansFonts(doc); // src/legacy/shared.js — use doc.setFont('GoogleSans', ...) below
     await registerThaiPdfFont(doc); // auto-switches doc.text() to Noto Sans Thai for Thai codepoints
     const PW = 297, PH = 210, M = 12; // landscape A4 — extra width for the Map + Photo columns
     const HEADER_H = 13, FOOTER_H = 14;
@@ -693,7 +715,7 @@ export async function buildSummaryPdf(rows, includeBudget) {
     // Baht for the PDF: the ฿ glyph (U+0E3F) isn't WinAnsi-safe and jsPDF drops it, so use "THB".
     const thb = n => (n == null || !isFinite(n)) ? '—' : 'THB ' + Math.round(n).toLocaleString('en-US');
     const thbNum = n => (n == null || !isFinite(n)) ? '—' : Math.round(n).toLocaleString('en-US');
-    const logo = (typeof OR_LOGO_DATAURL !== 'undefined' && OR_LOGO_DATAURL) || await fetchAsDataUrl('asset/RGB_OR_Full color.png', 3000);
+    const logo = (typeof OR_LOGO_DATAURL !== 'undefined' && OR_LOGO_DATAURL) || await fetchAsDataUrl('/RGB_OR_Full color.png', 3000);
     const logoIm = logo ? await loadImg(logo) : null;
 
     const term = filters.terminal || 'All terminals';

@@ -1,5 +1,5 @@
 /* ============================================================================
-   Display formatters (ported verbatim from asset/shared.js). Date/time are built
+   Display formatters (ported verbatim from src/legacy/shared.js). Date/time are built
    from getDate()/getHours() etc. — NOT toLocale* — so dd Mmm yyyy + 24-hour time
    render identically regardless of the viewer's OS locale.
    ============================================================================ */

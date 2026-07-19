@@ -54,6 +54,12 @@ export function setPhotoThumbs(v: any) { photoThumbs = v; }
 export let dashMarkers: any = {};
 export function setDashMarkers(v: any) { dashMarkers = v; }
 
+// Which dimension the dashboard map's pins + legend are colored by. 'status' matches the
+// register's status pills; 'type'/'severity' surface risk concentration by damage mechanism or
+// severity across the terminal, independent of lifecycle status.
+export let mapColorBy: 'status' | 'type' | 'severity' = 'status';
+export function setMapColorBy(v: 'status' | 'type' | 'severity') { mapColorBy = v; }
+
 export let dashAddMarker: any = null;
 export function setDashAddMarker(v: any) { dashAddMarker = v; }
 

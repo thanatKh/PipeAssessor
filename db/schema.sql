@@ -27,6 +27,7 @@ create table if not exists public.findings (
   -- the anomaly
   finding_type text not null,
   severity text check (severity in ('Low','Medium','High')),
+  is_leaking boolean not null default false, -- orthogonal to finding_type: e.g. External Corrosion WITH a leak
   description text,
   t_nominal numeric,
   t_measured numeric,
@@ -67,6 +68,10 @@ alter table public.findings add column if not exists report_link text;
 -- engineer assigns the Line No. later. (Idempotent — re-dropping NOT NULL is a no-op.)
 alter table public.findings alter column pipe_tag drop not null;
 alter table public.findings add column if not exists estimated_cost numeric;
+-- Leak used to be a Finding Type; it's now a flag orthogonal to type (a corrosion/dent/etc.
+-- finding can independently be actively leaking or not). Existing finding_type = 'Leak' rows are
+-- NOT auto-migrated here — reclassify them manually (set is_leaking = true + a real finding_type).
+alter table public.findings add column if not exists is_leaking boolean not null default false;
 
 -- ---------------------------------------------------------------------------
 -- 2. finding_photos — photos live in the 'finding-photos' storage bucket;

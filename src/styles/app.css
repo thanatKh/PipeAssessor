@@ -119,7 +119,7 @@
 
     /* ============ Dashboard top: map left, KPI column right ============
        Mutual max-height: align-items:stretch makes both columns match whichever is naturally
-       taller — the KPI column's own accumulated card heights (Ring+Budget pair, 6 chips, radar)
+       taller — the KPI column's own accumulated card heights (Ring+Budget pair, 6 chips)
        normally set that height, and the map (flex-grown, no fixed height) fills it. Individual
        KPI cards inside the column stay content-sized (see .kpi-sidebar below) — only the
        column's *aggregate* height participates in the stretch, not each card individually. */
@@ -143,7 +143,7 @@
     /* ============ KPI column: natural-height cards stacked vertically ============
        Ring + Budget sit side by side as a compact pair (both short); the 6 status chips follow
        in a 2-col grid. The cards themselves are not stretched to fill extra space — the column's
-       total (sum of its cards + gaps) is simply read by the sibling map/radar panels via
+       total (sum of its cards + gaps) is simply read by the sibling map panel via
        align-items:stretch on .dash-top above. */
     .kpi-sidebar {
       flex: 0 0 340px;
@@ -189,36 +189,6 @@
     .kb-sev .kb-md i { background: var(--warn-color); }
     .kb-sev .kb-lo i { background: var(--ok-color); }
     .kb-sev b { font-family: 'Google Sans', sans-serif; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text-color); }
-
-    /* Findings-by-type radar — its own column, third sibling in .dash-top, matching the map/KPI
-       column height via align-items:stretch (see .dash-top comment). The SVG grows to fill
-       whatever height that stretch gives the card, so it reads clearly at any dashboard height. */
-    .kpi-radar-card {
-      flex: 0 0 300px;
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 8px;
-      padding: 10px 12px 8px;
-    }
-    .kpi-radar-title { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); margin-bottom: 4px; }
-    #kpiRadar { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-    #kpiRadar svg { display: block; width: 100%; flex: 1 1 auto; min-height: 220px; }
-    .radar-grid { fill: none; stroke: var(--card-border); stroke-width: 0.8; }
-    .radar-axis { stroke: var(--card-border); stroke-width: 0.8; }
-    .radar-label { font-size: 9px; fill: var(--text-muted); }
-    .radar-total { fill: var(--button-primary); fill-opacity: 0.14; stroke: var(--button-primary); stroke-width: 1.4; }
-    .radar-remain { fill: var(--warn-color); fill-opacity: 0.26; stroke: var(--warn-color); stroke-width: 1.4; }
-    .radar-remain-dot { fill: var(--warn-color); }
-    .radar-legend { display: flex; justify-content: center; gap: 14px; margin-top: 4px; font-size: 11px; color: var(--text-muted); }
-    .radar-legend span { display: inline-flex; align-items: center; gap: 5px; }
-    .radar-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
-    .radar-legend .rl-remain i { background: var(--warn-color); }
-    .radar-legend .rl-total i { background: var(--button-primary); }
-    .radar-legend b { font-variant-numeric: tabular-nums; color: var(--text-color); }
-    .radar-empty { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--text-light); text-align: center; padding: 8px 0; }
 
     /* Stacked full-width above the budget card (see .kpi-top-pair) — horizontal layout (ring
        left, percentage + fraction right) so the card reads well at full sidebar width instead
@@ -373,15 +343,13 @@
 
     .kpi.k-overdue .k-num { color: var(--danger-color); }
 
-    /* Below ~960px the map, KPI column, and radar don't all earn their width — stack, map first,
-       then KPI column, then radar, each full-width. Stacked columns have no stretch sibling to
-       size themselves against, so they each fall back to an explicit height here. */
+    /* Below ~960px the map and KPI column don't both earn their width — stack, map first, then
+       KPI column, each full-width. Stacked columns have no stretch sibling to size themselves
+       against, so they fall back to an explicit height here. */
     @media (max-width: 960px) {
       .dash-top { flex-direction: column; align-items: stretch; }
       .kpi-sidebar { flex: none; }
-      .kpi-radar-card { flex: none; }
       #dashMap { height: 340px; }
-      #kpiRadar svg { height: 220px; }
     }
 
     @media (max-width: 767px) {
@@ -411,9 +379,11 @@
     .map-legend {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 6px 14px;
       align-items: center;
-      justify-content: flex-end;
+      justify-content: flex-start;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--card-border);
     }
 
     .map-legend .lg-item {
@@ -426,6 +396,12 @@
       letter-spacing: 0.4px;
       color: var(--text-muted);
       white-space: nowrap;
+    }
+
+    .map-legend .lg-item b {
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      color: var(--text-color);
     }
 
     .map-legend .lg-dot {

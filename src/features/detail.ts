@@ -15,6 +15,7 @@ import { sb } from '../core/supabase';
 import { computeB313, PA_MATERIALS } from '../engine/compute';
 import { paFmtBaht } from '../engine/format';
 import { paCreateAssessView } from '../workbench/assess-view';
+import { paRenderRepairAdvisor } from '../workbench/repair-advisor';
 import {
   current, setCurrent, currentPhotos, setCurrentPhotos, currentHistory, setCurrentHistory,
   currentAssessments, editingId, dlgTarget, setDlgTarget,
@@ -69,6 +70,7 @@ export function renderDetail() {
   d.push(dItem('Inspection Date', `<span class="mono">${fmtDate(f.inspection_date)}</span>`));
   d.push(dItem('Method', esc(f.method || '—')));
   d.push(dItem('Severity', esc(f.severity || '—')));
+  if (f.is_leaking) d.push(dItem('Leaking', '<span class="ov-badge">ACTIVELY LEAKING</span>'));
   if (f.t_nominal != null) d.push(dItem('Nominal Thk.', `<span class="mono">${f.t_nominal} mm</span>`));
   if (f.t_measured != null) d.push(dItem('Measured Min.', `<span class="mono">${f.t_measured} mm</span>`));
   if (f.defect_length_mm != null || f.defect_width_mm != null)
@@ -83,10 +85,21 @@ export function renderDetail() {
     ? `<div class="d-label">Description</div><p class="d-desc">${esc(f.description)}</p>`
     : '';
 
+  renderRepairAdvisor();
   renderAssessments();
   renderDetailMap();
   renderPhotoGroups();
   renderTimeline();
+}
+
+// Standalone Repair Advisor panel — always available, independent of whether an assessment
+// snapshot exists (resFromSnapshot returns null in that case, and resolveAdvisor falls back to
+// the generic per-finding-type guidance; see src/workbench/repair-advisor.ts).
+export function renderRepairAdvisor() {
+  const root = $('raDetailBody');
+  if (!root) return;
+  const latest = currentAssessments.length ? currentAssessments[0] : null;
+  paRenderRepairAdvisor(root, current.finding_type, latest ? resFromSnapshot(latest) : null, current.is_leaking);
 }
 
 
@@ -214,8 +227,8 @@ export function renderAssessments() {
   const host = $('awDetail');
   if (res) {
     const view = paCreateAssessView(host, {
-      sections: ['status', 'svg', 'results', 'advisor', 'equations'],
-      collapsed: ['advisor', 'equations']
+      sections: ['status', 'svg', 'results', 'equations'],
+      collapsed: ['equations']
     });
     view.render(res, { nps: latest.inputs.nps });
   } else {

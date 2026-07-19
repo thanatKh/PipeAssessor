@@ -1,5 +1,5 @@
 /* ============================================================================
-   Assessment workbench view layer — ported 1:1 from asset/assess-ui.js.
+   Assessment workbench view layer — ported 1:1 from the pre-migration asset/assess-ui.js.
    Injects the workbench markup and renders computeB313 results into it (status
    banner, cross-section SVG + drag handle, compliance verdicts, ERF gauge,
    results grid, advisor, equations, scope notice). Also rasterizes the SVG for
@@ -15,50 +15,6 @@ export const PA_SCOPE_TEXT = PA_SCOPE_HTML.replace(/<[^>]+>/g, '').replace(/&amp
 
 /* Fixed pixel geometry of the unrolled wall profile (see drawSvg below). */
 const PA_WALL_PLOT = { left: 55, right: 260, yOd: 30, yId: 220, pocketL: 90, pocketR: 230, pocketC: 160, pocketHalfW: 70 };
-
-/* Pure PCC-2 advisor content shared by the DOM list and the PDF report.
-   Each item: { title, body, sub: [..] } — title may be '' for untitled bullets. */
-export function paAdvisorItems(res) {
-  if (!res || res.hasErrors) {
-    return [{ title: '', body: 'No data calculated. Correct active errors and recalculate.', sub: [] }];
-  }
-
-  if (res.status === 'OK') {
-    return [
-      { title: 'PCC-2 Compliance:', body: 'Wall thickness is above design limit + corrosion allowance. No structural repair required.', sub: [] },
-      { title: 'Monitoring Recommendation:', body: 'Maintain standard inspection intervals and trend any nominal wall loss.', sub: [] }
-    ];
-  }
-
-  if (res.status === 'MONITOR') {
-    const items: any[] = [];
-    if (res.t_meas < res.t_struct) {
-      items.push({ title: 'Structural Support (API 574):', body: 'Remaining thickness is below the structural minimum threshold. Inspect pipe spans for sagging and verify support spacing to prevent buckling or collapse.', sub: [] });
-    }
-    items.push(
-      { title: 'Monitoring Plan:', body: 'Trend thickness using localized UT grid arrays. Verify corrosion rate ($CR$).', sub: [] },
-      { title: 'Prevention (PCC-2 Part 5):', body: 'Enhance external coating integrity or cathodic protection to mitigate local corrosion.', sub: [] },
-      { title: '', body: 'Plan a re-assessment prior to the next scheduled maintenance outage.', sub: [] }
-    );
-    return items;
-  }
-
-  // REPAIR Status Recommendations
-  const items: any[] = [];
-  const pctLoss = (1 - (res.t_meas / res.t_nom)) * 100;
-  if (pctLoss > 80) {
-    items.push({ title: 'CRITICAL (PCC-2 Part 3):', body: 'Metal loss exceeds 80% of nominal wall. Full spool replacement is highly recommended.', sub: [] });
-  }
-  items.push(
-    { title: 'Composite Repair (PCC-2 Part 2):', body: 'Engineered non-metallic wraps (e.g., carbon fiber/epoxy wraps) can be applied for non-leaking defects to restore pressure containment.', sub: [] },
-    { title: 'Welded Repair (PCC-2 Part 3):', body: '', sub: [
-      'Type B full-encirclement split welded sleeve designed for full pressure rating.',
-      'Weld metal overlay/build-up (requires qualified WPS/PQR, preheat, and post-weld NDE).'
-    ] },
-    { title: 'Mechanical Repair (PCC-2 Part 4):', body: 'Engineered mechanical clamp or leak containment encapsulation box (preferred if hot work or welding is restricted).', sub: [] }
-  );
-  return items;
-}
 
 /* ---------------- workbench markup (no ids — data-k lookups, instance-scoped) ---------------- */
 
@@ -197,13 +153,6 @@ const PA_AW_SECTIONS = {
       <p class="report-caveat" data-k="erlCaveat" style="margin-top:10px; display:none;">
         Assumes a single, constant, linear corrosion rate for the life of the pipe &mdash; it is not a substitute for trending multiple UT surveys over time. Per API 570 practice, the next inspection interval should not exceed half the estimated remaining life (subject to a code-defined maximum).
       </p>`
-  },
-  advisor: {
-    title: 'ASME PCC-2 Repair Advisor',
-    body: `
-      <ul class="advisor-list" data-k="advisorList">
-        <li>No data calculated. Provide input geometry and run calculations.</li>
-      </ul>`
   },
   equations: {
     title: 'Calculation References & Equations',
@@ -359,7 +308,7 @@ export async function paCrossSectionPng(res, scale) {
 
 export function paCreateAssessView(root, opts) {
   opts = opts || {};
-  const sections = opts.sections || ['status', 'scope', 'svg', 'results', 'advisor', 'equations'];
+  const sections = opts.sections || ['status', 'scope', 'svg', 'results', 'equations'];
   const collapsed = opts.collapsed || [];
 
   root.classList.add('aw');
@@ -577,18 +526,6 @@ export function paCreateAssessView(root, opts) {
     });
   }
 
-  /* ---- advisor ---- */
-
-  function renderAdvisor(res) {
-    const listEl = q('advisorList');
-    if (!listEl) return;
-    listEl.innerHTML = paAdvisorItems(res).map(item => {
-      const lead = item.title ? `<strong>${item.title}</strong> ` : '';
-      const subList = item.sub.length ? `<ul>${item.sub.map(s => `<li>${s}</li>`).join('')}</ul>` : '';
-      return `<li>${lead}${item.body}${subList}</li>`;
-    }).join('');
-  }
-
   /* ---- substituted equations ---- */
 
   function renderEquations(res, nps?) {
@@ -694,7 +631,6 @@ export function paCreateAssessView(root, opts) {
         q('ffsNote').style.display = 'none';
       }
       drawSvg(null);
-      renderAdvisor(null);
       renderEquations(null);
       return;
     }
@@ -765,7 +701,6 @@ export function paCreateAssessView(root, opts) {
     }
 
     drawSvg(res);
-    renderAdvisor(res);
     renderEquations(res, ctx.nps);
   }
 

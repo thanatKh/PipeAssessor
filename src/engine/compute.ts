@@ -2,7 +2,7 @@
    ASME B31.3 assessment engine — the SINGLE source of the wall-thickness math,
    consumed by every assessment surface (form workbench, detail page, quick calc,
    PDF). DOM-free and side-effect-free: validation returns an `errors` map the
-   caller maps onto its own UI. Ported 1:1 from asset/shared.js — any change here
+   caller maps onto its own UI. Ported 1:1 from src/legacy/shared.js — any change here
    must pass the numeric-identity regression (compute.test.ts) before shipping.
    ============================================================================ */
 import type { B313Inputs, B313Result } from '../types/models';

@@ -23,7 +23,7 @@ let XLSX: any;
 async function ensureXLSX() { if (!XLSX) XLSX = await import('xlsx'); return XLSX; }
 
 export const CSV_COLS = [
-  'terminal', 'pipe_tag', 'pid_no', 'service', 'location_desc', 'finding_type', 'severity',
+  'terminal', 'pipe_tag', 'pid_no', 'service', 'location_desc', 'finding_type', 'severity', 'is_leaking',
   'status', 'description', 'vendor', 'report_no', 'report_link', 'inspection_date', 'method',
   't_nominal', 't_measured', 'defect_length_mm', 'defect_width_mm', 'lat', 'lng',
   'target_date', 'next_check_date', 'sap_notification', 'sap_order', 'estimated_cost',

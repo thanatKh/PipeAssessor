@@ -6,6 +6,10 @@
 
 export const PHOTO_BUCKET = 'finding-photos';
 
+// Leak is NOT a finding type here — it's orthogonal to the damage mechanism (a corrosion, dent,
+// or CUI finding can independently be actively leaking or not). See the "Actively Leaking"
+// checkbox (form.ts's is_leaking field) and the repair advisor's leaking overlay
+// (src/workbench/repair-advisor.ts) instead.
 export const FINDING_TYPES = [
   'External Corrosion',
   'Internal Corrosion',
@@ -13,12 +17,18 @@ export const FINDING_TYPES = [
   'CUS (Corrosion Under Support)',
   'Coating / Painting Damage',
   'Pipe Support Defect',
-  'Leak',
   'Dent / Mechanical Damage',
   'Other'
 ];
 
-// Short axis labels for the findings-by-type radar (must fit at ~9px around a small chart).
+// Finding types where a UT reading is inherently expected — the ASME B31.3 wall-thickness engine
+// (and the numeric branch of the repair advisor, src/workbench/repair-advisor.ts) only applies to
+// these. Lives in constants.ts (not features/form.ts) so both form.ts and the workbench module can
+// import it without a features->workbench->features import cycle.
+export const WALL_LOSS_TYPES = ['External Corrosion', 'Internal Corrosion', 'CUI (Corrosion Under Insulation)', 'CUS (Corrosion Under Support)'];
+
+// Short labels for the map legend's Type mode (core/dashboard.ts's renderMapLegend) — full names
+// like "CUI (Corrosion Under Insulation)" wrap poorly even on the legend's own row.
 export const FINDING_TYPE_SHORT = {
   'External Corrosion': 'Ext Corr',
   'Internal Corrosion': 'Int Corr',
@@ -26,7 +36,6 @@ export const FINDING_TYPE_SHORT = {
   'CUS (Corrosion Under Support)': 'CUS',
   'Coating / Painting Damage': 'Coating',
   'Pipe Support Defect': 'Support',
-  'Leak': 'Leak',
   'Dent / Mechanical Damage': 'Dent',
   'Other': 'Other'
 };
@@ -51,6 +60,29 @@ export const STATUS_COLORS = {
   'Repair Planned': '#2563eb',
   'Repaired':       '#059669',
   'Closed':         '#64748b'
+};
+
+// Common risk-convention 3-color scale (green/amber/red) — same theme-independence rationale as
+// STATUS_COLORS above (drawn over satellite imagery). Used when the map's "color by" mode is
+// Severity (see app.ts's colorBy wiring / dashboard.ts's renderMap).
+export const SEVERITY_COLORS = {
+  'Low':    '#059669',
+  'Medium': '#d97706',
+  'High':   '#dc2626'
+};
+
+// 8 visually distinct hues, one per FINDING_TYPES entry — chosen for contrast against satellite
+// imagery and against each other (not a sequential/diverging scale, since finding type has no
+// inherent order). Used when the map's "color by" mode is Type.
+export const TYPE_COLORS = {
+  'External Corrosion':                '#dc2626',
+  'Internal Corrosion':                '#ea580c',
+  'CUI (Corrosion Under Insulation)':   '#d97706',
+  'CUS (Corrosion Under Support)':      '#65a30d',
+  'Coating / Painting Damage':          '#0891b2',
+  'Pipe Support Defect':                '#2563eb',
+  'Dent / Mechanical Damage':           '#7c3aed',
+  'Other':                              '#64748b'
 };
 
 // Same default view as the calculator's site-location map.

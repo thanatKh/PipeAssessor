@@ -17,9 +17,9 @@ import { computeB313, PA_PIPE_DATABASE, PA_MATERIALS, paDefaultScheduleForNps } 
 import { paFmtDate, paFmtDateTime, paFmtBaht, paFmtBahtShort } from './engine/format';
 import { downscaleImage, OR_LOGO_DATAURL } from './engine/branding';
 import { registerGoogleSansFonts, registerThaiPdfFont } from './engine/fonts';
-import { paCreateAssessView, paAdvisorItems, PA_SCOPE_TEXT, paCrossSectionPng } from './workbench/assess-view';
+import { paCreateAssessView, PA_SCOPE_TEXT, paCrossSectionPng } from './workbench/assess-view';
 import {
-  filters, session, findings, lineList, current, currentPhotos, currentHistory, currentAssessments, editingId, pendingPhotos, pickMap, pickMarker, dashMap, dashLayer, photoCounts, photoThumbs, dashMarkers, dashAddMarker, pendingNewCoords, selectedIds, lastRenderedRows, importValidRows, lineListValidRows, photoPasteTarget, assessResult, severityTouched, lastLoadedAssessInputs, awFormView, assessToggleTouched, awQuickView, detailMap, detailMarker, dlgTarget, setSession, setFindings, setLineList, setCurrent, setCurrentPhotos, setCurrentHistory, setCurrentAssessments, setEditingId, setPendingPhotos, setPickMap, setPickMarker, setDashMap, setDashLayer, setPhotoCounts, setPhotoThumbs, setDashMarkers, setDashAddMarker, setPendingNewCoords, setSelectedIds, setLastRenderedRows, setImportValidRows, setLineListValidRows, setPhotoPasteTarget, setAssessResult, setSeverityTouched, setLastLoadedAssessInputs, setAwFormView, setAssessToggleTouched, setAwQuickView, setDetailMap, setDetailMarker, setDlgTarget,
+  filters, session, findings, lineList, current, currentPhotos, currentHistory, currentAssessments, editingId, pendingPhotos, pickMap, pickMarker, dashMap, dashLayer, photoCounts, photoThumbs, dashMarkers, dashAddMarker, pendingNewCoords, selectedIds, lastRenderedRows, importValidRows, lineListValidRows, photoPasteTarget, assessResult, severityTouched, lastLoadedAssessInputs, awFormView, assessToggleTouched, awQuickView, detailMap, detailMarker, dlgTarget, setSession, setFindings, setLineList, setCurrent, setCurrentPhotos, setCurrentHistory, setCurrentAssessments, setEditingId, setPendingPhotos, setPickMap, setPickMarker, setDashMap, setDashLayer, setPhotoCounts, setPhotoThumbs, setDashMarkers, setDashAddMarker, setPendingNewCoords, setSelectedIds, setLastRenderedRows, setImportValidRows, setLineListValidRows, setPhotoPasteTarget, setAssessResult, setSeverityTouched, setLastLoadedAssessInputs, setAwFormView, setAssessToggleTouched, setAwQuickView, setDetailMap, setDetailMarker, setDlgTarget, setMapColorBy,
 } from './core/state';
 
 // Leaflet resolves its default marker icons relative to its own script URL, which breaks under
@@ -27,7 +27,7 @@ import {
 L.Icon.Default.mergeOptions({ iconRetinaUrl: markerIcon2x, iconUrl: markerIconUrl, shadowUrl: markerShadowUrl });
 
 import {
-  FINDING_TYPES, STATUS_COLORS,
+  FINDING_TYPES,
 } from './core/constants';
 
 import {
@@ -116,7 +116,7 @@ async function route() {
 
 
 import {
-  loadFindings, ageDays, STATUS_RANK, sortFindings, loadDetail, photoUrl, applyFilters, KPI_RING_CIRCUMFERENCE, renderKpis, renderBudgetKpi, renderTypeRadar, ensureDashMap, popupHtml, showAddFindingPopup, renderMap, highlightPin, flashRow, CAMERA_SVG, ageHtml, renderTable, updateSelectionUI, buildTagOptions, renderList,
+  loadFindings, ageDays, STATUS_RANK, sortFindings, loadDetail, photoUrl, applyFilters, KPI_RING_CIRCUMFERENCE, renderKpis, renderBudgetKpi, ensureDashMap, popupHtml, showAddFindingPopup, renderMap, highlightPin, flashRow, CAMERA_SVG, ageHtml, renderTable, updateSelectionUI, buildTagOptions, renderList,
 } from './features/dashboard';
 
 /* ---------------- CSV export (filtered register, Excel-friendly UTF-8 BOM) ---------------- */
@@ -126,7 +126,7 @@ import {
 } from './features/import-export';
 
 import {
-  clearValidation, setPin, clearPin, ensurePickMap, renderPendingGrid, addPendingFiles, imageFilesFromClipboard, onPastePhoto, WALL_LOSS_TYPES, AUTO_ASSESS_TYPES, CORR_TYPE_BY_FINDING, syncCorrTypeFromFinding, SEVERITY_BY_FINDING, suggestSeverityFromType, aMode, setAssessOn, updateAschedules, autofillAtnom, applyMaterialStress, gatherAssessParams, assessThickness, recalcAssessment, loadAssessmentInto, resetAssessment, initAssessment, applyTagMemory, TAG_COMBO_MAX, initTagCombo, initQuickCalc, openForm, collectForm, collectAssessment, uploadPhoto, saveForm, deleteFinding,
+  clearValidation, setPin, clearPin, ensurePickMap, renderPendingGrid, addPendingFiles, imageFilesFromClipboard, onPastePhoto, WALL_LOSS_TYPES, AUTO_ASSESS_TYPES, CORR_TYPE_BY_FINDING, syncCorrTypeFromFinding, SEVERITY_BY_FINDING, suggestSeverityFromType, aMode, setAssessOn, updateAschedules, autofillAtnom, applyMaterialStress, gatherAssessParams, assessThickness, recalcAssessment, loadAssessmentInto, resetAssessment, initAssessment, initRepairAdvisor, applyTagMemory, TAG_COMBO_MAX, initTagCombo, initQuickCalc, openForm, collectForm, collectAssessment, uploadPhoto, saveForm, deleteFinding,
 } from './features/form';
 
 import {
@@ -197,15 +197,7 @@ function initApp() {
 
   // list
   $('btnNew').addEventListener('click', () => { location.hash = '#/new'; });
-  $('segTerminal').querySelectorAll('.seg-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      $('segTerminal').querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      positionSegPill($('segTerminal'), true);
-      filters.terminal = btn.dataset.t;
-      renderList();
-    });
-  });
+  $('filTerminal').addEventListener('change', () => { filters.terminal = val('filTerminal'); renderList(); });
   $('filStatus').addEventListener('change', () => { filters.status = val('filStatus'); renderList(); });
   $('kpiRingCard').addEventListener('click', () => {
     filters.status = '__complete';
@@ -226,8 +218,7 @@ function initApp() {
   });
   $('btnResetFilters').addEventListener('click', () => {
     filters.terminal = ''; filters.status = ''; filters.type = ''; filters.q = '';
-    $('segTerminal').querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.t === ''));
-    positionSegPill($('segTerminal'), true);
+    $('filTerminal').value = '';
     $('filStatus').value = '';
     $('filType').value = '';
     $('filSearch').value = '';
@@ -269,13 +260,15 @@ function initApp() {
   });
   $('btnSelClear').addEventListener('click', () => { selectedIds.clear(); renderTable(lastRenderedRows); });
 
-  // map legend generated from STATUS_COLORS so pins and legend can never drift apart
-  $('mapLegend').innerHTML = Object.entries(STATUS_COLORS)
-    .map(([st, c]) => `<span class="lg-item"><span class="lg-dot" style="background:${c};"></span>${esc(st)}</span>`)
-    .join('') +
-    '<span class="lg-item"><span class="lg-dot lg-overdue"></span>Overdue</span>';
+  // map legend + pin coloring mode (Status/Type/Severity) — see renderMapLegend/colorFor in
+  // dashboard.ts; renderMap() renders both together on load and on every filter change.
+  $('mapColorBy').addEventListener('change', () => {
+    setMapColorBy($('mapColorBy').value);
+    renderList();
+  });
 
   // form
+  initRepairAdvisor();
   initAssessment();
   initQuickCalc();
   $('btnSave').addEventListener('click', () => saveForm(false));

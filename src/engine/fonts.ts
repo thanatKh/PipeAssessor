@@ -1,6 +1,6 @@
 /* ============================================================================
    Embedded Google Sans — base64 TTF, extracted verbatim from the pre-migration
-   asset/shared.js. Used by BOTH the PDF (jsPDF addFont) and the web @font-face.
+   src/legacy/shared.js. Used by BOTH the PDF (jsPDF addFont) and the web @font-face.
    "Google Sans" is proprietary and not on the public Google Fonts API, so it can't
    be linked — these bytes are the only source. Kept eager (not a lazy chunk): the UI
    @font-face below needs all four faces at startup. jsPDF / SheetJS are the lazy libs.

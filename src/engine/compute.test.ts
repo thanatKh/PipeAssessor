@@ -1,7 +1,7 @@
 /* ============================================================================
    Engine numeric-identity regression (the hard migration gate).
    Compares the ported, typed computeB313 (src/engine/compute.ts) against the
-   pre-migration reference — the original asset/shared.js, evaluated verbatim in
+   pre-migration reference — the original src/legacy/shared.js, evaluated verbatim in
    a VM sandbox — across a broad matrix of sizes / schedules / materials / modes /
    depths / pressures / CA / overrides / factors. Must be 0 mismatches.
    ============================================================================ */
@@ -12,7 +12,7 @@ import { computeB313 as computeNew } from './compute';
 import type { B313Inputs } from '../types/models';
 
 /* ---- Build the reference computeB313 from the original shared.js, verbatim ---- */
-const sharedSrc = readFileSync(new URL('../../asset/shared.js', import.meta.url), 'utf8');
+const sharedSrc = readFileSync(new URL('../legacy/shared.js', import.meta.url), 'utf8');
 const sandbox: any = {
   // registerGoogleSansWebFont() runs at load and touches the DOM — stub just enough.
   document: {

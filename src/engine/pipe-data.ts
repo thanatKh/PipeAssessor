@@ -1,6 +1,6 @@
 /* ============================================================================
    ASME B31.3 reference tables — EXTRACTED VERBATIM (line-sliced) from the
-   pre-migration asset/shared.js. Do not hand-edit values: the numeric-identity
+   pre-migration src/legacy/shared.js. Do not hand-edit values: the numeric-identity
    regression (src/engine/compute.test.ts) depends on these being unchanged.
    ============================================================================ */
 import type { PipeSize, Material } from '../types/models';

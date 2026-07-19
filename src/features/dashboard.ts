@@ -2,13 +2,13 @@
 // parity + Playwright), not via types yet. Same posture as app.ts; strict typing added
 // incrementally per module.
 /* ============================================================================
-   Dashboard: data loading (findings + detail), the map (Leaflet), the KPI
-   cards + budget + type radar, the register table + filters + selection, and
+   Dashboard: data loading (findings + detail), the map (Leaflet) + its color-by
+   legend, the KPI cards + budget, the register table + filters + selection, and
    CSV export helpers shared with import-export. Extracted from the app monolith.
    ============================================================================ */
 import L from 'leaflet';
 import { $, esc, notify, fmtDate, isOverdue, dueDateOf, pillHtml } from '../core/dom';
-import { FINDING_TYPES, FINDING_TYPE_SHORT, STATUS_COLORS, DEFAULT_MAP_VIEW, SAT_TILES, PHOTO_BUCKET } from '../core/constants';
+import { FINDING_TYPE_SHORT, STATUS_COLORS, TYPE_COLORS, SEVERITY_COLORS, DEFAULT_MAP_VIEW, SAT_TILES, PHOTO_BUCKET } from '../core/constants';
 import { paFmtBahtShort } from '../engine/format';
 import { sb } from '../core/supabase';
 import {
@@ -17,7 +17,39 @@ import {
   currentAssessments, setCurrentAssessments, photoCounts, setPhotoCounts, photoThumbs, setPhotoThumbs,
   dashMap, setDashMap, dashLayer, setDashLayer, dashMarkers, setDashMarkers,
   dashAddMarker, setDashAddMarker, pendingNewCoords, setPendingNewCoords, lastRenderedRows, setLastRenderedRows,
+  mapColorBy,
 } from '../core/state';
+
+// Resolves a finding's map/legend color for the current mapColorBy mode. Falls back to the
+// status palette's default ('#64748b') when a value has no palette entry (e.g. severity unset).
+function colorFor(f) {
+  if (mapColorBy === 'type') return TYPE_COLORS[f.finding_type] || '#64748b';
+  if (mapColorBy === 'severity') return SEVERITY_COLORS[f.severity] || '#64748b';
+  return STATUS_COLORS[f.status] || '#64748b';
+}
+
+// Map legend generated from whichever palette mapColorBy currently selects, so pins and legend
+// can never drift apart. Each swatch also shows a count of mapped findings in that bucket (of
+// `rows` — the same filtered set rendered as pins, so the numbers always match what's on screen;
+// replaced the old separate "Findings by Type" radar panel, which counted globally/unfiltered).
+// Status mode also gets an Overdue swatch (unlike Type/Severity, overdue is drawn as a separate
+// dashed ring, not a fill color, so it needs its own legend entry, with its own count).
+export function renderMapLegend(rows) {
+  rows = rows || [];
+  const mode = mapColorBy === 'type' ? 'finding_type' : mapColorBy === 'severity' ? 'severity' : 'status';
+  const palette = mapColorBy === 'type' ? TYPE_COLORS : mapColorBy === 'severity' ? SEVERITY_COLORS : STATUS_COLORS;
+  const countOf = k => rows.filter(f => f[mode] === k).length;
+  // Type mode uses the same short axis labels the old findings-by-type radar used
+  // (FINDING_TYPE_SHORT) instead of the full names — 8 full names ("CUI (Corrosion Under
+  // Insulation)") wrap poorly even on their own row; short labels keep the legend scannable.
+  const overdueCount = mapColorBy === 'status' ? rows.filter(isOverdue).length : 0;
+  const overdueEntry = mapColorBy === 'status'
+    ? `<span class="lg-item"><span class="lg-dot lg-overdue"></span>Overdue <b>${overdueCount}</b></span>`
+    : '';
+  $('mapLegend').innerHTML = Object.entries(palette)
+    .map(([k, c]) => `<span class="lg-item"><span class="lg-dot" style="background:${c};"></span>${esc(mapColorBy === 'type' ? (FINDING_TYPE_SHORT[k] || k) : k)} <b>${countOf(k)}</b></span>`)
+    .join('') + overdueEntry;
+}
 
 export async function loadFindings() {
   selectedIds.clear(); // fresh data -> drop any selection from a previous load (ids may be stale)
@@ -144,7 +176,6 @@ export function renderKpis() {
   $('kpiRingCard').classList.toggle('active', filters.status === '__complete');
 
   renderBudgetKpi();
-  renderTypeRadar();
 }
 
 // Outstanding repair budget: Σ estimated_cost over findings not yet Repaired/Closed, with a
@@ -162,63 +193,6 @@ export function renderBudgetKpi() {
     `<span class="kb-md"><i></i>Med <b>${sev('Medium')}</b></span>` +
     `<span class="kb-lo"><i></i>Low <b>${sev('Low')}</b></span>`;
   $('kpiBudgetCard').classList.toggle('active', filters.status === '__outstanding');
-}
-
-// Findings-by-type radar: for each of the 9 FINDING_TYPES, Remaining (not Repaired/Closed) nested
-// inside Total (all of that type). Hand-drawn SVG (no charting lib), fixed axes for a stable shape.
-export function renderTypeRadar() {
-  const el = $('kpiRadar');
-  const types = FINDING_TYPES;
-  const N = types.length;
-  const totalOf = t => findings.filter(f => f.finding_type === t).length;
-  const remainOf = t => findings.filter(f => f.finding_type === t && f.status !== 'Repaired' && f.status !== 'Closed').length;
-  const totals = types.map(totalOf);
-  const remains = types.map(remainOf);
-  const sumT = totals.reduce((a, b) => a + b, 0);
-  const sumR = remains.reduce((a, b) => a + b, 0);
-
-  if (!findings.length) {
-    el.innerHTML = `<div class="radar-empty">No findings yet</div>`;
-    return;
-  }
-
-  const cx = 120, cy = 100, maxR = 68;
-  // "nice" max so the outer ring isn't cramped (grid rings at 1/4..4/4 of it)
-  const rawMax = Math.max(1, ...totals);
-  const step = rawMax <= 4 ? 1 : rawMax <= 8 ? 2 : Math.ceil(rawMax / 4);
-  const maxVal = step * 4;
-  const RINGS = 4;
-  const ang = i => (-90 + i * (360 / N)) * Math.PI / 180;
-  const pt = (i, v) => {
-    const r = (v / maxVal) * maxR;
-    return [cx + r * Math.cos(ang(i)), cy + r * Math.sin(ang(i))];
-  };
-  const poly = vals => vals.map((v, i) => pt(i, v).map(n => n.toFixed(1)).join(',')).join(' ');
-
-  let grid = '';
-  for (let g = 1; g <= RINGS; g++) {
-    const rv = maxVal * g / RINGS;
-    grid += `<polygon class="radar-grid" points="${poly(types.map(() => rv))}"></polygon>`;
-  }
-  let axes = '', labels = '';
-  types.forEach((t, i) => {
-    const [ex, ey] = pt(i, maxVal);
-    axes += `<line class="radar-axis" x1="${cx}" y1="${cy}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}"></line>`;
-    const [lx, ly] = pt(i, maxVal + 0.9);
-    const a = ang(i);
-    const anchor = Math.abs(Math.cos(a)) < 0.3 ? 'middle' : (Math.cos(a) > 0 ? 'start' : 'end');
-    const dy = Math.sin(a) > 0.3 ? '0.7em' : (Math.sin(a) < -0.3 ? '-0.2em' : '0.3em');
-    labels += `<text class="radar-label" x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}" dy="${dy}">${esc(FINDING_TYPE_SHORT[t] || t)}</text>`;
-  });
-  const totalPoly = `<polygon class="radar-total" points="${poly(totals)}"></polygon>`;
-  const remainPoly = `<polygon class="radar-remain" points="${poly(remains)}"></polygon>`;
-  const remainDots = remains.map((v, i) => { const [x, y] = pt(i, v); return v > 0 ? `<circle class="radar-remain-dot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2"></circle>` : ''; }).join('');
-
-  el.innerHTML =
-    `<svg viewBox="0 0 240 200" role="img" aria-label="Findings by type, remaining vs total">` +
-    grid + axes + totalPoly + remainPoly + remainDots + labels +
-    `</svg>` +
-    `<div class="radar-legend"><span class="rl-remain"><i></i>Remaining <b>${sumR}</b></span><span class="rl-total"><i></i>Total <b>${sumT}</b></span></div>`;
 }
 
 /* ---------------- dashboard map ---------------- */
@@ -289,6 +263,8 @@ export function showAddFindingPopup(latlng) {
 
 export function renderMap(rows) {
   ensureDashMap();
+  const pts = rows.filter(f => f.lat != null && f.lng != null);
+  renderMapLegend(pts); // counts reflect exactly what's plotted as pins, not the full filtered set
   if (!dashMap) return;
   // The container was display:none while another view was active; Leaflet's cached size is
   // stale (0×0), and fitBounds against a zero-size map computes a world-level zoom. Re-measure
@@ -299,9 +275,8 @@ export function renderMap(rows) {
   setTimeout(() => dashMap.invalidateSize(), 100);
   dashLayer.clearLayers();
   setDashMarkers({});
-  const pts = rows.filter(f => f.lat != null && f.lng != null);
   pts.forEach(f => {
-    const color = STATUS_COLORS[f.status] || '#64748b';
+    const color = colorFor(f);
     if (isOverdue(f)) {
       // dashed red halo reads over any pin fill (a red ring on the red Open pin would vanish)
       dashLayer.addLayer(L.circleMarker([f.lat, f.lng], {

@@ -1,5 +1,5 @@
 /* ============================================================================
-   Brand assets + photo downscaling (from the pre-migration asset/shared.js).
+   Brand assets + photo downscaling (from the pre-migration src/legacy/shared.js).
    OR_LOGO_DATAURL embeds the full-color OR logo (base64 PNG) so it renders in the
    header and in PDFs even offline. downscaleImage is mandatory before any photo is
    stored/embedded — raw phone photos are 3–12 MP.

@@ -9,11 +9,12 @@
    ============================================================================ */
 import L from 'leaflet';
 import { $, val, esc, notify, setBusy, positionSegPill } from '../core/dom';
-import { PHOTO_BUCKET, PHOTO_LIMIT_PER_KIND, DEFAULT_MAP_VIEW, SAT_TILES } from '../core/constants';
+import { PHOTO_BUCKET, PHOTO_LIMIT_PER_KIND, DEFAULT_MAP_VIEW, SAT_TILES, WALL_LOSS_TYPES } from '../core/constants';
 import { sb } from '../core/supabase';
 import { computeB313, PA_PIPE_DATABASE, PA_MATERIALS, paDefaultScheduleForNps } from '../engine/compute';
 import { downscaleImage } from '../engine/branding';
 import { paCreateAssessView } from '../workbench/assess-view';
+import { resolveAdvisor, paRenderRepairAdvisor } from '../workbench/repair-advisor';
 import {
   session, current, editingId, setEditingId, pendingPhotos, setPendingPhotos,
   pickMap, setPickMap, pickMarker, setPickMarker,
@@ -148,10 +149,9 @@ export async function onPastePhoto(e) {
 
 /* ---------------- inline ASME B31.3 assessment (combined into the finding form) ---------------- */
 
-// Finding types where a UT reading is inherently expected — used only for the Corrosion Type
-// prefill below. Kept separate from AUTO_ASSESS_TYPES: CUI/CUS still map to a sensible corrosion
-// type if the user manually turns the assessment on, even though it no longer auto-enables.
-export const WALL_LOSS_TYPES = ['External Corrosion', 'Internal Corrosion', 'CUI (Corrosion Under Insulation)', 'CUS (Corrosion Under Support)'];
+// WALL_LOSS_TYPES now lives in core/constants.ts (shared with the repair advisor); re-exported
+// here since existing importers (app.ts) pull it from this module.
+export { WALL_LOSS_TYPES };
 
 // Finding types that auto-enable the assessment panel. Deliberately excludes CUI/CUS — under
 // insulation/supports a thickness reading usually isn't available at the time the finding is
@@ -175,7 +175,8 @@ export function syncCorrTypeFromFinding() {
 // Sensible starting severity by finding type, shown before any assessment has run — the user
 // can always override it (severityTouched short-circuits every auto-suggestion below once set).
 // Corrosion/CUI/CUS start at Medium since the real severity depends on the reading, which isn't
-// known yet; Leak is High as a safety-relevant default; cosmetic coating damage starts Low.
+// known yet; cosmetic coating damage starts Low. (Leak is no longer a finding type — see
+// applyLeakingSeverityBump below for its own severity effect, independent of type.)
 export const SEVERITY_BY_FINDING = {
   'External Corrosion': 'Medium',
   'Internal Corrosion': 'Medium',
@@ -183,7 +184,6 @@ export const SEVERITY_BY_FINDING = {
   'CUS (Corrosion Under Support)': 'Medium',
   'Coating / Painting Damage': 'Low',
   'Pipe Support Defect': 'Medium',
-  'Leak': 'High',
   'Dent / Mechanical Damage': 'Medium'
 };
 export function suggestSeverityFromType() {
@@ -191,6 +191,14 @@ export function suggestSeverityFromType() {
   const sev = SEVERITY_BY_FINDING[$('fType').value];
   if (!sev) return;
   $('fSeverity').value = sev;
+}
+
+// Actively Leaking is safety-relevant regardless of finding type, so checking it bumps Severity
+// to High immediately — same one-way severityTouched override rule as every other auto-suggestion
+// here (a manual Severity edit, before or after checking the box, wins from then on).
+export function applyLeakingSeverityBump() {
+  if (severityTouched) return;
+  if ($('fIsLeaking').checked) $('fSeverity').value = 'High';
 }
 
 
@@ -203,6 +211,7 @@ export function setAssessOn(on) {
   $('assessPanel').classList.toggle('on', on);
   $('aToggle').checked = on;
   if (on) recalcAssessment();
+  else { setAssessResult(null); renderRepairAdvisor(); }
 }
 
 export function updateAschedules(keepValue) {
@@ -257,7 +266,7 @@ export function assessThickness() {
 // The form's live workbench instance (paCreateAssessView), created in initAssessment().
 
 export function recalcAssessment() {
-  if (!$('assessPanel').classList.contains('on')) { setAssessResult(null); return; }
+  if (!$('assessPanel').classList.contains('on')) { setAssessResult(null); renderRepairAdvisor(); return; }
   const res = computeB313(gatherAssessParams());
   const hint = $('aCalcHint');
   if (res.hasErrors) {
@@ -275,11 +284,13 @@ export function recalcAssessment() {
     hint.style.display = msg ? 'block' : 'none';
     hint.textContent = msg;
     if (awFormView) awFormView.render(res, { neutral: !msg, nps: $('aNps').value });
+    renderRepairAdvisor();
     return;
   }
   setAssessResult(res);
   hint.style.display = 'none';
   if (awFormView) awFormView.render(res, { nps: $('aNps').value });
+  renderRepairAdvisor();
 
   // auto-suggest severity from the result unless the user has set it themselves — the assessment
   // result is more precise than the finding-type prefill (suggestSeverityFromType), so it wins
@@ -340,17 +351,48 @@ export function resetAssessment() {
   setAssessResult(null);
   $('aCalcHint').style.display = 'none';
   if (awFormView) awFormView.render(null, { neutral: true });
+  renderRepairAdvisor();
+}
+
+/* ---------------- standalone repair advisor (form panel, always available) ---------------- */
+
+// Renders src/workbench/repair-advisor.ts's resolveAdvisor() output into #raBody, and toggles
+// the "View full ASME B31.3 workbench" link for wall-loss finding types.
+export function renderRepairAdvisor() {
+  const root = $('raBody');
+  if (!root) return;
+  const findingType = $('fType').value;
+  paRenderRepairAdvisor(root, findingType, assessResult, $('fIsLeaking').checked);
+  const link = $('advisorAssessLink');
+  if (link) link.style.display = WALL_LOSS_TYPES.includes(findingType) ? 'inline' : 'none';
+}
+
+export function initRepairAdvisor() {
+  renderRepairAdvisor();
+  const link = $('advisorAssessLink');
+  if (link) {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!$('assessPanel').classList.contains('on')) setAssessOn(true);
+      $('assessPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+  $('fIsLeaking').addEventListener('change', () => {
+    applyLeakingSeverityBump();
+    renderRepairAdvisor();
+  });
 }
 
 export function initAssessment() {
   $('aNps').innerHTML = Object.keys(PA_PIPE_DATABASE).map(n => `<option>${n}</option>`).join('');
   $('aMat').innerHTML = PA_MATERIALS.map(m => `<option value="${m.code}">${m.name}</option>`).join('');
 
-  // Full workbench under the inputs (advisor + equations ship collapsed to keep the column
-  // scannable). The drag handle writes back into whichever reading field is active.
+  // Full workbench under the inputs (equations ship collapsed to keep the column scannable —
+  // the repair advisor is its own standalone panel now, see initRepairAdvisor). The drag handle
+  // writes back into whichever reading field is active.
   setAwFormView(paCreateAssessView($('awForm'), {
-    sections: ['status', 'svg', 'results', 'advisor', 'equations', 'scope'],
-    collapsed: ['advisor', 'equations'],
+    sections: ['status', 'svg', 'results', 'equations', 'scope'],
+    collapsed: ['equations'],
     onDepthDrag: (depth_mm) => {
       if (!assessResult) return;
       if (aMode() === 'depth') {
@@ -600,8 +642,8 @@ export function initQuickCalc() {
   };
 
   setAwQuickView(paCreateAssessView($('awQuick'), {
-    sections: ['status', 'svg', 'results', 'advisor', 'equations', 'scope'],
-    collapsed: ['advisor', 'equations'],
+    sections: ['status', 'svg', 'results', 'equations', 'scope'],
+    collapsed: ['equations'],
     onDepthDrag: (depth_mm) => {
       if (!lastQuickRes) return;
       if (qMode() === 'depth') $('qDepth').value = depth_mm.toFixed(2);
@@ -690,7 +732,9 @@ export function openForm(f) {
   $('fInspDate').value = f ? (f.inspection_date || '') : '';
   $('fMethod').value = f ? (f.method || '') : '';
   $('fType').value = f ? f.finding_type : '';
+  $('fIsLeaking').checked = f ? !!f.is_leaking : false;
   syncCorrTypeFromFinding(); // corrosion type follows the finding type (a saved assessment overrides it below)
+  renderRepairAdvisor(); // show guidance for the loaded finding type/leak state immediately, not just on next change
   $('fSeverity').value = f ? (f.severity || '') : '';
   if (f && f.severity) setSeverityTouched(true); // don't auto-overwrite a stored severity
   else suggestSeverityFromType(); // new finding: prefill from the finding type if one is already set
@@ -783,6 +827,7 @@ export function collectForm() {
     method: sOrNull('fMethod'),
     finding_type: val('fType'),
     severity: sOrNull('fSeverity'),
+    is_leaking: $('fIsLeaking').checked,
     description: sOrNull('fDescription'),
     t_nominal: (thk.t_nom != null && isFinite(thk.t_nom)) ? thk.t_nom : null,
     t_measured: (thk.t_meas != null && isFinite(thk.t_meas)) ? thk.t_meas : null,

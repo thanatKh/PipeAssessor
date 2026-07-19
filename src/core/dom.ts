@@ -14,8 +14,9 @@ export const val = (id) => $(id).value;
 // in, .is-closing plays a quicker scale-down before the dialog actually closes so it never
 // just vanishes.
 // Slides a .seg-row's pill under whichever .seg-btn is currently .active. animate=false
-// (first paint, resize, or a freshly-rendered #segTerminal) suspends the transition so the
-// pill snaps into place instead of sliding in from translateX(0)/width:0.
+// (first paint, resize, or a freshly-rendered segmented control e.g. #aModeSeg/#qModeSeg)
+// suspends the transition so the pill snaps into place instead of sliding in from
+// translateX(0)/width:0.
 export function positionSegPill(segRow, animate) {
   const pill = segRow.querySelector('.seg-pill');
   const active = segRow.querySelector('.seg-btn.active');
@@ -73,8 +74,8 @@ export function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-export const fmtDate = paFmtDate; // shared "dd Mmm yyyy" helper (asset/shared.js)
-export const fmtDateTime = paFmtDateTime; // shared "dd Mmm yyyy HH:mm" (24-hour) helper (asset/shared.js)
+export const fmtDate = paFmtDate; // shared "dd Mmm yyyy" helper (src/legacy/shared.js)
+export const fmtDateTime = paFmtDateTime; // shared "dd Mmm yyyy HH:mm" (24-hour) helper (src/legacy/shared.js)
 
 export function todayISO() {
   const d = new Date();
@@ -121,6 +122,6 @@ export function setBusy(btn, busy, busyText) {
   }
 }
 
-// downscaleImage() lives in asset/shared.js
+// downscaleImage() lives in src/legacy/shared.js
 
 /* ---------------- auth ---------------- */
