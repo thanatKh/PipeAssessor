@@ -341,6 +341,19 @@ details.panel[open] > .panel-collapse.panel-h {
   color: var(--text-color);
 }
 
+/* Small muted note sitting beside a .panel-h title (e.g. "worst-first · click to expand") — was
+   used in the Risk Ranking page's markup with no rule defined for it at all, so it rendered at
+   the ambient body font-size (13.5px, no color override) instead of reading as secondary text;
+   matches .hint's existing small/muted visual weight, used the same way elsewhere in the app. */
+.h-note {
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text-light);
+  text-align: right;
+}
+
 .panel-b { padding: 14px; }
 
 /* ============ Accordion expand (transitions.dev 21-accordion), adapted for native

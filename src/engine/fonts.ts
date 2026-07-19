@@ -30,8 +30,18 @@ export function registerGoogleSansFonts(doc: any): void {
    Sans lacks. Called once from main.ts at startup. */
 export function registerGoogleSansWebFont(): void {
   if (document.getElementById('pa-google-sans-face')) return;
+  // unicode-range defaults to U+0-10FFFF (everything) when omitted — that was the actual bug here:
+  // it made these @font-face rules claim the Thai block too, so the browser never even tried the
+  // second font-family in the CSS stack ('Noto Sans Thai', unicode-range-scoped to Thai, see
+  // main.ts) for Thai text. unicode-range only gates which characters a face is TRIED for, not
+  // whether the font file has a glyph for them — Google Sans's TTF has no Thai glyphs, so Thai
+  // characters were silently falling through to the browser's own default system font instead of
+  // ever reaching Noto Sans Thai. Excluding the Thai block (and its combining marks) here is what
+  // lets the family-list fallback to 'Noto Sans Thai' actually happen.
+  const LATIN_RANGE = 'U+0-0DFF,U+0E5C-10FFFF';
   const src = (b64: string, style: string, wLo: number, wHi: number) =>
     `@font-face{font-family:'Google Sans';font-style:${style};font-weight:${wLo} ${wHi};` +
+    `unicode-range:${LATIN_RANGE};` +
     `font-display:swap;src:url(data:font/ttf;base64,${b64}) format('truetype');}`;
   const css =
     src(PA_GOOGLE_SANS_REGULAR, 'normal', 400, 500) +

@@ -4,7 +4,13 @@
    dashboard, form, detail, and PDF surfaces. Extracted from the app monolith.
    ============================================================================ */
 
-export const PHOTO_BUCKET = 'finding-photos';
+// Photo storage lives on Cloudflare R2, not Supabase Storage (Supabase's free tier storage
+// cap forced aggressive downscaling; R2's free tier is 10x larger with zero egress fees).
+// Uploads/deletes go through a small Cloudflare Worker (worker/, deployed separately via
+// Wrangler — see CLAUDE.md) since R2 write access can't be done safely from the browser.
+// Reads are a plain public URL, same model as Supabase Storage's public bucket before it.
+export const R2_UPLOAD_ENDPOINT = 'https://pipeassessor-photo-worker.thanat-kh.workers.dev';
+export const R2_PUBLIC_BASE = 'https://pub-515a1eb709644dedb7c78238192f0edc.r2.dev';
 
 // Leak is NOT a finding type here — it's orthogonal to the damage mechanism (a corrosion, dent,
 // or CUI finding can independently be actively leaking or not). See the "Actively Leaking"
@@ -41,7 +47,7 @@ export const FINDING_TYPE_SHORT = {
 };
 
 export const STATUSES = ['Open', 'Monitoring', 'Repair Planned', 'Repaired', 'Closed'];
-export const PHOTO_LIMIT_PER_KIND = 3; // As Found and After Repair each capped at 3 -> 6 total per finding
+export const PHOTO_LIMIT_PER_KIND = 5; // As Found and After Repair each capped at 5 -> 10 total per finding
 
 export const STATUS_META = {
   'Open':           { cls: 'st-open' },
@@ -71,18 +77,23 @@ export const SEVERITY_COLORS = {
   'High':   '#dc2626'
 };
 
-// 8 visually distinct hues, one per FINDING_TYPES entry — chosen for contrast against satellite
-// imagery and against each other (not a sequential/diverging scale, since finding type has no
-// inherent order). Used when the map's "color by" mode is Type.
+// 8 hues, one per FINDING_TYPES entry — deliberately clear of red/amber/orange (STATUS_COLORS'
+// and SEVERITY_COLORS' territory) so Type mode never looks like a repaint of Status/Severity mode
+// on the map's "color by" selector. Validated against the dataviz skill's categorical-color
+// checks (OKLCH lightness band, chroma floor, CVD ΔE, normal-vision floor) on the *adjacent*
+// pairlist, i.e. each type vs. its neighbors in this exact FINDING_TYPES order — reordering the
+// object's keys would invalidate that check, so keep this order in sync with FINDING_TYPES above.
+// 'Other' is the sole exception: kept as the existing desaturated neutral (a deliberate non-hue
+// catch-all, not part of the validated set) rather than spending a hue slot on it.
 export const TYPE_COLORS = {
-  'External Corrosion':                '#dc2626',
-  'Internal Corrosion':                '#ea580c',
-  'CUI (Corrosion Under Insulation)':   '#d97706',
-  'CUS (Corrosion Under Support)':      '#65a30d',
-  'Coating / Painting Damage':          '#0891b2',
-  'Pipe Support Defect':                '#2563eb',
-  'Dent / Mechanical Damage':           '#7c3aed',
-  'Other':                              '#64748b'
+  'External Corrosion':                '#1d6fa8', // navy blue
+  'Internal Corrosion':                '#4d7c0f', // olive green
+  'CUI (Corrosion Under Insulation)':   '#7c3aed', // violet
+  'CUS (Corrosion Under Support)':      '#be5314', // burnt orange
+  'Coating / Painting Damage':          '#0284c7', // sky blue
+  'Pipe Support Defect':                '#c0257a', // magenta
+  'Dent / Mechanical Damage':           '#166534', // dark green
+  'Other':                              '#64748b'  // neutral gray (unvalidated, deliberate)
 };
 
 // Same default view as the calculator's site-location map.

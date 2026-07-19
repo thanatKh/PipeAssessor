@@ -9,7 +9,7 @@
 import L from 'leaflet';
 import { $, val, esc, notify, todayISO, isOverdue, fmtDate, fmtDateTime, pillHtml, openDialog, closeDialog, setBusy } from '../core/dom';
 import {
-  PHOTO_BUCKET, PHOTO_LIMIT_PER_KIND, SAT_TILES, STATUSES, STATUS_COLORS,
+  PHOTO_LIMIT_PER_KIND, SAT_TILES, STATUSES, STATUS_COLORS,
 } from '../core/constants';
 import { sb } from '../core/supabase';
 import { computeB313, PA_MATERIALS } from '../engine/compute';
@@ -22,7 +22,7 @@ import {
   detailMap, setDetailMap, detailMarker, setDetailMarker, photoPasteTarget, setPhotoPasteTarget,
 } from '../core/state';
 import { loadDetail, photoUrl } from './dashboard';
-import { uploadPhoto } from './form';
+import { uploadPhoto, deletePhotos } from './form';
 
 /* ---------------- detail view ---------------- */
 
@@ -271,7 +271,10 @@ export function renderPhotoGroups() {
     if (!el) return; // markup may not exist yet on first call — harmless no-op
     const rows = kind === 'found' ? found : rep;
     el.innerHTML = rows.map(photoThumb).join('');
-    $(empty).style.display = rows.length ? 'none' : 'block';
+    // 'flex' not 'block' — .photo-empty's CSS lays the icon + text out in a row (display:flex),
+    // but an inline style always beats a class rule, so 'block' here silently broke that layout,
+    // stacking the icon above the text on its own line instead of beside it.
+    $(empty).style.display = rows.length ? 'none' : 'flex';
     const btn = $(addBtn);
     if (btn) {
       const atLimit = rows.length >= PHOTO_LIMIT_PER_KIND;
@@ -290,7 +293,7 @@ export function renderPhotoGroups() {
     btn.addEventListener('click', async () => {
       if (!window.confirm('Delete this photo?')) return;
       try {
-        await sb.storage.from(PHOTO_BUCKET).remove([btn.dataset.path]);
+        await deletePhotos([btn.dataset.path]);
         const { error } = await sb.from('finding_photos').delete().eq('id', btn.dataset.id);
         if (error) throw error;
         setCurrentPhotos(currentPhotos.filter(p => p.id !== btn.dataset.id));
@@ -403,7 +406,7 @@ export function renderDlgRepairedPhotos() {
     btn.addEventListener('click', async () => {
       if (!window.confirm('Delete this photo?')) return;
       try {
-        await sb.storage.from(PHOTO_BUCKET).remove([btn.dataset.path]);
+        await deletePhotos([btn.dataset.path]);
         const { error } = await sb.from('finding_photos').delete().eq('id', btn.dataset.id);
         if (error) throw error;
         setCurrentPhotos(currentPhotos.filter(p => p.id !== btn.dataset.id));

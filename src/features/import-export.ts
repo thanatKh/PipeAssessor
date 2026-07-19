@@ -8,11 +8,11 @@
    (see the block comment below), and normHeader/ensureXLSX are shared by both.
    Extracted from the app monolith.
    ============================================================================ */
-import { $, esc, notify, openDialog, closeDialog, setBusy, todayISO } from '../core/dom';
+import { $, esc, notify, openDialog, closeDialog, setBusy, todayISO, positionSegPill } from '../core/dom';
 import { FINDING_TYPES } from '../core/constants';
 import {
   importValidRows, setImportValidRows, lineListValidRows, setLineListValidRows,
-  lineList, setLineList,
+  lineList, setLineList, findings,
 } from '../core/state';
 import { sb } from '../core/supabase';
 import { PA_PIPE_DATABASE, PA_MATERIALS } from '../engine/compute';
@@ -393,7 +393,15 @@ export async function doLineListImport() {
     closeDialog($('lineListImportDlg'));
     notify(`Imported ${data.length} line list entr${data.length === 1 ? 'y' : 'ies'}.`);
     await loadLineList();
-    if ($('lineListManageDlg').open) renderLineListManageTable();
+    if ($('lineListManageDlg').open) {
+      renderLineListManageTable();
+      // Newly-imported tags may have resolved some of the Unlisted set — refresh the badge (and
+      // the tab's own table, if that's the one currently showing) so the count doesn't go stale.
+      const badge = $('lineListUnlistedCount');
+      const unlistedCount = computeUnlistedTags().length;
+      badge.textContent = unlistedCount ? String(unlistedCount) : '';
+      if ($('lineListUnlistedTab').style.display !== 'none') renderLineListUnlistedTable();
+    }
   } catch (e) {
     $('errLineListImport').textContent = 'Import failed: ' + e.message;
     $('errLineListImport').style.display = 'block';
@@ -492,6 +500,55 @@ export function renderLineListManageTable() {
     : `${lineList.length} entr${lineList.length === 1 ? 'y' : 'ies'}`;
 }
 
+// Findings whose pipe_tag has no line_list match — a data-quality gap, not a bug: findings.pipe_tag
+// is deliberately free text (an operator may not know the Line No.), while line_list is the
+// curated reference NPS/Schedule/Material auto-fill draws from, so the two only ever converge when
+// an engineer folds a real tag into the master list (via Import). Grouped by tag since the same
+// unlisted tag often appears on multiple findings.
+export function computeUnlistedTags() {
+  const known = new Set(lineList.map(r => r.pipe_tag));
+  const byTag = new Map();
+  findings.forEach(f => {
+    if (!f.pipe_tag || known.has(f.pipe_tag)) return;
+    const entry = byTag.get(f.pipe_tag) || { tag: f.pipe_tag, terminal: f.terminal || '', count: 0 };
+    entry.count++;
+    byTag.set(f.pipe_tag, entry);
+  });
+  return [...byTag.values()].sort((a, b) => a.tag.localeCompare(b.tag));
+}
+
+export function renderLineListUnlistedTable() {
+  const body = $('lineListUnlistedBody');
+  const rows = computeUnlistedTags();
+  if (!rows.length) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="3">Every pipe tag in use is in the master list.</td></tr>`;
+  } else {
+    body.innerHTML = rows.map(r => `<tr>
+      <td>${esc(r.tag)}</td><td>${esc(r.terminal || '—')}</td><td>${r.count}</td>
+    </tr>`).join('');
+  }
+  const badge = $('lineListUnlistedCount');
+  badge.textContent = rows.length ? String(rows.length) : '';
+}
+
+// Master List / Unlisted Tags tab toggle inside the manage dialog — same .seg-row/.seg-btn.active
+// + sliding-pill pattern as the terminal filter and reading-mode segments elsewhere in the app.
+export function initLineListTabs() {
+  const seg = $('lineListTabSeg');
+  seg.querySelectorAll('.seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.classList.contains('active')) return;
+      seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      positionSegPill(seg, true);
+      const isUnlisted = btn.dataset.tab === 'unlisted';
+      $('lineListMasterTab').style.display = isUnlisted ? 'none' : 'block';
+      $('lineListUnlistedTab').style.display = isUnlisted ? 'block' : 'none';
+      if (isUnlisted) renderLineListUnlistedTable();
+    });
+  });
+}
+
 export async function deleteLineListRow(id) {
   const row = lineList.find(r => r.id === id);
   if (!window.confirm(`Delete line list entry "${row ? row.pipe_tag : ''}"?`)) return;
@@ -507,6 +564,17 @@ export async function deleteLineListRow(id) {
 export function openLineListManageDialog() {
   $('lineListSearch').value = '';
   renderLineListManageTable();
+  // Badge count needs the unlisted set even while the Master List tab is showing; the table body
+  // itself only renders lazily on first switch to that tab (initLineListTabs' click handler).
+  const badge = $('lineListUnlistedCount');
+  const unlistedCount = computeUnlistedTags().length;
+  badge.textContent = unlistedCount ? String(unlistedCount) : '';
+  // Always reopen on the Master List tab — reset in case a prior session left it on Unlisted.
+  const seg = $('lineListTabSeg');
+  seg.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === 'master'));
+  $('lineListMasterTab').style.display = 'block';
+  $('lineListUnlistedTab').style.display = 'none';
   openDialog($('lineListManageDlg'));
+  positionSegPill(seg, false); // dialog was display:none until openDialog(); offsetLeft/Width are only valid now
 }
 

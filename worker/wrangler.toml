@@ -1,0 +1,21 @@
+# Cloudflare Worker config for the finding-photos R2 proxy.
+# Deploy from this directory with: npx wrangler deploy
+# (Requires `npx wrangler login` once, against the account that owns the R2 bucket.)
+
+name = "pipeassessor-photo-worker"
+main = "src/index.ts"
+compatibility_date = "2026-07-01"
+
+[[r2_buckets]]
+binding = "PHOTO_BUCKET"
+bucket_name = "pipe-assessor"
+
+# Non-secret — same Supabase publishable key already committed in src/core/supabase.ts.
+# The Worker only uses it to ask Supabase "is this bearer token a valid logged-in user?" —
+# it never touches R2 credentials, since env.PHOTO_BUCKET above is a native binding.
+[vars]
+SUPABASE_URL = "https://uuwcftjduphtngmhwvrb.supabase.co"
+SUPABASE_ANON_KEY = "sb_publishable_-wA0hWoW-SIOpdlSpNrXkw_-YsUQYMH"
+
+# TODO after first deploy: replace with the app's real origins (Render prod URL + local dev)
+# in src/index.ts's ALLOWED_ORIGINS list.

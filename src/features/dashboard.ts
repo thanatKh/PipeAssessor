@@ -8,7 +8,7 @@
    ============================================================================ */
 import L from 'leaflet';
 import { $, esc, notify, fmtDate, isOverdue, dueDateOf, pillHtml } from '../core/dom';
-import { FINDING_TYPE_SHORT, STATUS_COLORS, TYPE_COLORS, SEVERITY_COLORS, DEFAULT_MAP_VIEW, SAT_TILES, PHOTO_BUCKET } from '../core/constants';
+import { FINDING_TYPE_SHORT, STATUS_COLORS, TYPE_COLORS, SEVERITY_COLORS, DEFAULT_MAP_VIEW, SAT_TILES, R2_PUBLIC_BASE } from '../core/constants';
 import { paFmtBahtShort } from '../engine/format';
 import { sb } from '../core/supabase';
 import {
@@ -110,7 +110,7 @@ export async function loadDetail(id) {
 }
 
 export function photoUrl(path) {
-  return sb.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl;
+  return `${R2_PUBLIC_BASE}/${path}`;
 }
 
 /* ---------------- list view ---------------- */
@@ -332,11 +332,26 @@ export function ageHtml(f) {
 // persisted across re-renders/filter changes within the same list load, cleared whenever
 // loadFindings() pulls fresh data (stale ids could otherwise reference deleted rows).
 
+// basecoat's .empty component (components/empty.css: header > figure/h2/p, centered) — nested
+// inside the register's single-cell placeholder <tr><td> since .empty itself can't be a direct
+// table child. EMPTY_ICON is a plain inbox/tray glyph (no basecoat icon set is bundled; matches
+// the outline-SVG convention CAMERA_SVG already uses elsewhere in this file).
+const EMPTY_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>';
+
 export function renderTable(rows) {
   setLastRenderedRows(rows);
   const body = $('listBody');
   if (!rows.length) {
-    body.innerHTML = `<tr class="empty-row"><td colspan="6">${findings.length ? 'No findings match the current filters.' : 'No findings recorded yet — use “+ New Finding” to add the first one.'}</td></tr>`;
+    const hasAnyFindings = !!findings.length;
+    body.innerHTML = `<tr class="empty-row"><td colspan="6">
+      <div class="empty">
+        <header>
+          <figure>${EMPTY_ICON}</figure>
+          <h2>${hasAnyFindings ? 'No findings match the current filters.' : 'No findings recorded yet.'}</h2>
+          <p>${hasAnyFindings ? 'Try a different terminal, status, or search term.' : 'Use “+ New Finding” to add the first one.'}</p>
+        </header>
+      </div>
+    </td></tr>`;
     updateSelectionUI();
     return;
   }
@@ -353,6 +368,8 @@ export function renderTable(rows) {
       : `<span class="row-thumb row-thumb-empty"></span>`;
     const dim = (f.status === 'Repaired' || f.status === 'Closed') ? ' row-dim' : '';
     const checked = selectedIds.has(f.id) ? ' checked' : '';
+    // data-state="selected" is applied by updateSelectionUI() below (also the row's live sync
+    // point), not here — one place to keep new-render and post-toggle state in agreement.
     return `<tr data-id="${esc(f.id)}" class="${dim.trim()}">
       <td class="c-check"><input type="checkbox" class="row-check" data-sel="${esc(f.id)}"${checked}></td>
       <td>${pillHtml(f.status)}</td>
@@ -399,6 +416,12 @@ export function updateSelectionUI() {
     selectAll.checked = idsOnPage.length > 0 && selectedOnPage === idsOnPage.length;
     selectAll.indeterminate = selectedOnPage > 0 && selectedOnPage < idsOnPage.length;
   }
+  // basecoat's .table styles tr[data-state="selected"] with a --muted background (table.css) —
+  // .list replicates that one rule (app.css) since the register isn't basecoat's .table class.
+  $('listBody').querySelectorAll('tr[data-id]').forEach(tr => {
+    if (selectedIds.has(tr.dataset.id)) tr.setAttribute('data-state', 'selected');
+    else tr.removeAttribute('data-state');
+  });
   const bar = $('selBar');
   const btn = $('btnExport');
   if (selectedIds.size > 0) {

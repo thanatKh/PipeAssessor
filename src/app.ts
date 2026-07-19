@@ -92,6 +92,15 @@ async function route() {
     show('viewCalc');
     return;
   }
+  if (h === '#/risk') {
+    // needs current findings + every finding's latest assessment — load fresh each visit so the
+    // ranking never shows stale data from before the last dashboard load
+    await loadFindings();
+    await loadRiskData();
+    show('viewRisk');
+    renderRiskPage();
+    return;
+  }
   if (h.startsWith('#/edit/')) {
     const id = h.slice(7);
     let f = findings.find(x => x.id === id) || (current && current.id === id ? current : null);
@@ -122,7 +131,7 @@ import {
 /* ---------------- CSV export (filtered register, Excel-friendly UTF-8 BOM) ---------------- */
 
 import {
-  CSV_COLS, exportCsv, IMPORT_COLS, importHeaderMap, resolveFindingType, toImportDate, toImportNum, validateImportRow, renderImportPreview, parseImportFile, doImport, downloadImportTemplate, openImportDialog, LINE_LIST_IMPORT_COLS, lineListHeaderMap, resolveNps, resolveSchedule, resolveMaterialCode, validateLineListRow, renderLineListImportPreview, parseLineListImportFile, doLineListImport, downloadLineListTemplate, openLineListImportDialog, loadLineList, renderLineListManageTable, deleteLineListRow, openLineListManageDialog,
+  CSV_COLS, exportCsv, IMPORT_COLS, importHeaderMap, resolveFindingType, toImportDate, toImportNum, validateImportRow, renderImportPreview, parseImportFile, doImport, downloadImportTemplate, openImportDialog, LINE_LIST_IMPORT_COLS, lineListHeaderMap, resolveNps, resolveSchedule, resolveMaterialCode, validateLineListRow, renderLineListImportPreview, parseLineListImportFile, doLineListImport, downloadLineListTemplate, openLineListImportDialog, loadLineList, renderLineListManageTable, deleteLineListRow, openLineListManageDialog, initLineListTabs,
 } from './features/import-export';
 
 import {
@@ -132,6 +141,10 @@ import {
 import {
   dItem, renderDetail, renderDetailMap, fmtN, erfNo, assessPill, materialName, CORR_TYPE_LABEL, assessSetupLine, resFromSnapshot, renderAssessments, photoThumb, PHOTO_GRID_SETS, renderPhotoGroups, addDetailPhotos, renderTimeline, openStatusDialog, renderDlgRepairedPhotos, confirmStatusChange,
 } from './features/detail';
+
+/* ---------------- Line Risk Ranking ---------------- */
+
+import { loadRiskData, renderRiskPage, initRiskPage } from './features/risk';
 
 /* ===================== Finding PDF report =====================
    Same visual language as the calculator's report (navy headings, hairline
@@ -247,6 +260,7 @@ function initApp() {
   $('importConfirm').addEventListener('click', doImport);
 
   $('btnLineList').addEventListener('click', openLineListManageDialog);
+  initLineListTabs();
   $('lineListManageClose').addEventListener('click', () => closeDialog($('lineListManageDlg')));
   $('lineListSearch').addEventListener('input', renderLineListManageTable);
   $('lineListManageImportBtn').addEventListener('click', openLineListImportDialog);
@@ -266,6 +280,9 @@ function initApp() {
     setMapColorBy($('mapColorBy').value);
     renderList();
   });
+
+  // line risk ranking
+  initRiskPage();
 
   // form
   initRepairAdvisor();

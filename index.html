@@ -25,6 +25,7 @@
     <div class="header-actions">
       <span class="hdr-user authed-only" id="hdrUser"></span>
       <div class="hdr-btn-group">
+        <a class="btn hdr-btn authed-only" data-variant="outline" href="#/risk">Line Risk</a>
         <a class="btn hdr-btn" data-variant="outline" href="#/calc">Quick Calc</a>
         <button class="btn hdr-btn authed-only" data-variant="outline" id="btnSignOut" type="button">Sign out</button>
       </div>
@@ -65,11 +66,7 @@
       <div class="panel dash-map-panel">
         <div class="panel-h">
           <h2>Map <span class="f-optnote" style="font-size:11px;">— double-click to add a finding here</span></h2>
-          <select id="mapColorBy" class="select" style="width:auto; height:26px; font-size:11px; padding:2px 22px 2px 8px;">
-            <option value="status">Color by: Status</option>
-            <option value="type">Color by: Type</option>
-            <option value="severity">Color by: Severity</option>
-          </select>
+          <select id="mapColorBy" class="select" style="width:auto; height:26px; font-size:11px; padding:2px 22px 2px 8px;"><option value="status" selected>Color by: Status</option><option value="type">Color by: Type</option><option value="severity">Color by: Severity</option></select>
         </div>
         <div class="map-legend" id="mapLegend"></div>
         <div id="dashMap"></div>
@@ -126,27 +123,15 @@
         </div>
         <div class="panel-b" style="padding-bottom: 10px;">
           <div class="filters">
-            <select id="filTerminal" class="select">
-              <option value="">All terminals</option>
-              <option value="KBY">KBY</option>
-              <option value="SRC">SRC</option>
-              <option value="BRP">BRP</option>
-            </select>
-            <select id="filStatus" class="select">
-              <option value="">All statuses</option>
-              <option>Open</option><option>Monitoring</option><option>Repair Planned</option>
-              <option>Repaired</option><option>Closed</option>
-              <option value="__overdue">Overdue only</option>
-              <option value="__outstanding">Outstanding (not resolved)</option>
-              <option value="__complete">Complete (Repaired + Closed)</option>
-            </select>
-            <select id="filType" class="select"><option value="">All types</option></select>
+            <select id="filTerminal" class="select"><option value="" selected>All terminals</option><option>KBY</option><option>SRC</option><option>BRP</option></select>
+            <select id="filStatus" class="select"><option value="" selected>All statuses</option><option>Open</option><option>Monitoring</option><option>Repair Planned</option><option>Repaired</option><option>Closed</option><option value="__overdue">Overdue only</option><option value="__outstanding">Outstanding (not resolved)</option><option value="__complete">Complete (Repaired + Closed)</option></select>
+            <select id="filType" class="select"><option value="" selected>All types</option></select>
             <input id="filSearch" class="input" type="search" placeholder="Search tag, description, report no., SAP…">
             <button class="btn" data-variant="outline" id="btnResetFilters" type="button">Reset filters</button>
           </div>
         </div>
         <div class="tbl-scroll">
-          <table class="list">
+          <table class="list register-table">
             <thead>
               <tr>
                 <th class="c-check"><input type="checkbox" class="row-check" id="chkSelectAll" title="Select all"></th>
@@ -167,7 +152,10 @@
   <!-- ================= FORM (new / edit) ================= -->
   <section id="viewForm" class="view">
     <div class="toolbar">
-      <a class="back-link" href="#/list">&#8592; All findings</a>
+      <div class="toolbar-id-row">
+        <a class="back-link" href="#/list">&#8592; All findings</a>
+        <div class="detail-head" id="formHead"><h2 id="formTitle">New Finding</h2></div>
+      </div>
       <div class="form-actions">
         <div class="grp">
           <button class="btn btn-danger-outline" id="btnDelete" type="button" style="display:none;">Delete finding</button>
@@ -187,17 +175,14 @@
 
     <div class="panel">
       <div class="panel-h">
-        <h2 id="formTitle">New Finding</h2>
+        <h2>Finding Info</h2>
         <button class="btn" data-variant="outline" id="btnLineList" type="button">Manage line list</button>
       </div>
       <div class="panel-b">
         <div class="fgrid">
           <div>
             <label class="f-label req" for="fTerminal">Terminal</label>
-            <select id="fTerminal" class="select">
-              <option value="" selected disabled>Select terminal…</option>
-              <option>KBY</option><option>SRC</option><option>BRP</option>
-            </select>
+            <select id="fTerminal" class="select"><option value="" selected disabled>Select terminal…</option><option>KBY</option><option>SRC</option><option>BRP</option></select>
             <div class="validation-alert" id="errTerminal">Terminal is required.</div>
           </div>
           <div>
@@ -234,22 +219,18 @@
         <div class="fgrid">
           <div>
             <label class="f-label req" for="fType">Finding Type</label>
-            <select id="fType" class="select"></select>
+            <select id="fType" class="select"><option value="" selected disabled>Select type…</option></select>
             <div class="validation-alert" id="errType">Finding type is required.</div>
           </div>
           <div>
             <label class="f-label" for="fSeverity">Severity</label>
-            <select id="fSeverity" class="select">
-              <option value="">—</option>
-              <option>Low</option><option>Medium</option><option>High</option>
-            </select>
-          </div>
-          <div>
-            <label class="f-label">&nbsp;</label>
-            <label class="switch-inline" style="height:38px;">
-              <input type="checkbox" id="fIsLeaking">
-              <span>Actively Leaking</span>
-            </label>
+            <div class="severity-row">
+              <select id="fSeverity" class="select"><option value="" selected>—</option><option>Low</option><option>Medium</option><option>High</option></select>
+              <label class="switch-inline">
+                <input class="input" type="checkbox" role="switch" id="fIsLeaking">
+                <span>Actively Leaking</span>
+              </label>
+            </div>
           </div>
           <div class="full">
             <label class="f-label" for="fDescription">Anomaly Description</label>
@@ -293,7 +274,7 @@
       </div>
       <div class="panel-b">
         <div class="photo-grid" id="pendingPhotoGrid"></div>
-        <div class="photo-empty" id="pendingPhotoEmpty">No photos yet — add a file or paste a screenshot with <kbd>Ctrl</kbd>+<kbd>V</kbd>. Photos are downscaled automatically before upload.</div>
+        <div class="photo-empty" id="pendingPhotoEmpty"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No photos yet — add a file or paste a screenshot with <kbd>Ctrl</kbd>+<kbd>V</kbd>. Photos are downscaled automatically before upload.</span></div>
       </div>
     </div>
 
@@ -311,7 +292,7 @@
             <button class="btn" data-variant="outline" id="btnAddFound2" type="button">+ Add</button>
           </div>
           <div class="photo-grid" id="gridFound2"></div>
-          <div class="photo-empty" id="emptyFound2">No as-found photos.</div>
+          <div class="photo-empty" id="emptyFound2"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No as-found photos.</span></div>
         </div>
         <div class="photo-group">
           <div class="photo-group-h">
@@ -319,7 +300,7 @@
             <button class="btn" data-variant="outline" id="btnAddRepaired2" type="button">+ Add</button>
           </div>
           <div class="photo-grid" id="gridRepaired2"></div>
-          <div class="photo-empty" id="emptyRepaired2">No after-repair photos yet — add one when the repair is completed.</div>
+          <div class="photo-empty" id="emptyRepaired2"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No after-repair photos yet — add one when the repair is completed.</span></div>
         </div>
       </div>
     </div>
@@ -338,11 +319,7 @@
           </div>
           <div>
             <label class="f-label" for="fMethod">Method</label>
-            <select id="fMethod" class="select">
-              <option value="">—</option>
-              <option>Visual</option><option>UT</option><option>RT</option>
-              <option>PT</option><option>MT</option><option>Other</option>
-            </select>
+            <select id="fMethod" class="select"><option value="" selected>—</option><option>Visual</option><option>UT</option><option>RT</option><option>PT</option><option>MT</option><option>Other</option></select>
           </div>
           <div>
             <label class="f-label" for="fReportLink">Report Link (SharePoint)</label>
@@ -391,7 +368,7 @@
         <div class="panel-h">
           <h2>ASME B31.3 Assessment</h2>
           <label class="switch-inline">
-            <input type="checkbox" id="aToggle">
+            <input class="input" type="checkbox" role="switch" id="aToggle">
             <span>Include assessment</span>
           </label>
         </div>
@@ -443,15 +420,12 @@
               <label class="f-label req" for="aP">Design Pressure</label>
               <div class="p-row">
                 <input id="aP" class="input" type="number" step="0.1" placeholder="e.g., 7.0">
-                <select id="aPUnit" class="select"><option value="bar">bar</option><option value="psi">psi</option></select>
+                <select id="aPUnit" class="select"><option selected>bar</option><option>psi</option></select>
               </div>
             </div>
             <div>
               <label class="f-label" for="aCorrType">Corrosion Type</label>
-              <select id="aCorrType" class="select">
-                <option value="external">External Wall Loss</option>
-                <option value="internal">Internal Wall Loss</option>
-              </select>
+              <select id="aCorrType" class="select"><option value="external" selected>External Wall Loss</option><option value="internal">Internal Wall Loss</option></select>
             </div>
             <div>
               <label class="f-label" for="aCa">Corrosion Allowance, CA (mm)</label>
@@ -499,6 +473,99 @@
       </div>
     </div><!-- /formColAssess -->
     </div><!-- /form-split -->
+  </section>
+
+  <!-- ================= LINE RISK RANKING ================= -->
+  <section id="viewRisk" class="view">
+    <div class="toolbar">
+      <div class="toolbar-id-row">
+        <a class="back-link" href="#/list">&#8592; Dashboard</a>
+        <div class="risk-toolbar-title">Line Risk Ranking</div>
+      </div>
+      <div class="panel-h-btns">
+        <select id="riskTerminalFilter" class="select">
+          <option value="">All terminals</option>
+          <option>KBY</option><option>SRC</option><option>BRP</option>
+        </select>
+        <label class="switch-inline">
+          <input class="input" type="checkbox" role="switch" id="riskIncludeResolved">
+          <span>Include repaired / closed</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="risk-head">
+      <p class="risk-sub">Piping lines ranked by worst-case ASME B31.3 status across their findings — a qualitative screening tool, not API 581 quantitative POF.</p>
+    </div>
+
+    <div class="risk-kpi-band">
+      <div class="risk-kpi rk-total">
+        <div class="rk-label">Lines w/ Findings</div>
+        <div class="rk-num" id="riskKpiTotal">0</div>
+      </div>
+      <div class="risk-kpi rk-high">
+        <div class="rk-label">High Risk</div>
+        <div class="rk-num" id="riskKpiHigh">0</div>
+        <div class="rk-sub">≥ 1 REPAIR-status finding</div>
+      </div>
+      <div class="risk-kpi rk-med">
+        <div class="rk-label">Medium Risk</div>
+        <div class="rk-num" id="riskKpiMed">0</div>
+        <div class="rk-sub">MONITOR, no repair yet</div>
+      </div>
+      <div class="risk-kpi rk-low">
+        <div class="rk-label">Low Risk</div>
+        <div class="rk-num" id="riskKpiLow">0</div>
+        <div class="rk-sub">within allowable limits</div>
+      </div>
+      <div class="risk-kpi rk-na">
+        <div class="rk-label">Not Assessed</div>
+        <div class="rk-num" id="riskKpiNa">0</div>
+        <div class="rk-sub">findings, no B31.3 yet</div>
+      </div>
+    </div>
+
+    <div class="risk-chart-row">
+      <div class="panel">
+        <div class="panel-h">
+          <h2>Risk band by terminal</h2>
+          <span class="h-note">lines, worst-status per line</span>
+        </div>
+        <div class="panel-b" id="riskTerminalChart"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-h">
+          <h2>High-risk lines by damage mechanism</h2>
+          <span class="h-note">what's driving the risk</span>
+        </div>
+        <div class="panel-b" id="riskMechanismChart"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h">
+        <h2>Lines ranked by risk</h2>
+        <span class="h-note">worst-first · click a multi-finding line to expand it</span>
+      </div>
+      <div class="tbl-scroll">
+        <table class="list risk-table">
+          <thead>
+            <tr>
+              <th>Risk</th>
+              <th>Pipe Line / Location</th>
+              <th>Terminal</th>
+              <th>Mechanism</th>
+              <th>Findings</th>
+              <th>Min. wall left</th>
+              <th>Est. remaining life</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="riskTableBody"></tbody>
+        </table>
+      </div>
+      <div class="tbl-foot" id="riskTableFoot"></div>
+    </div>
   </section>
 
   <!-- ================= QUICK CALC (standalone what-if workbench; nothing saves) ================= -->
@@ -561,15 +628,12 @@
               <label class="f-label req" for="qP">Design Pressure</label>
               <div class="p-row">
                 <input id="qP" class="input" type="number" step="0.1" placeholder="e.g., 7.0">
-                <select id="qPUnit" class="select"><option value="bar">bar</option><option value="psi">psi</option></select>
+                <select id="qPUnit" class="select"><option selected>bar</option><option>psi</option></select>
               </div>
             </div>
             <div>
               <label class="f-label" for="qCorrType">Corrosion Type</label>
-              <select id="qCorrType" class="select">
-                <option value="external">External Wall Loss</option>
-                <option value="internal">Internal Wall Loss</option>
-              </select>
+              <select id="qCorrType" class="select"><option value="external" selected>External Wall Loss</option><option value="internal">Internal Wall Loss</option></select>
             </div>
             <div>
               <label class="f-label" for="qCa">Corrosion Allowance, CA (mm)</label>
@@ -681,7 +745,7 @@
                 <button class="btn" data-variant="outline" id="btnAddFound" type="button">+ Add</button>
               </div>
               <div class="photo-grid" id="gridFound"></div>
-              <div class="photo-empty" id="emptyFound">No as-found photos.</div>
+              <div class="photo-empty" id="emptyFound"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No as-found photos.</span></div>
             </div>
             <div class="photo-group">
               <div class="photo-group-h">
@@ -689,7 +753,7 @@
                 <button class="btn" data-variant="outline" id="btnAddRepaired" type="button">+ Add</button>
               </div>
               <div class="photo-grid" id="gridRepaired"></div>
-              <div class="photo-empty" id="emptyRepaired">No after-repair photos yet — add one when the repair is completed.</div>
+              <div class="photo-empty" id="emptyRepaired"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No after-repair photos yet — add one when the repair is completed.</span></div>
             </div>
           </div>
         </div>
@@ -772,17 +836,38 @@
     <span class="hint" id="lineListCount" style="margin:0;">0 entries</span>
   </div>
   <div class="dlg-b">
-    <input id="lineListSearch" class="input" type="search" placeholder="Search pipe tag, terminal, NPS, material, P&amp;ID, service…" style="margin-bottom:2px;">
-    <div class="tbl-scroll" style="max-height:50vh;">
-      <table class="list">
-        <thead>
-          <tr>
-            <th>Pipe Tag</th><th>Terminal</th><th>NPS</th><th>Schedule</th><th>Material</th>
-            <th>P&amp;ID</th><th>Service</th><th></th>
-          </tr>
-        </thead>
-        <tbody id="lineListTableBody"></tbody>
-      </table>
+    <div class="seg-row" id="lineListTabSeg" role="tablist" aria-label="Line list view" style="margin-bottom:10px;">
+      <span class="seg-pill" aria-hidden="true"></span>
+      <button class="seg-btn active" data-tab="master" type="button">Master List</button>
+      <button class="seg-btn" data-tab="unlisted" type="button">Unlisted Tags <span id="lineListUnlistedCount" class="seg-badge"></span></button>
+    </div>
+    <div id="lineListMasterTab">
+      <input id="lineListSearch" class="input" type="search" placeholder="Search pipe tag, terminal, NPS, material, P&amp;ID, service…" style="margin-bottom:2px;">
+      <div class="tbl-scroll" style="max-height:50vh;">
+        <table class="list">
+          <thead>
+            <tr>
+              <th>Pipe Tag</th><th>Terminal</th><th>NPS</th><th>Schedule</th><th>Material</th>
+              <th>P&amp;ID</th><th>Service</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="lineListTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="lineListUnlistedTab" style="display:none;">
+      <p class="hint" style="margin:0 0 6px;">
+        Pipe tags used on findings but not yet in the master list — their NPS/Schedule/Material
+        can't auto-fill on new findings until an engineer adds them here (via Import).
+      </p>
+      <div class="tbl-scroll" style="max-height:50vh;">
+        <table class="list">
+          <thead>
+            <tr><th>Pipe Tag</th><th>Terminal</th><th>Findings</th></tr>
+          </thead>
+          <tbody id="lineListUnlistedBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
   <div class="dlg-f">
@@ -807,7 +892,7 @@
       </label>
     </div>
     <label class="switch-inline" style="margin-top:4px;">
-      <input type="checkbox" id="exportInclBudget">
+      <input class="input" type="checkbox" role="switch" id="exportInclBudget">
       <span>Include estimated repair budget</span>
     </label>
     <div class="hint" style="margin-top:2px;">Leave off when sending the file to a vendor.</div>
@@ -829,7 +914,7 @@
 <input type="file" id="fileDlgRepaired" accept="image/*" capture="environment" multiple hidden>
 <input type="file" id="fileRepaired2" accept="image/*" capture="environment" multiple hidden>
 
-<div id="toast"></div>
+<div id="toaster" class="toaster" data-align="center"></div>
 
 <div class="footer">
   Central and Eastern Engineering and Maintenance Division — PTT Oil and Retail Business Public Company Limited

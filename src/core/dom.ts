@@ -100,14 +100,12 @@ export function pillHtml(status) {
   return `<span class="pill ${m.cls}">${esc(status)}</span>`;
 }
 
-let toastTimer: any = null;
+// Basecoat's toaster (src/main.ts imports 'basecoat-css/toast') stacks multiple toasts and
+// auto-pauses their dismiss timer on hover — the old single-slot #toast div couldn't do either
+// (a second notify() while one was showing just clobbered it). category drives both the icon and
+// the default duration (toast.js: 5000ms for 'error', 3000ms otherwise).
 export function notify(msg, isError) {
-  const t = $('toast');
-  t.textContent = msg;
-  t.classList.toggle('err', !!isError);
-  t.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), isError ? 5000 : 2800);
+  $('toaster').toast({ category: isError ? 'error' : 'success', description: msg });
 }
 
 export function setBusy(btn, busy, busyText) {

@@ -92,7 +92,11 @@
       cursor: pointer;
     }
     .combo-item.active, .combo-item:hover { background: var(--button-ghost-hover); }
-    .combo-tag { font-family: 'Google Sans', sans-serif; font-size: 12.5px; color: var(--text-color); }
+    /* 'Noto Sans Thai' in the stack — this shows a pipe_tag/location, which can be Thai text
+       (location-first identity, see CLAUDE.md); the bare 'Google Sans', sans-serif override used
+       elsewhere in this file for numeric-only fields (age, currency, ERF results — never Thai) is
+       wrong here since it has no Thai fallback in its own chain and skips the theme.css default. */
+    .combo-tag { font-family: 'Google Sans', 'Noto Sans Thai', sans-serif; font-size: 12.5px; color: var(--text-color); }
     .combo-loc { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
     .combo-empty { padding: 6px 8px; font-size: 11px; color: var(--text-light); }
     .combo-more { padding: 6px 8px; font-size: 10.5px; color: var(--text-light); border-top: 1px solid var(--card-border); margin-top: 4px; text-align: center; }
@@ -141,10 +145,12 @@
     .dash-top .dash-map-panel #dashMap { flex: 1 1 auto; }
 
     /* ============ KPI column: natural-height cards stacked vertically ============
-       Ring + Budget sit side by side as a compact pair (both short); the 6 status chips follow
-       in a 2-col grid. The cards themselves are not stretched to fill extra space — the column's
-       total (sum of its cards + gaps) is simply read by the sibling map panel via
-       align-items:stretch on .dash-top above. */
+       Ring + Budget sit side by side as a compact pair (both short) and stay content-sized; the
+       6 status chips follow in a 3-col grid and absorb whatever extra height align-items:stretch
+       (on .dash-top above) gives the column beyond Ring+Budget's own height — otherwise the map
+       (taller, flex-grown/no fixed height) stretches the sidebar past its content and leaves a
+       dead gap under the chip grid. flex:1 1 auto on .kpi-row-bottom claims that leftover space;
+       its rows use minmax(0, 1fr) so the chips grow evenly to fill it instead of clipping. */
     .kpi-sidebar {
       flex: 0 0 340px;
       min-width: 0;
@@ -156,8 +162,14 @@
     /* Ring + Budget stacked full-width (not side-by-side) — each card spans the sidebar's full
        width (equivalent to the old two 1fr columns combined), Ring on top, Budget below. */
     .kpi-top-pair { display: flex; flex-direction: column; gap: 8px; }
-    /* All 6 status chips, 3 across x 2 rows. */
-    .kpi-row-bottom { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    /* All 6 status chips, 3 across x 2 rows — flex-grow to fill the sidebar's stretched height. */
+    .kpi-row-bottom {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      flex: 1 1 auto;
+    }
 
     /* Budget KPI card — same card shell as the ring card, currency-sum content. Natural height
        (see .dash-top comment) — content flows top to bottom instead of being vertically centered
@@ -308,6 +320,11 @@
       font: inherit;
       color: var(--text-color);
       outline: none; /* see .kpi-ring-card's identical reset — real outline added back below, focus-visible only */
+      /* .kpi-row-bottom's rows stretch to fill leftover sidebar height (see its comment) — center
+         the number/label pair in that extra room instead of leaving it pinned to the top. */
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
 
     .kpi:hover { border-color: var(--button-primary); }
@@ -420,7 +437,9 @@
     }
 
     .map-popup { font-size: 12px; line-height: 1.5; }
-    .map-popup .mp-tag { font-family: 'Google Sans', sans-serif; font-weight: 700; font-size: 12px; margin-bottom: 4px; }
+    /* Same Thai-fallback note as .combo-tag above — the popup title is pipe_tag||location_desc,
+       which is user text and can be Thai. */
+    .map-popup .mp-tag { font-family: 'Google Sans', 'Noto Sans Thai', sans-serif; font-weight: 700; font-size: 12px; margin-bottom: 4px; }
     .map-popup .mp-meta { color: var(--text-muted); margin: 3px 0 6px; }
     .map-popup a { color: var(--button-primary); font-weight: 600; }
 
@@ -503,6 +522,23 @@
       .seg-pill, .seg-btn { transition: none !important; }
     }
 
+    /* Count badge inside a .seg-btn (Manage Line List's "Unlisted Tags" tab) — small pill,
+       hidden when empty (0 unlisted tags is the steady state worth not drawing attention to). */
+    .seg-badge {
+      display: inline-block;
+      min-width: 15px;
+      padding: 0 4px;
+      margin-left: 4px;
+      border-radius: 999px;
+      background: var(--danger-color);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 15px;
+      text-align: center;
+    }
+    .seg-badge:empty { display: none; }
+
     /* ============ Filters ============ */
     .filters {
       display: flex;
@@ -517,6 +553,15 @@
 
     /* ============ Findings table ============ */
     .tbl-scroll { overflow-x: auto; }
+
+    /* Small caption row under a .tbl-scroll table (e.g. Risk Ranking's row-count summary) — was
+       used with no rule defined for it at all, same missing-CSS bug as .h-note above. */
+    .tbl-foot {
+      padding: 10px 14px;
+      font-size: 11px;
+      color: var(--text-light);
+      border-top: 1px solid var(--card-border);
+    }
 
     table.list {
       width: 100%;
@@ -545,11 +590,17 @@
     table.list tbody tr { cursor: pointer; }
     table.list tbody tr:hover { background: var(--button-ghost-hover); }
     table.list tbody tr:last-child td { border-bottom: none; }
+    /* Matches basecoat's .table tr[data-state="selected"] rule (table.css) — .list isn't
+       basecoat's .table class, so this replicates just that one rule, reusing the app's existing
+       neutral-highlight token (already used for :hover above) instead of introducing --muted. */
+    table.list tbody tr[data-state="selected"] { background: var(--button-ghost-hover); }
 
     /* Tag cell: tag on top, finding-type as muted subtext, optional photo-count chip */
     .c-tag .t-tag-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    /* Same Thai-fallback note as .combo-tag above — the register's tag cell is pipe_tag||
+       location_desc, user text that can be Thai. */
     .c-tag .t-tag {
-      font-family: 'Google Sans', sans-serif;
+      font-family: 'Google Sans', 'Noto Sans Thai', sans-serif;
       font-size: 13.5px;
       font-weight: 600;
       overflow: hidden;
@@ -591,7 +642,24 @@
       background: var(--bg-color);
     }
     .row-thumb-empty { visibility: hidden; }
-    body.hide-row-photos .row-thumb { display: none; }
+    /* "Hide photos" collapses height only, keeping width reserved — display:none drops the thumb
+       from the table's auto layout entirely, so the tag-cell column renegotiates a narrower width
+       and .c-tag-text jumps left, reflowing every row's text at once (the horizontal shift the
+       user doesn't want). Collapsing just the height lets the row compact vertically (the user
+       does want this) without touching the column's width, so nothing to the right ever moves. */
+    body.hide-row-photos .row-thumb {
+      height: 0;
+      min-height: 0;
+      border-width: 0;
+      opacity: 0;
+    }
+    /* Compact mode: with the thumbnail gone, also tighten the row's own vertical rhythm (cell
+       padding + the tag/type/subtext line spacing) so more findings fit on screen — the point of
+       hiding photos in the first place. Width/column layout is untouched, so nothing shifts
+       horizontally; only vertical spacing shrinks. */
+    body.hide-row-photos table.register-table td { padding-top: 6px; padding-bottom: 6px; }
+    body.hide-row-photos .t-type { margin-top: 0; }
+    body.hide-row-photos .t-desc { margin-top: 0; }
     @media (max-width: 640px) {
       .row-thumb { display: none; }
     }
@@ -631,25 +699,42 @@
     /* Below ~640px there isn't room for Status/Tag/Terminal/Age/Due at their natural widths, and
        an auto-layout table lets a long pipe tag wrap across lines instead of shrinking. Pin a
        fixed layout with per-column widths so the tag cell is bounded and truncates (title attr
-       carries the full value) instead of blowing up row height. */
+       carries the full value) instead of blowing up row height.
+       Scoped to table.register-table specifically (the findings register — index.html's
+       #listBody table), NOT the bare table.list class every list-styled table shares (Manage Line
+       List's tables, the Risk Ranking table) — this rule hardcodes column *positions* (nth-child)
+       and widths tuned for the register's exact 6-column layout (checkbox/Status/Tag/Terminal/
+       Age/Due); on any other table.list, "column 4" is a different field entirely (e.g. Risk
+       Ranking's Mechanism), so a bare table.list selector here silently mis-hid/mis-sized the
+       wrong columns on those tables at the same breakpoint — a real bug, not a design choice. */
     @media (max-width: 640px) {
-      table.list { table-layout: fixed; }
-      table.list th:nth-child(1), table.list td:nth-child(1) { width: 26px; }
-      table.list th:nth-child(2), table.list td:nth-child(2) { width: 94px; }
+      table.register-table { table-layout: fixed; }
+      table.register-table th:nth-child(1), table.register-table td:nth-child(1) { width: 26px; }
+      table.register-table th:nth-child(2), table.register-table td:nth-child(2) { width: 94px; }
       /* Terminal is redundant with the KBY/SRC/BRP segmented filter right above the table, and
          the tag itself usually encodes it — drop the column here so Pipe Tag gets breathing room. */
-      table.list th:nth-child(4), table.list td:nth-child(4) { display: none; }
-      table.list th:nth-child(5), table.list td:nth-child(5) { width: 34px; }
-      table.list th:nth-child(6), table.list td:nth-child(6) { width: 80px; }
-      table.list th, table.list td { padding: 8px 4px; }
-      table.list th:first-child, table.list td:first-child { padding-left: 0; }
-      /* Scoped to table.list (not a bare .pill) both to beat the base .pill rule's font-size
-         regardless of source order (equal specificity otherwise means whichever is declared
-         LAST in the stylesheet wins, not whichever is "more specific to mobile" — the base
-         rule sits after this block) and so this doesn't also shrink status pills elsewhere
+      table.register-table th:nth-child(4), table.register-table td:nth-child(4) { display: none; }
+      table.register-table th:nth-child(5), table.register-table td:nth-child(5) { width: 34px; }
+      table.register-table th:nth-child(6), table.register-table td:nth-child(6) { width: 80px; }
+      table.register-table th, table.register-table td { padding: 8px 4px; }
+      table.register-table th:first-child, table.register-table td:first-child { padding-left: 0; }
+      /* Scoped to table.register-table (not a bare .pill) both to beat the base .pill rule's
+         font-size regardless of source order (equal specificity otherwise means whichever is
+         declared LAST in the stylesheet wins, not whichever is "more specific to mobile" — the
+         base rule sits after this block) and so this doesn't also shrink status pills elsewhere
          (detail page, assessment card) that happen to render under 640px. */
-      table.list .pill { font-size: 9px; padding: 2px 5px; letter-spacing: 0; }
-      table.list .ov-badge { font-size: 9.5px; }
+      table.register-table .pill { font-size: 9px; padding: 2px 5px; letter-spacing: 0; }
+      table.register-table .ov-badge { font-size: 9.5px; }
+    }
+
+    /* Risk Ranking table's own narrow-viewport handling — Mechanism and Findings are the least
+       essential at a glance on a tiny screen (Risk band + tag + Status carry the headline), so
+       those two collapse rather than any column being force-hidden/mis-widthed the way the
+       register rule above (wrongly) used to apply here. */
+    @media (max-width: 640px) {
+      table.risk-table th:nth-child(4), table.risk-table td:nth-child(4),
+      table.risk-table th:nth-child(5), table.risk-table td:nth-child(5) { display: none; }
+      table.risk-table th, table.risk-table td { padding: 8px 6px; font-size: 12px; }
     }
 
     /* ============ Row selection (Summary PDF) ============ */
@@ -755,13 +840,14 @@
       margin-bottom: 12px;
     }
 
-    /* Detail page: keep "All findings" + Export/Edit reachable while scrolling a long
-       two-column detail view instead of having to scroll back up. Stacks directly below the
+    /* Detail/Form/Risk pages: keep the back-link + page identity + primary actions reachable
+       while scrolling a long view instead of having to scroll back up. Stacks directly below the
        app header (also position:sticky, theme.css) using its real measured height
        (--app-header-h, kept in sync by syncHeaderHeight()) rather than top:0, which would
        collide with — not stack under — the header. */
     #viewDetail .toolbar,
-    #viewForm .toolbar {
+    #viewForm .toolbar,
+    #viewRisk .toolbar {
       position: sticky;
       top: var(--app-header-h, 64px);
       z-index: 20;
@@ -805,7 +891,15 @@
     .coord-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
     .coord-row > div { flex: 1 1 130px; }
 
+    /* Severity <select> + the Actively Leaking switch share one .fgrid cell so the switch sits
+       inline with Severity instead of starting its own grid row underneath. */
+    .severity-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .severity-row .select { flex: 1 1 auto; min-width: 0; }
+    .severity-row .switch-inline { flex: none; white-space: nowrap; }
+
     /* ============ Inline assessment section ============ */
+    /* Label wrapper only — the checkbox itself is basecoat's real switch component
+       (class="input" role="switch"), styled by basecoat.cdn.min.css/theme.css tokens. */
     .switch-inline {
       display: inline-flex;
       align-items: center;
@@ -815,7 +909,6 @@
       color: var(--text-muted);
       cursor: pointer;
     }
-    .switch-inline input { width: 15px; height: 15px; accent-color: var(--button-primary); cursor: pointer; }
 
     /* collapsed state: body hidden when the toggle is off (driven by a class on the panel) */
     #assessPanel:not(.on) #aBody { display: none; }
@@ -969,7 +1062,19 @@
       color: #fff;
     }
 
-    .photo-empty { font-size: 11.5px; color: var(--text-light); }
+    /* Lighter-weight companion to the .empty component used for the register's empty row
+       (dashboard.ts) — a full basecoat .empty card (icon + h2 + description, dashed border,
+       generous padding) reads as too heavy repeated across every one of these 5 spots, each
+       already sitting right under its own group's <h3> title. Small inline icon instead, same
+       intent (some visual weight beyond plain muted text) at a size that fits a dense form. */
+    .photo-empty {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      font-size: 11.5px;
+      color: var(--text-light);
+    }
+    .photo-empty svg { flex: none; margin-top: 1px; opacity: 0.6; }
 
     .photo-group-h {
       display: flex;
@@ -1011,11 +1116,14 @@
       border-left: 1px solid var(--card-border);
     }
 
+    /* Same Thai-fallback note as .combo-tag above — the detail toolbar title is pipe_tag||
+       location_desc, user text that can be Thai (this is the exact title reported not rendering
+       in Thai — the bare 'Google Sans', sans-serif override had no Thai fallback of its own). */
     .detail-head h2 {
       margin: 0;
       font-size: 14px;
       font-weight: 800;
-      font-family: 'Google Sans', sans-serif;
+      font-family: 'Google Sans', 'Noto Sans Thai', sans-serif;
       white-space: nowrap;
     }
 
@@ -1234,39 +1342,14 @@
       gap: 8px;
     }
 
-    /* ============ Toast ============ */
-    :root {
-      --toast-open-dur: 250ms;
-      --toast-close-dur: 350ms;
-      --toast-ease: cubic-bezier(0.22, 1, 0.36, 1);
+    /* ============ Toast (error accent) ============ */
+    /* Basecoat's .toast is category-agnostic by design (icon shape is the only built-in
+       differentiator) — this adds a destructive-colored left border + icon tint on top,
+       purely additive so every other category keeps basecoat's stock look. */
+    .toast[data-category="error"] .toast-content {
+      border-inline-start: 3px solid var(--danger-color);
     }
-    #toast {
-      position: fixed;
-      left: 50%;
-      bottom: 24px;
-      transform: translateX(-50%) translateY(8px);
-      background: #0f172a;
-      color: #f8fafc;
-      font-size: 12.5px;
-      padding: 10px 16px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.3);
-      opacity: 0;
-      pointer-events: none;
-      /* Close (toast hiding) is the resting/base transition; .show overrides it with the
-         quicker open timing below — see transitions-polish's toast open/close split
-         (--duration-fast open / --duration-medium close, per its documented usage). */
-      transition: opacity var(--toast-close-dur) var(--toast-ease), transform var(--toast-close-dur) var(--toast-ease);
-      z-index: 1000;
-      max-width: calc(100vw - 32px);
-    }
-
-    #toast.show {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-      transition: opacity var(--toast-open-dur) var(--toast-ease), transform var(--toast-open-dur) var(--toast-ease);
-    }
-    #toast.err { background: var(--danger-color); }
+    .toast[data-category="error"] .toast-content svg { color: var(--danger-color); }
 
     /* ============ Photo lightbox ============ */
     dialog#lightbox {
@@ -1297,4 +1380,140 @@
       font-size: 11.5px;
       color: var(--text-light);
       padding: 18px 20px 26px;
+    }
+
+    /* ============ Line Risk Ranking (#/risk, src/features/risk.ts) ============
+       A qualitative risk ranking of LINES (not findings), rolled up from the worst ASME B31.3
+       status among a line's findings. Deliberately NOT named/labeled "POF" — see risk.ts's file
+       header for why. Reuses .panel/.chip/.list/.life-bar-style patterns already established
+       elsewhere in this file rather than inventing a parallel visual language. */
+    /* Page title moved into the sticky .toolbar (see .risk-toolbar-title) so it and the back-link
+       stay visible while scrolling, same as the detail page's .detail-head — .risk-head is just
+       the (non-sticky) intro sentence beneath it now. */
+    .risk-sub { color: var(--text-muted); font-size: 12.5px; margin: 0 0 14px; }
+
+    /* Matches .detail-head's compact-title-beside-back-link treatment (font-size/weight/
+       border-left separator) so the sticky toolbar reads the same way across Detail/Form/Risk.
+       No Thai fallback needed here — unlike .detail-head h2 (a finding's pipe_tag/location_desc,
+       user-entered), this title is the static string "Line Risk Ranking", never Thai text. */
+    .risk-toolbar-title {
+      font-size: 14px;
+      font-weight: 800;
+      font-family: 'Google Sans', sans-serif;
+      padding-left: 14px;
+      border-left: 1px solid var(--card-border);
+      white-space: nowrap;
+    }
+
+    .risk-kpi-band { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 14px; }
+    .risk-kpi {
+      background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px;
+      padding: 14px 16px; position: relative; overflow: hidden;
+    }
+    .risk-kpi::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
+    .risk-kpi.rk-total::before { background: var(--button-primary); }
+    .risk-kpi.rk-high::before  { background: var(--danger-color); }
+    .risk-kpi.rk-med::before   { background: var(--warn-color); }
+    .risk-kpi.rk-low::before   { background: var(--ok-color); }
+    .risk-kpi.rk-na::before    { background: var(--text-light); }
+    .risk-kpi .rk-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+    .risk-kpi .rk-num { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; margin-top: 4px; }
+    .risk-kpi .rk-sub { font-size: 11px; color: var(--text-light); margin-top: 2px; }
+    .risk-kpi.rk-high .rk-num { color: var(--danger-color); }
+    .risk-kpi.rk-med .rk-num  { color: var(--warn-color); }
+    .risk-kpi.rk-low .rk-num  { color: var(--ok-color); }
+    .risk-kpi.rk-na .rk-num   { color: var(--text-muted); }
+
+    .risk-chart-row { display: grid; grid-template-columns: 1.15fr 1fr; gap: 12px; margin-bottom: 14px; }
+
+    /* stacked horizontal bars — risk band by terminal */
+    .stack-row { display: grid; grid-template-columns: 48px 1fr 30px; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .stack-row:last-child { margin-bottom: 0; }
+    .stack-label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    .stack-bar { display: flex; height: 20px; border-radius: 5px; overflow: hidden; background: var(--button-ghost-hover); }
+    .stack-seg { height: 100%; }
+    .stack-seg + .stack-seg { box-shadow: -2px 0 0 var(--card-bg); }
+    .seg-high { background: var(--danger-color); }
+    .seg-med  { background: var(--warn-color); }
+    .seg-low  { background: var(--ok-color); }
+    .seg-na   { background: var(--text-light); }
+    .stack-total { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-muted); text-align: right; }
+
+    .risk-chart-row .legend { display: flex; gap: 14px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--card-border); flex-wrap: wrap; }
+    .risk-chart-row .legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-muted); }
+    .risk-chart-row .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+
+    /* damage-mechanism bars — reuses TYPE_COLORS (core/constants.ts), the same palette the map
+       legend's Type mode already uses, so a mechanism's color means the same thing everywhere. */
+    .mech-row { display: grid; grid-template-columns: 110px 1fr 26px; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .mech-row:last-child { margin-bottom: 0; }
+    .mech-label { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mech-track { height: 14px; background: var(--button-ghost-hover); border-radius: 4px; overflow: hidden; }
+    .mech-fill { height: 100%; border-radius: 4px; }
+    .mech-num { font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+
+    /* mechanism chips on a collapsed multi-finding line row — a line's mechanism is a SET (one
+       per finding, see risk.ts's file header), never flattened to a single value. */
+    .mech-chips { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+    .mech-chip { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 10.5px; font-weight: 600; white-space: nowrap; }
+    .mech-more { font-size: 10.5px; color: var(--text-light); font-weight: 600; }
+    table.risk-table .mech-cell-child { font-size: 12px; color: var(--text-muted); padding-left: 0; }
+
+    /* risk band pill — same shape as .pill (core status pills) but its own severity-scale palette */
+    .risk-pill {
+      display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px;
+      font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+    }
+    .risk-pill .dot { width: 7px; height: 7px; border-radius: 50%; }
+    .risk-pill.risk-high { background: color-mix(in oklab, var(--danger-color) 12%, transparent); color: var(--danger-color); }
+    .risk-pill.risk-high .dot { background: var(--danger-color); }
+    .risk-pill.risk-med  { background: color-mix(in oklab, var(--warn-color) 14%, transparent); color: var(--warn-color); }
+    .risk-pill.risk-med .dot { background: var(--warn-color); }
+    .risk-pill.risk-low  { background: color-mix(in oklab, var(--ok-color) 12%, transparent); color: var(--ok-color); }
+    .risk-pill.risk-low .dot { background: var(--ok-color); }
+    .risk-pill.risk-na   { background: var(--button-ghost-hover); color: var(--text-muted); }
+    .risk-pill.risk-na .dot { background: var(--text-light); }
+
+    /* remaining-life mini bar */
+    .life-bar { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+    .life-track { width: 42px; height: 6px; border-radius: 3px; background: var(--button-ghost-hover); overflow: hidden; flex: none; }
+    .life-fill { height: 100%; border-radius: 3px; }
+    .rl-none { color: var(--text-light); }
+
+    /* expand affordance + child (per-finding) rows — click a multi-finding line row to reveal one
+       row per finding (its own location, mechanism, wall%, life, status), worst-first.
+       .tag-sub's padding-left (19px = the caret's 14px width + 5px margin, see .expand-caret
+       below) is unconditional — risk.ts always reserves the caret's slot on every row (invisible
+       via visibility:hidden when there's nothing to expand) precisely so this indent lines the
+       subtitle up under the tag text the same way on every row, single- or multi-location alike. */
+    table.risk-table .tag-cell { font-weight: 600; }
+    table.risk-table .tag-sub { font-size: 11px; color: var(--text-light); font-weight: 400; margin-top: 1px; padding-left: 19px; }
+    table.risk-table .loc-count { color: var(--text-muted); }
+    table.risk-table .worst-tag { color: var(--text-light); }
+    table.risk-table .leak-flag { color: var(--danger-color); font-weight: 700; }
+
+    .expand-caret {
+      display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px;
+      margin-right: 5px; color: var(--text-light); font-size: 9px; transition: transform .15s ease;
+    }
+    tr.line-row.open .expand-caret { transform: rotate(90deg); color: var(--text-muted); }
+    tr.line-row[data-line-key] { cursor: pointer; }
+
+    tr.child-row td { background: var(--button-ghost-hover); border-bottom: 1px solid var(--card-border); padding-top: 7px; padding-bottom: 7px; }
+    .child-loc { display: flex; align-items: center; gap: 8px; padding-left: 20px; }
+    .child-loc .child-marker { width: 5px; height: 5px; border-radius: 50%; flex: none; }
+    .child-marker.m-high { background: var(--danger-color); }
+    .child-marker.m-med  { background: var(--warn-color); }
+    .child-marker.m-low  { background: var(--ok-color); }
+    .child-marker.m-na   { background: var(--text-light); }
+    .child-loc-text { font-size: 12px; }
+    .child-status { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+    .cs-high { color: var(--danger-color); }
+    .cs-med  { color: var(--warn-color); }
+    .cs-low  { color: var(--ok-color); }
+    .cs-na   { color: var(--text-muted); }
+
+    @media (max-width: 900px) {
+      .risk-kpi-band { grid-template-columns: repeat(2, 1fr); }
+      .risk-chart-row { grid-template-columns: 1fr; }
     }

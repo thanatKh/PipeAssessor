@@ -110,3 +110,10 @@ export function setDlgTarget(v: any) { dlgTarget = v; }
 
 // Register filter (mutated in place; never wholesale-reassigned):
 export const filters: any = { terminal: '', status: '', type: '', q: '' };
+
+// Risk Ranking page (#/risk): every finding's latest assessment row, loaded once per visit (all
+// findings at once, not per-finding like the detail page) — see features/risk.ts's loadRiskData().
+export let riskAssessments: any = [];
+export function setRiskAssessments(v: any) { riskAssessments = v; }
+
+export const riskFilters: any = { terminal: '', includeResolved: false };

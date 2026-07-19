@@ -8,8 +8,8 @@
    the form CRUD (open/collect/save/delete). Extracted from the app monolith.
    ============================================================================ */
 import L from 'leaflet';
-import { $, val, esc, notify, setBusy, positionSegPill } from '../core/dom';
-import { PHOTO_BUCKET, PHOTO_LIMIT_PER_KIND, DEFAULT_MAP_VIEW, SAT_TILES, WALL_LOSS_TYPES } from '../core/constants';
+import { $, val, esc, notify, setBusy, positionSegPill, pillHtml, isOverdue } from '../core/dom';
+import { R2_UPLOAD_ENDPOINT, PHOTO_LIMIT_PER_KIND, DEFAULT_MAP_VIEW, SAT_TILES, WALL_LOSS_TYPES } from '../core/constants';
 import { sb } from '../core/supabase';
 import { computeB313, PA_PIPE_DATABASE, PA_MATERIALS, paDefaultScheduleForNps } from '../engine/compute';
 import { downscaleImage } from '../engine/branding';
@@ -78,7 +78,8 @@ export function renderPendingGrid() {
        <img src="${p.previewUrl}" alt="Pending photo">
        <button type="button" class="photo-remove" data-i="${i}" title="Remove">&#215;</button>
      </div>`).join('');
-  $('pendingPhotoEmpty').style.display = pendingPhotos.length ? 'none' : 'block';
+  // 'flex' not 'block' — see the identical note on detail.ts's renderPhotoGroups().
+  $('pendingPhotoEmpty').style.display = pendingPhotos.length ? 'none' : 'flex';
   grid.querySelectorAll('.photo-remove').forEach(btn => {
     btn.addEventListener('click', () => {
       pendingPhotos.splice(Number(btn.dataset.i), 1);
@@ -460,17 +461,22 @@ export async function applyTagMemory() {
   const prior = findings.filter(f => f.pipe_tag === tag)
     .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
 
-  // metadata: prior finding first, then whatever the line list has that's still empty
+  // metadata: prior finding first, then whatever the line list has that's still empty. Both
+  // sources fill the same field set (Terminal/P&ID/Service) so a tag's prefill doesn't depend on
+  // which source happened to match. (Location Description is NOT prefilled from either — it's
+  // specific to where on the line THIS finding was seen, e.g. two findings on the same tag can
+  // legitimately sit at different spots along it; silently copying a prior location risked the
+  // inspector not noticing and leaving a stale/wrong location on the new record.)
   const last = prior[0];
   if (last) {
+    if (!$('fTerminal').value && last.terminal) $('fTerminal').value = last.terminal;
     if (!$('fPid').value && last.pid_no) $('fPid').value = last.pid_no;
     if (!$('fService').value && last.service) $('fService').value = last.service;
-    if (!$('fLocationDesc').value && last.location_desc) $('fLocationDesc').value = last.location_desc;
   }
   if (lineRow) {
+    if (!$('fTerminal').value && lineRow.terminal) $('fTerminal').value = lineRow.terminal;
     if (!$('fPid').value && lineRow.pid_no) $('fPid').value = lineRow.pid_no;
     if (!$('fService').value && lineRow.service) $('fService').value = lineRow.service;
-    if (!$('fTerminal').value && lineRow.terminal) $('fTerminal').value = lineRow.terminal;
   }
 
   // engineering setup: prior finding's own assessment wins; line list is the fallback
@@ -703,7 +709,12 @@ export function openForm(f) {
   resetAssessment();
   setAssessOn(false);
 
-  $('formTitle').textContent = f ? 'Edit Finding' : 'New Finding';
+  // Sticky-toolbar identity, same pattern as detail.ts's $('detailHead') — plain title while
+  // creating (nothing to identify yet), tag/status/terminal-type once editing a real record.
+  $('formHead').innerHTML = f
+    ? `<h2>${esc(f.pipe_tag || f.location_desc || '—')}</h2>${pillHtml(f.status)}${isOverdue(f) ? '<span class="ov-badge">OVERDUE</span>' : ''}` +
+      `<span class="dh-meta">${esc(f.terminal)} Terminal — ${esc(f.finding_type)}</span>`
+    : `<h2>New Finding</h2>`;
   $('btnDelete').style.display = f ? 'inline-flex' : 'none';
   // New findings queue photos in memory (uploaded on save); existing findings manage photos
   // immediately via the same Photographic Record panel/logic the detail page uses.
@@ -735,9 +746,12 @@ export function openForm(f) {
   $('fIsLeaking').checked = f ? !!f.is_leaking : false;
   syncCorrTypeFromFinding(); // corrosion type follows the finding type (a saved assessment overrides it below)
   renderRepairAdvisor(); // show guidance for the loaded finding type/leak state immediately, not just on next change
+  // Populate from the stored value without marking severityTouched — the field shows what was
+  // saved, but auto-suggestion (leaking bump, ERF-based bump, finding-type prefill) still applies
+  // to whatever the user does next in this session, same as a brand-new finding. Only the user's
+  // own edit to the Severity <select> (its change listener below) should set severityTouched.
   $('fSeverity').value = f ? (f.severity || '') : '';
-  if (f && f.severity) setSeverityTouched(true); // don't auto-overwrite a stored severity
-  else suggestSeverityFromType(); // new finding: prefill from the finding type if one is already set
+  if (!f || !f.severity) suggestSeverityFromType(); // prefill from the finding type if none stored yet
   $('fDescription').value = f ? (f.description || '') : '';
   $('fDefLen').value = f && f.defect_length_mm != null ? f.defect_length_mm : '';
   $('fDefWid').value = f && f.defect_width_mm != null ? f.defect_width_mm : '';
@@ -867,16 +881,36 @@ export function collectAssessment() {
 }
 
 export async function uploadPhoto(findingId, file, kind) {
-  // 900px / 0.55 — chosen for max headroom on Supabase's free-tier 1GB storage bucket (this
-  // table has all of it to itself); still legible for the lightbox and the PDF's largest photo
-  // cell (~84x62mm) at typical print/screen resolution.
-  const dataUrl = await downscaleImage(file, 900, 0.55);
+  // 1600px / 0.75 — R2's free tier (10GB, zero egress fees) has far more headroom than
+  // Supabase Storage's 1GB free cap did; still comfortably legible for the lightbox and the
+  // PDF's largest photo cell (~84x62mm) at typical print/screen resolution, just sharper.
+  const dataUrl = await downscaleImage(file, 1600, 0.75);
   const blob = await (await fetch(dataUrl)).blob();
-  const path = `${findingId}/${crypto.randomUUID()}.jpg`;
-  const up = await sb.storage.from(PHOTO_BUCKET).upload(path, blob, { contentType: 'image/jpeg' });
-  if (up.error) throw up.error;
+  const { data: sess } = await sb.auth.getSession();
+  const token = sess?.session?.access_token;
+  if (!token) throw new Error('Not signed in.');
+  const up = await fetch(`${R2_UPLOAD_ENDPOINT}/upload?findingId=${encodeURIComponent(findingId)}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'image/jpeg' },
+    body: blob
+  });
+  if (!up.ok) throw new Error('Photo upload failed (' + up.status + ').');
+  const { path } = await up.json();
   const ins = await sb.from('finding_photos').insert({ finding_id: findingId, kind, storage_path: path });
   if (ins.error) throw ins.error;
+}
+
+export async function deletePhotos(paths) {
+  if (!paths || !paths.length) return;
+  const { data: sess } = await sb.auth.getSession();
+  const token = sess?.session?.access_token;
+  if (!token) throw new Error('Not signed in.');
+  const res = await fetch(`${R2_UPLOAD_ENDPOINT}/delete`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ paths })
+  });
+  if (!res.ok) throw new Error('Photo delete failed (' + res.status + ').');
 }
 
 export async function saveForm(addAnother) {
@@ -950,7 +984,7 @@ export async function deleteFinding() {
   setBusy(btn, true, 'Deleting…');
   try {
     const { data: ph } = await sb.from('finding_photos').select('storage_path').eq('finding_id', editingId);
-    if (ph && ph.length) await sb.storage.from(PHOTO_BUCKET).remove(ph.map(p => p.storage_path));
+    if (ph && ph.length) await deletePhotos(ph.map(p => p.storage_path));
     const { error } = await sb.from('findings').delete().eq('id', editingId);
     if (error) throw error;
     notify('Finding deleted.');
