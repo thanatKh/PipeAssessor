@@ -436,7 +436,21 @@
       box-shadow: none;
     }
 
-    .map-popup { font-size: 12px; line-height: 1.5; }
+    .map-popup { font-size: 12px; line-height: 1.5; min-width: 140px; }
+    .map-popup .mp-img-wrap {
+      width: 100%;
+      height: 96px;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 6px;
+      background: var(--bg-muted, #f1f5f9);
+    }
+    .map-popup .mp-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
     /* Same Thai-fallback note as .combo-tag above — the popup title is pipe_tag||location_desc,
        which is user text and can be Thai. */
     .map-popup .mp-tag { font-family: 'Google Sans', 'Noto Sans Thai', sans-serif; font-weight: 700; font-size: 12px; margin-bottom: 4px; }

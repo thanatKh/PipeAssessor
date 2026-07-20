@@ -223,7 +223,12 @@ export function ensureDashMap() {
 }
 
 export function popupHtml(f) {
+  const thumb = photoThumbs[f.id];
+  const imgHtml = thumb
+    ? `<div class="mp-img-wrap"><img class="mp-img" src="${esc(photoUrl(thumb.storage_path))}" alt="" loading="lazy"></div>`
+    : '';
   return `<div class="map-popup">
+    ${imgHtml}
     <div class="mp-tag">${esc(f.pipe_tag || f.location_desc || '—')}</div>
     ${pillHtml(f.status)}${isOverdue(f) ? ' <span class="ov-badge">OVERDUE</span>' : ''}
     <div class="mp-meta">${esc(f.terminal)} — ${esc(f.finding_type)}</div>
@@ -287,8 +292,6 @@ export function renderMap(rows) {
       radius: 8, fillColor: color, fillOpacity: 0.95, color: '#ffffff', weight: 2
     });
     pin.bindPopup(popupHtml(f));
-    // clicking a pin flashes + scrolls to its table row (the reverse of row->pin hover)
-    pin.on('click', () => flashRow(f.id));
     dashLayer.addLayer(pin);
     dashMarkers[f.id] = pin;
   });
