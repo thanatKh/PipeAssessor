@@ -228,11 +228,13 @@ export function popupHtml(f) {
     ? `<div class="mp-img-wrap"><img class="mp-img" src="${esc(photoUrl(thumb.storage_path))}" alt="" loading="lazy"></div>`
     : '';
   return `<div class="map-popup">
+    <div class="mp-body">
+      <div class="mp-tag">${esc(f.pipe_tag || f.location_desc || '—')}</div>
+      ${pillHtml(f.status)}${isOverdue(f) ? ' <span class="ov-badge">OVERDUE</span>' : ''}
+      <div class="mp-meta">${esc(f.terminal)} — ${esc(f.finding_type)}</div>
+      <a href="#/f/${esc(f.id)}">Open finding &#8594;</a>
+    </div>
     ${imgHtml}
-    <div class="mp-tag">${esc(f.pipe_tag || f.location_desc || '—')}</div>
-    ${pillHtml(f.status)}${isOverdue(f) ? ' <span class="ov-badge">OVERDUE</span>' : ''}
-    <div class="mp-meta">${esc(f.terminal)} — ${esc(f.finding_type)}</div>
-    <a href="#/f/${esc(f.id)}">Open finding &#8594;</a>
   </div>`;
 }
 

@@ -436,13 +436,14 @@
       box-shadow: none;
     }
 
-    .map-popup { font-size: 12px; line-height: 1.5; min-width: 140px; }
+    .map-popup { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; line-height: 1.5; min-width: 180px; }
+    .map-popup .mp-body { flex: 1; min-width: 0; }
     .map-popup .mp-img-wrap {
-      width: 100%;
-      height: 96px;
+      width: 68px;
+      height: 68px;
+      flex-shrink: 0;
       border-radius: 6px;
       overflow: hidden;
-      margin-bottom: 6px;
       background: var(--bg-muted, #f1f5f9);
     }
     .map-popup .mp-img {
