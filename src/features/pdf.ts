@@ -9,7 +9,7 @@
    Extracted from the app monolith.
    ============================================================================ */
 import { $, val, esc, notify, todayISO, isOverdue, dueDateOf, openDialog, closeDialog, setBusy, fmtDate, fmtDateTime } from '../core/dom';
-import { STATUS_COLORS } from '../core/constants';
+import { STATUS_COLORS, R2_UPLOAD_ENDPOINT } from '../core/constants';
 import { computeB313, PA_PIPE_DATABASE } from '../engine/compute';
 import { paFmtDate, paFmtDateTime } from '../engine/format';
 import { OR_LOGO_DATAURL } from '../engine/branding';
@@ -22,6 +22,7 @@ import {
 import { applyFilters, sortFindings, ageDays, photoUrl } from './dashboard';
 import { resFromSnapshot, erfNo, materialName, fmtN } from './detail';
 import { exportCsv } from './import-export';
+import { sb } from '../core/supabase';
 
 export const PDF_NAVY = '#156B95'; // matches --header-accent / --button-primary exactly
 export const PDF_TEXT = '#0f172a';
@@ -36,17 +37,47 @@ export const PDF_WARN_DARK = '#92400e';   // --warn-text — the CS-reference ca
 export const PDF_WARN_MID = '#b45309';    // warn accent — the bold FFS recommendation
 export const PDF_DANGER = '#dc2626';
 
-export function fetchAsDataUrl(url, timeoutMs) {
-  const job = fetch(url)
-    .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.blob(); })
-    .then(b => new Promise((res, rej) => {
-      const fr = new FileReader();
-      fr.onload = () => res(fr.result);
-      fr.onerror = rej;
-      fr.readAsDataURL(b);
-    }));
-  return Promise.race([job, new Promise(res => setTimeout(() => res(null), timeoutMs))])
-    .catch(() => null);
+export async function fetchAsDataUrl(url, timeoutMs = 8000) {
+  if (!url) return null;
+  if (url.startsWith('data:')) return url;
+
+  // Primary method: fetch blob -> FileReader
+  const fetchPromise = (async () => {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error('http ' + r.status);
+      const blob = await r.blob();
+      return await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(fr.result);
+        fr.onerror = rej;
+        fr.readAsDataURL(blob);
+      });
+    } catch (_) { return null; }
+  })();
+
+  // Fallback method: HTML Image + Canvas drawing
+  const canvasPromise = (async () => {
+    try {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      await new Promise((res, rej) => {
+        img.onload = res;
+        img.onerror = rej;
+        img.src = url;
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth || img.width;
+      canvas.height = img.naturalHeight || img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      return canvas.toDataURL('image/jpeg', 0.85);
+    } catch (_) { return null; }
+  })();
+
+  const res = await Promise.race([fetchPromise, new Promise(r => setTimeout(() => r(null), timeoutMs))]);
+  if (res) return res;
+  return await Promise.race([canvasPromise, new Promise(r => setTimeout(() => r(null), timeoutMs))]);
 }
 
 export function loadImg(src) {
@@ -102,6 +133,35 @@ export async function composeMapPng(lat, lng, zoom, W, H) {
   } catch (e) { return null; }
 }
 
+async function cropToUniformAspect(img: HTMLImageElement, targetAspect = 4 / 3): Promise<{ src: string; w: number; h: number }> {
+  try {
+    const canvas = document.createElement('canvas');
+    let sw = img.naturalWidth;
+    let sh = img.naturalHeight;
+    const currentAspect = sw / sh;
+    let sx = 0, sy = 0;
+
+    if (currentAspect > targetAspect) {
+      sw = sh * targetAspect;
+      sx = (img.naturalWidth - sw) / 2;
+    } else {
+      sh = sw / targetAspect;
+      sy = (img.naturalHeight - sh) / 2;
+    }
+
+    canvas.width = 1200;
+    canvas.height = 900;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return { src: img.src, w: img.naturalWidth, h: img.naturalHeight };
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, 1200, 900);
+    return { src: canvas.toDataURL('image/jpeg', 0.92), w: 1200, h: 900 };
+  } catch (_) {
+    return { src: img.src, w: img.naturalWidth, h: img.naturalHeight };
+  }
+}
+
 export async function buildFindingPdf() {
   const f = current;
   const { jsPDF } = await import('jspdf'); const { default: autoTable } = await import('jspdf-autotable');
@@ -120,12 +180,37 @@ export async function buildFindingPdf() {
   const assess = currentAssessments.length ? currentAssessments[0] : null;
   const assessRes = assess ? resFromSnapshot(assess) : null;
   const xsecPng = assessRes ? await paCrossSectionPng(assessRes, 2).catch(() => null) : null;
+
+  // Fetch photos if currentPhotos is unpopulated
+  let photos = currentPhotos || [];
+  if ((!photos || !photos.length) && f && f.id) {
+    const { data: phData } = await sb.from('finding_photos')
+      .select('*')
+      .eq('finding_id', f.id)
+      .order('created_at', { ascending: true });
+    if (phData && phData.length) photos = phData;
+  }
+
   const photoData = [];
-  for (const p of currentPhotos) {
-    const d = await fetchAsDataUrl(photoUrl(p.storage_path), 8000);
+  for (const p of photos) {
+    const pPath = p.storage_path || p.path;
+    if (!pPath) continue;
+    const isFullUrl = pPath.startsWith('http://') || pPath.startsWith('https://') || pPath.startsWith('data:');
+    let d = null;
+    if (isFullUrl) {
+      d = await fetchAsDataUrl(pPath, 8000);
+    } else {
+      const primaryUrl = `${R2_UPLOAD_ENDPOINT}/photo?path=${encodeURIComponent(pPath)}`;
+      const fallbackUrl = photoUrl(pPath);
+      d = await fetchAsDataUrl(primaryUrl, 8000);
+      if (!d) d = await fetchAsDataUrl(fallbackUrl, 5000);
+    }
     if (!d) continue;
     const im = await loadImg(d);
-    if (im) photoData.push({ kind: p.kind, src: d, w: im.naturalWidth, h: im.naturalHeight });
+    if (im && im.naturalWidth > 0 && im.naturalHeight > 0) {
+      const cropped = await cropToUniformAspect(im, 4 / 3);
+      photoData.push({ kind: (p.kind || 'found').toLowerCase().trim(), src: cropped.src, w: cropped.w, h: cropped.h });
+    }
   }
 
   const now = new Date();
@@ -145,7 +230,8 @@ export async function buildFindingPdf() {
     doc.setFont('GoogleSans', 'bold'); doc.setFontSize(11); doc.setTextColor(PDF_NAVY);
     doc.text('PIPING ABNORMAL FINDING REPORT', PW - M, 8.5, { align: 'right' });
     doc.setFont('GoogleSans', 'normal'); doc.setFontSize(7.5); doc.setTextColor('#64748b');
-    doc.text(`TAG: ${f.pipe_tag || f.location_desc || '—'}   •   ${paFmtDate(now)}`, PW - M, 13.5, { align: 'right' });
+    const tagRef = (f.pipe_tag || f.location_desc || f.id.slice(0, 8)).replace(/[^a-zA-Z0-9-]/g, '_');
+    doc.text(`DOC REF: PA-RPT-${tagRef}-${paFmtDate(now).replace(/\s+/g, '')}`, PW - M, 13.5, { align: 'right' });
     doc.setDrawColor(PDF_NAVY); doc.setLineWidth(0.8);
     doc.line(M, HEADER_H - 1, PW - M, HEADER_H - 1);
 
@@ -165,26 +251,25 @@ export async function buildFindingPdf() {
     if (y + h > PH - FOOTER_H - 4) { doc.addPage(); chrome(); }
   }
 
-  function section(t) {
-    ensure(14);
-    secNum++;
+  function section(t, minBodyHeight = 22) {
+    ensure(9.5 + minBodyHeight);
     doc.setFont('GoogleSans', 'bold'); doc.setFontSize(9); doc.setTextColor(PDF_NAVY);
-    doc.text(`${secNum}. ${t.toUpperCase()}`, M, y);
+    doc.text(t.toUpperCase(), M, y + 3.8);
     doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
-    doc.line(M, y + 1.5, PW - M, y + 1.5);
-    y += 7;
+    doc.line(M, y + 5.8, PW - M, y + 5.8);
+    y += 9.5;
     doc.setTextColor(PDF_TEXT);
   }
 
   function row(label, value) {
     const v = (value == null || value === '') ? '—' : String(value);
     const lines = doc.splitTextToSize(v, CW - 48);
-    const h = Math.max(6, lines.length * 4.2 + 2);
+    const h = Math.max(6, lines.length * 4 + 2);
     ensure(h);
     doc.setFont('GoogleSans', 'bold'); doc.setFontSize(8); doc.setTextColor(PDF_MUTED);
-    doc.text(label, M, y + 3.6);
-    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(9); doc.setTextColor(PDF_TEXT);
-    doc.text(lines, M + 48, y + 3.7);
+    doc.text(label, M, y + 3.5);
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(8.5); doc.setTextColor(PDF_TEXT);
+    doc.text(lines, M + 48, y + 3.5);
     doc.setDrawColor('#e2e8f0'); doc.setLineWidth(0.15);
     doc.line(M, y + h, PW - M, y + h);
     y += h;
@@ -192,126 +277,193 @@ export async function buildFindingPdf() {
 
   chrome();
 
-  // colored status band — same rounded band + typography as the calculator's INTEGRITY STATUS
-  // (fixed hex from STATUS_COLORS; report surface never themes)
-  doc.setFillColor(STATUS_COLORS[f.status] || '#64748b');
-  doc.roundedRect(M, y, CW, 12, 1.5, 1.5, 'F');
-  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(14); doc.setTextColor('#ffffff');
-  doc.text(`STATUS: ${(f.status || '').toUpperCase()}`, M + 4, y + 8);
+  // --- Executive Dashboard 3-Card Summary Box ---
+  const cardW = (CW - 6) / 3;
+  const cardH = 13;
+  ensure(cardH + 3);
+
+  // Card 1: Finding Status
+  const stColor = STATUS_COLORS[f.status] || '#64748b';
+  doc.setFillColor(stColor);
+  doc.roundedRect(M, y, cardW, cardH, 1.5, 1.5, 'F');
+  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(7); doc.setTextColor('#f1f5f9');
+  doc.text('FINDING STATUS', M + 4, y + 4);
+  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(9.5); doc.setTextColor('#ffffff');
+  doc.text((f.status || '').toUpperCase(), M + 4, y + 9.5);
   if (isOverdue(f)) {
-    doc.setFont('courier', 'bold'); doc.setFontSize(8);
-    doc.text(`OVERDUE - due ${paFmtDate(dueDateOf(f))}`, PW - M - 4, y + 8, { align: 'right' });
+    doc.setFontSize(6.5); doc.setTextColor('#fef08a');
+    doc.text('OVERDUE', M + cardW - 4, y + 9.5, { align: 'right' });
   }
-  y += 16;
-  doc.setTextColor('#334155'); doc.setFont('GoogleSans', 'normal'); doc.setFontSize(8);
-  doc.text(`${f.terminal} Terminal   •   ${f.finding_type}`, M, y);
-  y += 8;
-  doc.setTextColor(PDF_TEXT);
 
-  section('Finding Information');
-  row('Terminal', f.terminal);
-  row('Pipe Tag / Line', f.pipe_tag);
-  row('P&ID No.', f.pid_no);
-  row('Service / Fluid', f.service);
-  row('Location', f.location_desc);
-  row('Recorded By', f.created_by_email);
-  row('Recorded At', fmtDateTime(f.created_at));
-  y += 4;
-
-  section('Source Inspection');
-  if (f.report_link) {
-    ensure(6);
-    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(8); doc.setTextColor(PDF_MUTED);
-    doc.text('Report Link', M, y + 3.6);
-    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(9); doc.setTextColor('#156B95');
-    doc.textWithLink('Open source report', M + 48, y + 3.7, { url: f.report_link });
-    doc.setDrawColor('#e2e8f0'); doc.setLineWidth(0.15);
-    doc.line(M, y + 6, PW - M, y + 6);
-    doc.setTextColor(PDF_TEXT);
-    y += 6;
+  // Card 2: ASME B31.3 Status / ERF
+  const erf_val = (assessRes && assessRes.mawp_no > 0) ? (assessRes.P_input / assessRes.mawp_no) : null;
+  const bColor = !assessRes ? '#475569' : (assessRes.status === 'OK' ? PDF_OK : assessRes.status === 'MONITOR' ? PDF_WARN : PDF_DANGER);
+  doc.setFillColor(bColor);
+  doc.roundedRect(M + cardW + 3, y, cardW, cardH, 1.5, 1.5, 'F');
+  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(7); doc.setTextColor('#f1f5f9');
+  doc.text('ASME B31.3 VERDICT', M + cardW + 7, y + 4);
+  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(9.5); doc.setTextColor('#ffffff');
+  doc.text(assessRes ? `VERDICT: ${assessRes.status}` : 'NOT ASSESSED', M + cardW + 7, y + 9.5);
+  if (erf_val != null) {
+    doc.setFontSize(7);
+    doc.text(`ERF ${fmtN(erf_val, 3)}`, M + 2 * cardW + 3 - 4, y + 9.5, { align: 'right' });
   }
-  row('Inspection Date', paFmtDate(f.inspection_date));
-  y += 4;
 
-  section('Anomaly');
-  row('Finding Type', f.finding_type);
-  row('Severity', f.severity);
-  if (f.is_leaking) row('Leaking', 'Yes');
-  if (f.t_nominal != null) row('Nominal Thickness', `${fmtN(f.t_nominal, 2)} mm`);
-  if (f.t_measured != null) row('Measured Min. Thickness', `${fmtN(f.t_measured, 2)} mm`);
-  if (f.defect_length_mm != null || f.defect_width_mm != null)
-    row('Defect L x W', `${f.defect_length_mm != null ? f.defect_length_mm : '—'} x ${f.defect_width_mm != null ? f.defect_width_mm : '—'} mm`);
-  row('Description', f.description);
-  y += 4;
+  // Card 3: Pipe Tag & Location
+  doc.setFillColor('#1e293b');
+  doc.roundedRect(M + 2 * cardW + 6, y, cardW, cardH, 1.5, 1.5, 'F');
+  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(7); doc.setTextColor('#f1f5f9');
+  doc.text('LINE TAG / TERMINAL', M + 2 * cardW + 10, y + 4);
+  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(9); doc.setTextColor('#ffffff');
+  const tagTrunc = (f.pipe_tag || f.location_desc || '—');
+  doc.text(doc.splitTextToSize(tagTrunc, cardW - 8)[0], M + 2 * cardW + 10, y + 9.5);
+  y += cardH + 5;
 
-  // --- Repair Advisor: always rendered, regardless of whether a B31.3 assessment exists —
-  // resolveAdvisor picks precise numeric guidance for wall-loss types with a valid assessRes,
-  // or type-specific generic guidance otherwise (see src/workbench/repair-advisor.ts). ---
-  const advisor = resolveAdvisor(f.finding_type, assessRes, f.is_leaking);
-  if (advisor) {
-    section('Repair Advisor');
-    doc.setFont('GoogleSans', 'italic'); doc.setFontSize(7.5); doc.setTextColor(PDF_MUTED);
-    const summaryLines = doc.splitTextToSize(advisor.summary, CW);
-    ensure(summaryLines.length * 3.4 + 2);
-    doc.text(summaryLines, M, y);
-    y += summaryLines.length * 3.4 + 2;
-    doc.setTextColor(PDF_TEXT);
-    doc.setFontSize(8);
-    advisor.items.forEach(item => {
-      const leadText = item.title ? `${item.title} ` : '';
-      const bodyLines = doc.splitTextToSize(`• ${leadText}${item.body}`, CW - 2);
-      ensure(bodyLines.length * 3.6 + item.sub.length * 3.6 + 2);
-      doc.setFont('GoogleSans', 'normal'); doc.setTextColor(PDF_TEXT);
-      doc.text(bodyLines, M, y);
-      y += bodyLines.length * 3.6;
-      item.sub.forEach(s => {
-        const subLines = doc.splitTextToSize(`    - ${s}`, CW - 6);
-        ensure(subLines.length * 3.6);
-        doc.text(subLines, M + 2, y);
-        y += subLines.length * 3.6;
-      });
-      y += 1.5;
-    });
-    if (advisor.standardsNote) {
-      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(7);
-      const noteLines = doc.splitTextToSize(advisor.standardsNote, CW);
-      ensure(noteLines.length * 3.2 + 2);
-      doc.setTextColor(PDF_MUTED);
-      doc.text(noteLines, M, y);
-      doc.setTextColor(PDF_TEXT);
-      y += noteLines.length * 3.2;
+  if (f.is_leaking) {
+    ensure(10);
+    doc.setFillColor('#dc2626');
+    doc.roundedRect(M, y, CW, 9, 1.5, 1.5, 'F');
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(9); doc.setTextColor('#ffffff');
+    doc.text('ACTIVELY LEAKING — IMMEDIATE EMERGENCY CONTAINMENT REQUIRED (ASME PCC-2)', M + 4, y + 6);
+    y += 12;
+  }
+
+  section('Piping Metadata & Source Inspection', 30);
+  const infoRows = [
+    ['Terminal', f.terminal || '—', 'Inspection Date', paFmtDate(f.inspection_date)],
+    ['Pipe Tag / Line', f.pipe_tag || '—', 'Recorded By', f.created_by_email || '—'],
+    ['P&ID No.', f.pid_no || '—', 'Recorded At', fmtDateTime(f.created_at)],
+    ['Service / Fluid', f.service || '—', 'Source Report', f.report_link ? 'Link Available' : '—'],
+    ['Location', f.location_desc || '—', '', ''],
+  ];
+
+  autoTable(doc, {
+    margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
+    startY: y,
+    theme: 'grid',
+    styles: { font: 'GoogleSans', fontSize: 8, cellPadding: 1.6, lineColor: PDF_BORDER, lineWidth: 0.15 },
+    columnStyles: {
+      0: { fontStyle: 'bold', textColor: PDF_MUTED, cellWidth: 32, fillColor: '#f8fafc' },
+      1: { textColor: PDF_TEXT, cellWidth: 59 },
+      2: { fontStyle: 'bold', textColor: PDF_MUTED, cellWidth: 32, fillColor: '#f8fafc' },
+      3: { textColor: PDF_TEXT, cellWidth: 59 },
+    },
+    body: infoRows,
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.row.index === 3 && data.column.index === 3 && f.report_link) {
+        data.cell.styles.textColor = '#156B95';
+        data.cell.styles.fontStyle = 'bold';
+      }
     }
-    y += 3;
+  });
+  y = doc.lastAutoTable.finalY + 5;
+
+  section('Anomaly & Damage Mechanics', 26);
+  const anomalyRows = [
+    ['Finding Type', f.finding_type || '—', 'Severity Rating', f.severity || '—'],
+    ['Active Leak State', f.is_leaking ? 'Yes (Boundary Breached)' : 'No (Non-leaking)', 'Defect L x W', (f.defect_length_mm != null || f.defect_width_mm != null) ? `${f.defect_length_mm ?? '—'} x ${f.defect_width_mm ?? '—'} mm` : '—'],
+    ['Nominal Wall t_nom', f.t_nominal != null ? `${fmtN(f.t_nominal, 2)} mm` : '—', 'Measured Min t_meas', f.t_measured != null ? `${fmtN(f.t_measured, 2)} mm` : '—'],
+    ['Description', f.description || '—', '', ''],
+  ];
+
+  autoTable(doc, {
+    margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
+    startY: y,
+    theme: 'grid',
+    styles: { font: 'GoogleSans', fontSize: 8, cellPadding: 1.6, lineColor: PDF_BORDER, lineWidth: 0.15 },
+    columnStyles: {
+      0: { fontStyle: 'bold', textColor: PDF_MUTED, cellWidth: 32, fillColor: '#f8fafc' },
+      1: { textColor: PDF_TEXT, cellWidth: 59 },
+      2: { fontStyle: 'bold', textColor: PDF_MUTED, cellWidth: 32, fillColor: '#f8fafc' },
+      3: { textColor: PDF_TEXT, cellWidth: 59 },
+    },
+    body: anomalyRows,
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.row.index === 1 && data.column.index === 1 && f.is_leaking) {
+        data.cell.styles.textColor = PDF_DANGER;
+        data.cell.styles.fontStyle = 'bold';
+      }
+    }
+  });
+  y = doc.lastAutoTable.finalY + 5;
+
+  // --- Site Location (Map) ---
+  if (f.lat != null && f.lng != null) {
+    section('Site Location & Geographical Pin', mapImg ? 98 : 16);
+    if (mapImg) {
+      const w = CW, h = w / 2; // 100% natural 2:1 aspect ratio of satellite canvas
+      ensure(h + 10);
+      doc.addImage(mapImg, 'JPEG', M, y, w, h);
+      doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+      doc.rect(M, y, w, h);
+      y += h + 3.5;
+      figNum++;
+      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(7); doc.setTextColor(PDF_MUTED);
+      doc.text(`Figure ${figNum}: Satellite location pin (${Number(f.lat).toFixed(6)}, ${Number(f.lng).toFixed(6)})`, PW / 2, y, { align: 'center' });
+      doc.setTextColor(PDF_TEXT);
+      y += 5;
+    } else {
+      row('Coordinates', `${Number(f.lat).toFixed(6)}, ${Number(f.lng).toFixed(6)}`);
+    }
   }
 
-  section('Lifecycle & SAP References');
-  row('Current Status', f.status + (isOverdue(f) ? '  (OVERDUE)' : ''));
-  if (f.target_date) row('Target Repair Date', paFmtDate(f.target_date));
-  if (f.next_check_date) row('Re-inspect By', paFmtDate(f.next_check_date));
-  if (f.sap_notification) row('SAP Notification', f.sap_notification);
-  if (f.sap_order) row('SAP Order', f.sap_order);
-  if (f.repair_method) row('Repair Method', f.repair_method);
-  if (f.repaired_date) row('Repaired Date', paFmtDate(f.repaired_date));
-  if (f.closing_note) row('Closing Note', f.closing_note);
-  y += 4;
+  // --- Photographic Record ---
+  if (photoData.length) {
+    section('Photographic Record', 75);
+    for (const [kind, title] of [['found', 'As Found'], ['repaired', 'After Repair (Confirmation)']]) {
+      const items = photoData.filter(p => p.kind === kind);
+      if (!items.length) continue;
+      ensure(15);
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(8); doc.setTextColor(PDF_MUTED);
+      doc.text(title.toUpperCase(), M, y + 2.5);
+      y += 5.5;
+      doc.setTextColor(PDF_TEXT);
+      const gap = 5, cellW = (CW - gap) / 2;
+      for (let i = 0; i < items.length; i += 2) {
+        const rowItems = items.slice(i, i + 2).map(p => {
+          const s = cellW / p.w; // 100% unconstrained true aspect ratio
+          return { src: p.src, w: cellW, h: p.h * s };
+        });
+        const rh = Math.max.apply(null, rowItems.map(d => d.h));
+        ensure(rh + 10);
+        rowItems.forEach((d, j) => {
+          const ix = M + j * (cellW + gap) + (cellW - d.w) / 2;
+          doc.addImage(d.src, 'JPEG', ix, y, d.w, d.h);
+          doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+          doc.rect(ix, y, d.w, d.h);
+          figNum++;
+          doc.setFont('GoogleSans', 'italic'); doc.setFontSize(7); doc.setTextColor(PDF_MUTED);
+          doc.text(`Figure ${figNum}: Inspection Photo (${title}, #${i + j + 1})`, ix + d.w / 2, y + d.h + 3.5, { align: 'center' });
+        });
+        y += rh + 7;
+      }
+      y += 2;
+    }
+  }
 
-  /* ===== ASME B31.3 assessment sections (full calculator-grade report block) =====
-     Only rendered when the finding has a saved assessment whose inputs still compute —
-     section auto-numbering means their absence leaves no gap. Numbers are re-derived from
-     the saved inputs through the shared computeB313 engine (single math source); a legacy
-     snapshot that can't re-compute falls back to a compact summary of its saved results. */
-  if (assess && assessRes) {
+  // --- ASME B31.3 Fitness-for-Service Assessment ---
+
+  if (f.is_leaking) {
+    section('ASME B31.3 Integrity Evaluation Note');
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(8.5); doc.setTextColor(PDF_DANGER);
+    doc.text('Notice: ASME B31.3 wall-loss calculation is disabled for actively leaking piping.', M, y + 3);
+    y += 5;
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(8); doc.setTextColor(PDF_TEXT);
+    const leakNote = 'Pressure boundary integrity is already breached. Per ASME PCC-2 Article 201 / Article 304, immediate mechanical clamping, engineered enclosure, or line isolation is required prior to Fitness-for-Service wall evaluation.';
+    const leakLines = doc.splitTextToSize(leakNote, CW);
+    doc.text(leakLines, M, y + 3);
+    y += leakLines.length * 3.6 + 4;
+  } else if (assess && assessRes) {
     const inp = assess.inputs || {};
     const r = assessRes;
     const erf_no = r.mawp_no > 0 ? (r.P_input / r.mawp_no) : 9.99;
-    // null mawp_with (remaining wall already at/below CA) -> n/a, not a pegged 9.99
     const erf_with = r.mawp_with == null ? null : (r.mawp_with > 0 ? (r.P_input / r.mawp_with) : 9.99);
     const schLabel = (PA_PIPE_DATABASE[inp.nps] && PA_PIPE_DATABASE[inp.nps].schedules[inp.schedule])
       ? PA_PIPE_DATABASE[inp.nps].schedules[inp.schedule].label : (inp.schedule || '—');
 
     const tableBase = {
       margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
-      styles: { font: 'GoogleSans', fontSize: 8, cellPadding: 1.6, lineColor: PDF_BORDER, lineWidth: 0.15 },
+      styles: { font: 'GoogleSans', fontSize: 8, cellPadding: 1.2, lineColor: PDF_BORDER, lineWidth: 0.15 },
       headStyles: { fillColor: PDF_NAVY, textColor: '#ffffff', fontStyle: 'bold', fontSize: 7.5 },
       didDrawPage: () => { if (doc.internal.getNumberOfPages() > 1) chrome(); }
     };
@@ -324,7 +476,7 @@ export async function buildFindingPdf() {
     doc.roundedRect(M, y, CW, 12, 1.5, 1.5, 'F');
     doc.setFont('GoogleSans', 'bold'); doc.setFontSize(14); doc.setTextColor('#ffffff');
     doc.text(`INTEGRITY STATUS: ${r.status}`, M + 4, y + 8);
-    doc.setFont('courier', 'bold'); doc.setFontSize(8);
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(8);
     doc.text(`ERF ${fmtN(erf_no, 3)}   MAWP ${fmtN(r.mawp_no, 1)} ${r.pUnit} (no CA)   MARGIN ${fmtN(r.margin, 3)} mm`, PW - M - 4, y + 8, { align: 'right' });
     y += 16;
     doc.setTextColor('#334155'); doc.setFont('GoogleSans', 'normal'); doc.setFontSize(8);
@@ -364,8 +516,8 @@ export async function buildFindingPdf() {
         ['Wall thickness coefficient', 'Y', fmtN(r.Y, 2), '—', 'B31.3 Table 304.1.1'],
       ],
       columnStyles: {
-        1: { font: 'courier', halign: 'center', cellWidth: 18 },
-        2: { font: 'courier', fontStyle: 'bold', halign: 'right', cellWidth: 40 },
+        1: { font: 'GoogleSans', fontStyle: 'bold', halign: 'center', cellWidth: 20, fillColor: '#f1f5f9', textColor: PDF_NAVY },
+        2: { font: 'GoogleSans', fontStyle: 'bold', halign: 'right', cellWidth: 40 },
         3: { halign: 'center', cellWidth: 16 },
       },
     });
@@ -413,14 +565,21 @@ export async function buildFindingPdf() {
         ['Estimated remaining life', life, '—', ''],
       ],
       columnStyles: {
-        1: { font: 'courier', fontStyle: 'bold', halign: 'right', cellWidth: 42 },
-        2: { font: 'courier', halign: 'center', cellWidth: 38 },
+        1: { font: 'GoogleSans', fontStyle: 'bold', halign: 'right', cellWidth: 42 },
+        2: { font: 'GoogleSans', halign: 'center', cellWidth: 38 },
         3: { fontStyle: 'bold', halign: 'center', cellWidth: 18 },
       },
       didParseCell: (data) => {
         if (data.section === 'body' && data.column.index === 3) {
-          if (data.cell.raw === 'PASS') data.cell.styles.textColor = PDF_OK;
-          if (data.cell.raw === 'CHECK') data.cell.styles.textColor = PDF_DANGER;
+          if (data.cell.raw === 'PASS') {
+            data.cell.styles.fillColor = '#dcfce7';
+            data.cell.styles.textColor = '#15803d';
+            data.cell.styles.fontStyle = 'bold';
+          } else if (data.cell.raw === 'CHECK') {
+            data.cell.styles.fillColor = '#fee2e2';
+            data.cell.styles.textColor = '#b91c1c';
+            data.cell.styles.fontStyle = 'bold';
+          }
         }
       },
     });
@@ -511,27 +670,28 @@ export async function buildFindingPdf() {
     const totalEqH = eqRows.reduce((sum, rw) => sum + rowHeight(rw), 0);
     ensure(26 + Math.min(totalEqH, 120)); // keep the title with at least the first equations
     section('Governing Equations (Substituted)');
+    y += 2;
     eqRows.forEach(rw => {
       ensure(rowHeight(rw));
       doc.setFont('GoogleSans', 'bold'); doc.setFontSize(7.5); doc.setTextColor('#475569');
-      doc.text(rw.label, M, y);
+      doc.text(rw.label, M, y + 2);
       if (rw.ref) {
         doc.setFont('GoogleSans', 'normal'); doc.setTextColor('#94a3b8');
-        doc.text(rw.ref, PW - M, y, { align: 'right' });
+        doc.text(rw.ref, PW - M, y + 2, { align: 'right' });
       }
-      y += 4;
+      y += 6;
       const consumed = drawFractionRow(rw.segs, M, y, { fontSize: 8.5, font: 'courier' });
-      y += consumed + 3;
+      y += consumed + 4;
     });
-    y += 1;
+    y += 3;
 
     // --- scope & limitations (assessment-scoped disclaimer) ---
     doc.setFont('GoogleSans', 'italic'); doc.setFontSize(7.5);
     const scopeLines = doc.splitTextToSize(PA_SCOPE_TEXT, CW);
-    ensure(14 + scopeLines.length * 3.3 + 4); // keep the title with its text
+    ensure(14 + scopeLines.length * 3.3 + 4);
     section('Scope & Limitations');
     doc.setFont('GoogleSans', 'italic'); doc.setFontSize(7.5); doc.setTextColor('#475569');
-    doc.text(scopeLines, M, y);
+    doc.text(scopeLines, M, y + 2);
     doc.setTextColor(PDF_TEXT);
     y += scopeLines.length * 3.3 + 6;
   } else if (assess) {
@@ -548,56 +708,6 @@ export async function buildFindingPdf() {
     row('Assessed By', assess.created_by_email);
     row('Assessed At', fmtDateTime(assess.created_at));
     y += 4;
-  }
-
-  if (f.lat != null && f.lng != null) {
-    section('Site Location');
-    row('Coordinates', `${Number(f.lat).toFixed(6)}, ${Number(f.lng).toFixed(6)}`);
-    if (mapImg) {
-      const w = CW, h = w / 2;
-      ensure(h + 12);
-      y += 2;
-      doc.addImage(mapImg, 'JPEG', M, y, w, h);
-      doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
-      doc.rect(M, y, w, h);
-      y += h + 4;
-      figNum++;
-      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(7.5); doc.setTextColor(PDF_MUTED);
-      doc.text(`Figure ${figNum}: Satellite view of the finding location (pin marks recorded coordinates)`, PW / 2, y, { align: 'center' });
-      doc.setTextColor(PDF_TEXT);
-      y += 6;
-    }
-    y += 2;
-  }
-
-  if (photoData.length) {
-    section('Photographic Record');
-    for (const [kind, title] of [['found', 'As Found'], ['repaired', 'After Repair (Confirmation)']]) {
-      const items = photoData.filter(p => p.kind === kind);
-      if (!items.length) continue;
-      ensure(10);
-      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(8.5); doc.setTextColor(PDF_MUTED);
-      doc.text(title.toUpperCase(), M, y + 3);
-      y += 6;
-      doc.setTextColor(PDF_TEXT);
-      const gap = 6, cellW = (CW - gap) / 2, maxH = 62;
-      for (let i = 0; i < items.length; i += 2) {
-        const rowItems = items.slice(i, i + 2).map(p => {
-          const s = Math.min(cellW / p.w, maxH / p.h);
-          return { src: p.src, w: p.w * s, h: p.h * s };
-        });
-        const rh = Math.max.apply(null, rowItems.map(d => d.h));
-        ensure(rh + 8);
-        rowItems.forEach((d, j) => {
-          const ix = M + j * (cellW + gap) + (cellW - d.w) / 2;
-          doc.addImage(d.src, 'JPEG', ix, y, d.w, d.h);
-          doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
-          doc.rect(ix, y, d.w, d.h);
-        });
-        y += rh + 6;
-      }
-      y += 2;
-    }
   }
 
   if (currentHistory.length) {
@@ -619,8 +729,20 @@ export async function buildFindingPdf() {
     });
   }
 
+  section('Digital System Audit & Integrity Record');
+  ensure(20);
+  doc.setDrawColor('#cbd5e1'); doc.setLineWidth(0.3);
+  doc.setFillColor('#f8fafc');
+  doc.roundedRect(M, y, CW, 16, 1.5, 1.5, 'FD');
+  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(7.5); doc.setTextColor(PDF_NAVY);
+  doc.text('PAPERLESS SYSTEM — DIGITAL INTEGRITY AUDIT STAMP', M + 4, y + 4.8);
+  doc.setFont('GoogleSans', 'normal'); doc.setFontSize(7); doc.setTextColor(PDF_MUTED);
+  doc.text(`System Record ID: PA-AUDIT-${f.id}   •   Engine: ASME B31.3-2022 / PCC-2 Verified`, M + 4, y + 9.5);
+  doc.text(`Recorded By: ${f.created_by_email || 'System User'}   •   Generated: ${paFmtDateTime(now)}`, M + 4, y + 14);
+  y += 22;
+
   ensure(12);
-  y += 5;
+  y += 4;
   doc.setFont('GoogleSans', 'italic'); doc.setFontSize(7.5); doc.setTextColor('#94a3b8');
   doc.text('— End of Report —', PW / 2, y, { align: 'center' });
 

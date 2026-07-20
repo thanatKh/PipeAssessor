@@ -235,18 +235,54 @@ export function paRenderRepairAdvisor(root: HTMLElement, findingType: string | n
     return;
   }
 
+  // Determine card theme color
+  let themeClass = 'info';
+  let bannerTitle = 'ASME PCC-2 / API 570 GUIDANCE';
+  if (isLeaking) {
+    themeClass = 'danger';
+    bannerTitle = 'ACTIVELY LEAKING — EMERGENCY CONTAINMENT (ASME PCC-2)';
+  } else if (res?.status === 'REPAIR') {
+    themeClass = 'danger';
+    bannerTitle = 'CRITICAL REPAIR REQUIRED (ASME PCC-2)';
+  } else if (res?.status === 'MONITOR') {
+    themeClass = 'warning';
+    bannerTitle = 'INTEGRITY MONITORING STRATEGY';
+  } else if (res?.status === 'OK') {
+    themeClass = 'success';
+    bannerTitle = 'OPERATIONAL INTEGRITY COMPLIANT';
+  }
+
   const itemsHtml = resolved.items.map(item => {
-    const lead = item.title ? `<strong>${escHtml(item.title)}</strong> ` : '';
-    const subList = item.sub.length ? `<ul>${item.sub.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>` : '';
-    return `<li>${lead}${escHtml(item.body)}${subList}</li>`;
+    const titleText = item.title ? escHtml(item.title) : 'คำแนะนำทางวิศวกรรม:';
+    const bodyText = escHtml(item.body);
+    const subHtml = item.sub.length
+      ? `<ul class="advisor-sub-list">${item.sub.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>`
+      : '';
+    return `
+      <div class="advisor-item-row">
+        <div class="advisor-item-title">${titleText}</div>
+        <div class="advisor-item-body">
+          ${bodyText ? `<div>${bodyText}</div>` : ''}
+          ${subHtml}
+        </div>
+      </div>
+    `;
   }).join('');
 
   const noteHtml = resolved.standardsNote
-    ? `<p class="hint" style="margin:8px 0 0;">${escHtml(resolved.standardsNote)}${resolved.needsReview ? ' <em>(คำแนะนำทั่วไป — โปรดตรวจสอบกับมาตรฐานทางวิศวกรรมของโครงการ)</em>' : ''}</p>`
+    ? `<div class="advisor-standards-note"><strong>[Standard Reference]</strong> ${escHtml(resolved.standardsNote)}${resolved.needsReview ? ' <em>(คำแนะนำทั่วไป — โปรดตรวจสอบกับมาตรฐานทางวิศวกรรมของโครงการ)</em>' : ''}</div>`
     : '';
 
   root.innerHTML = `
-    <p class="hint" style="margin:0 0 10px;">${escHtml(resolved.summary)}</p>
-    <ul class="advisor-list">${itemsHtml}</ul>
-    ${noteHtml}`;
+    <div class="advisor-container ${themeClass}">
+      <div class="advisor-header-card">
+        <div class="advisor-banner-tag">${bannerTitle}</div>
+        <div class="advisor-summary-text">${escHtml(resolved.summary)}</div>
+      </div>
+      <div class="advisor-items-grid">
+        ${itemsHtml}
+      </div>
+      ${noteHtml}
+    </div>
+  `;
 }

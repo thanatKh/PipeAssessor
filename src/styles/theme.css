@@ -785,18 +785,146 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   font-style: italic;
 }
 
-/* PCC-2 Repair Advisor list */
-.advisor-list {
-  margin: 0;
-  padding-left: 20px;
+/* PCC-2 Repair Advisor — Executive Component */
+.advisor-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--card-border, #e2e8f0);
 }
 
-.advisor-list li {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
-  margin-bottom: 8px;
+.advisor-container.danger {
+  border-left: 4px solid #dc2626;
+}
+
+.advisor-container.warning {
+  border-left: 4px solid #d97706;
+}
+
+.advisor-container.info {
+  border-left: 4px solid #0284c7;
+}
+
+.advisor-container.success {
+  border-left: 4px solid #16a34a;
+}
+
+.advisor-header-card {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--svg-bg, #f8fafc);
+  border: 1px solid var(--card-border, #e2e8f0);
+}
+
+.advisor-container.danger .advisor-header-card {
+  background: rgba(220, 38, 38, 0.06);
+  border-color: rgba(220, 38, 38, 0.2);
+}
+
+.advisor-container.warning .advisor-header-card {
+  background: rgba(217, 119, 6, 0.06);
+  border-color: rgba(217, 119, 6, 0.2);
+}
+
+.advisor-container.info .advisor-header-card {
+  background: rgba(2, 132, 199, 0.06);
+  border-color: rgba(2, 132, 199, 0.2);
+}
+
+.advisor-container.success .advisor-header-card {
+  background: rgba(22, 163, 74, 0.06);
+  border-color: rgba(22, 163, 74, 0.2);
+}
+
+.advisor-banner-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--button-primary, #0284c7);
+  margin-bottom: 3px;
+}
+
+.advisor-container.danger .advisor-banner-tag { color: #dc2626; }
+.advisor-container.warning .advisor-banner-tag { color: #d97706; }
+.advisor-container.success .advisor-banner-tag { color: #16a34a; }
+
+.advisor-summary-text {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-color, #1e293b);
   line-height: 1.4;
+}
+
+.advisor-items-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.advisor-item-row {
+  display: grid;
+  grid-template-columns: 210px 1fr;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--card-border, #e2e8f0);
+  align-items: start;
+}
+
+@media (max-width: 640px) {
+  .advisor-item-row {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+}
+
+.advisor-item-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-color, #1e293b);
+  line-height: 1.4;
+  padding-top: 1px;
+}
+
+.advisor-item-body {
+  font-size: 12px;
+  color: var(--text-muted, #475569);
+  line-height: 1.4;
+  padding-top: 1px;
+}
+
+.advisor-sub-list {
+  margin: 3px 0 0 0;
+  padding-left: 18px;
+}
+
+.advisor-item-body > .advisor-sub-list:first-child {
+  margin-top: 0;
+}
+
+.advisor-sub-list li {
+  font-size: 12px;
+  line-height: 1.4;
+  margin-bottom: 3px;
+}
+
+.advisor-sub-list li:last-child {
+  margin-bottom: 0;
+}
+
+.advisor-standards-note {
+  font-size: 11px;
+  color: var(--text-muted, #64748b);
+  padding: 6px 10px;
+  background: var(--svg-bg, #f8fafc);
+  border-radius: 6px;
+  border: 1px dashed var(--card-border, #cbd5e1);
+  line-height: 1.35;
 }
 
 /* References & Equations */

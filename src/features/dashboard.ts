@@ -571,6 +571,7 @@ export function toggleMapPresentation(forceState?: boolean) {
     document.body.style.overflow = 'hidden';
   } else {
     document.body.style.overflow = '';
+    togglePresSidebar(false);
   }
 
   if (dashMap) {

@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.12",
+    "playwright": "^1.61.1",
     "typescript": "^5.7.0",
     "vite": "^6.0.0",
     "vitest": "^3.0.0"

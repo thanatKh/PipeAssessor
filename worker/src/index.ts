@@ -64,6 +64,19 @@ export default {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
     }
+    if (request.method === 'GET' && url.pathname === '/photo') {
+      const path = url.searchParams.get('path') || '';
+      if (!KEY_RE.test(path)) return new Response('invalid path', { status: 400, headers: corsHeaders(origin) });
+      const object = await env.PHOTO_BUCKET.get(path);
+      if (!object) return new Response('not found', { status: 404, headers: corsHeaders(origin) });
+      const headers = new Headers();
+      object.writeHttpMetadata(headers);
+      headers.set('etag', object.httpEtag);
+      headers.set('Access-Control-Allow-Origin', '*');
+      headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+      return new Response(object.body, { headers });
+    }
+
     if (request.method !== 'POST') {
       return json({ error: 'not found' }, 404, origin);
     }
