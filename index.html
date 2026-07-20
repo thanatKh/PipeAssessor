@@ -63,13 +63,42 @@
   <section id="viewList" class="view">
     <div class="dash-top">
       <!-- LEFT: map -->
-      <div class="panel dash-map-panel">
+      <div class="panel dash-map-panel" id="dashMapPanel">
         <div class="panel-h">
-          <h2>Map <span class="f-optnote" style="font-size:11px;">— double-click to add a finding here</span></h2>
-          <select id="mapColorBy" class="select" style="width:auto; height:26px; font-size:11px; padding:2px 22px 2px 8px;"><option value="status" selected>Color by: Status</option><option value="type">Color by: Type</option><option value="severity">Color by: Severity</option></select>
+          <h2>Map <span class="f-optnote" style="font-size:11px;">— double-click to add a finding here</span><span id="presSummaryBar" class="pres-summary-bar" hidden></span></h2>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <select id="presTerminalFilter" class="select pres-only" style="width:auto; height:26px; font-size:11px; padding:2px 22px 2px 8px;" hidden>
+              <option value="" selected>All terminals</option>
+              <option value="KBY">KBY</option>
+              <option value="SRC">SRC</option>
+              <option value="BRP">BRP</option>
+            </select>
+            <select id="mapColorBy" class="select" style="width:auto; height:26px; font-size:11px; padding:2px 22px 2px 8px;"><option value="status" selected>Color by: Status</option><option value="type">Color by: Type</option><option value="severity">Color by: Severity</option></select>
+            <button type="button" class="btn btn-sm btn-subtle pres-only" id="btnPresReset" title="Reset map view to fit all markers (press R)" style="height:26px; font-size:11px; padding:0 8px; display:inline-flex; align-items:center; gap:4px;" hidden>
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              <span>Reset View</span>
+            </button>
+            <button type="button" class="btn btn-sm btn-subtle pres-only" id="btnPresToggleSidebar" title="Toggle interactive findings list panel" style="height:26px; font-size:11px; padding:0 8px; display:inline-flex; align-items:center; gap:4px;" hidden>
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              <span>Findings List</span>
+            </button>
+            <button type="button" class="btn btn-sm btn-subtle" id="btnMapExpand" title="Toggle full-screen presentation mode (press F)" style="height:26px; font-size:11px; padding:0 8px; display:inline-flex; align-items:center; gap:5px;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+              <span>Presentation</span>
+            </button>
+          </div>
         </div>
         <div class="map-legend" id="mapLegend"></div>
-        <div id="dashMap"></div>
+        <div class="map-canvas-wrap">
+          <div id="dashMap"></div>
+          <div class="pres-sidebar" id="presSidebar" hidden>
+            <div class="pres-sidebar-h">
+              <span class="pres-sidebar-title">Mapped Findings (<span id="presSidebarCount">0</span>)</span>
+              <button type="button" class="pres-sidebar-close" id="btnPresSidebarClose" title="Close findings list">&times;</button>
+            </div>
+            <div class="pres-sidebar-b" id="presSidebarList"></div>
+          </div>
+        </div>
       </div>
 
       <!-- MIDDLE: KPI column, natural-height cards (no forced stretch to the map). Ring, then
@@ -111,9 +140,11 @@
         <div class="panel-h">
           <h2>Findings Register</h2>
           <div class="panel-h-btns">
-            <button class="btn" data-variant="outline" id="btnTogglePhotos" type="button" aria-pressed="true">Hide photos</button>
-            <button class="btn" data-variant="outline" id="btnImport" type="button">Import</button>
-            <button class="btn" data-variant="outline" id="btnExport" type="button">Export</button>
+            <div class="hdr-btn-group-subtle">
+              <button class="btn btn-sm" data-variant="outline" id="btnTogglePhotos" type="button" aria-pressed="true">Hide photos</button>
+              <button class="btn btn-sm" data-variant="outline" id="btnImport" type="button">Import</button>
+              <button class="btn btn-sm" data-variant="outline" id="btnExport" type="button">Export</button>
+            </div>
             <button class="btn" id="btnNew" type="button">+ New Finding</button>
           </div>
         </div>
@@ -126,8 +157,10 @@
             <select id="filTerminal" class="select"><option value="" selected>All terminals</option><option>KBY</option><option>SRC</option><option>BRP</option></select>
             <select id="filStatus" class="select"><option value="" selected>All statuses</option><option>Open</option><option>Monitoring</option><option>Repair Planned</option><option>Repaired</option><option>Closed</option><option value="__overdue">Overdue only</option><option value="__outstanding">Outstanding (not resolved)</option><option value="__complete">Complete (Repaired + Closed)</option></select>
             <select id="filType" class="select"><option value="" selected>All types</option></select>
-            <input id="filSearch" class="input" type="search" placeholder="Search tag, description, report no., SAP…">
-            <button class="btn" data-variant="outline" id="btnResetFilters" type="button">Reset filters</button>
+            <div class="search-input-wrap">
+              <input id="filSearch" class="input" type="search" placeholder="Search tag, description, SAP… (press / to focus)">
+            </div>
+            <button class="btn" data-variant="outline" id="btnResetFilters" type="button">Reset filters <span id="filActiveBadge" class="filter-active-badge" hidden>0</span></button>
           </div>
         </div>
         <div class="tbl-scroll">
@@ -151,20 +184,31 @@
 
   <!-- ================= FORM (new / edit) ================= -->
   <section id="viewForm" class="view">
-    <div class="toolbar">
-      <div class="toolbar-id-row">
-        <a class="back-link" href="#/list">&#8592; All findings</a>
-        <div class="detail-head" id="formHead"><h2 id="formTitle">New Finding</h2></div>
+    <div class="sticky-page-header">
+      <div class="toolbar">
+        <div class="toolbar-id-row">
+          <a class="back-link" href="#/list">&#8592; All findings</a>
+          <div class="detail-head" id="formHead"><h2 id="formTitle">New Finding</h2></div>
+        </div>
+        <div class="form-actions">
+          <div class="grp">
+            <button class="btn btn-danger-outline" id="btnDelete" type="button" style="display:none;">Delete finding</button>
+          </div>
+          <div class="grp">
+            <a class="btn" data-variant="outline" href="#/list">Cancel</a>
+            <button class="btn" data-variant="outline" id="btnSaveAnother" type="button" title="Save, then start a new finding keeping terminal and inspection date">Save &amp; add another</button>
+            <button class="btn btn-primary" id="btnSave" type="button" title="Save finding (Ctrl+S)">Save finding</button>
+          </div>
+        </div>
       </div>
-      <div class="form-actions">
-        <div class="grp">
-          <button class="btn btn-danger-outline" id="btnDelete" type="button" style="display:none;">Delete finding</button>
-        </div>
-        <div class="grp">
-          <a class="btn" data-variant="outline" href="#/list">Cancel</a>
-          <button class="btn" data-variant="outline" id="btnSaveAnother" type="button" title="Save, then start a new finding keeping terminal and inspection date">Save &amp; add another</button>
-          <button class="btn" id="btnSave" type="button">Save finding</button>
-        </div>
+
+      <div class="form-section-nav">
+        <button type="button" class="nav-tab active" data-target="panelInfo">Info</button>
+        <button type="button" class="nav-tab" data-target="panelAnomaly">Anomaly</button>
+        <button type="button" class="nav-tab" data-target="panelPosition">Position</button>
+        <button type="button" class="nav-tab" data-target="pendingPhotoPanel">Photos</button>
+        <button type="button" class="nav-tab" data-target="panelPlanning">Planning &amp; SAP</button>
+        <button type="button" class="nav-tab" data-target="assessPanel">ASME B31.3</button>
       </div>
     </div>
 
@@ -173,7 +217,7 @@
     <div class="form-split">
     <div class="form-col" id="formColMain">
 
-    <div class="panel">
+    <div class="panel" id="panelInfo">
       <div class="panel-h">
         <h2>Finding Info</h2>
         <button class="btn" data-variant="outline" id="btnLineList" type="button">Manage line list</button>
@@ -213,9 +257,13 @@
       </div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="panelAnomaly">
       <div class="panel-h"><h2>Anomaly</h2></div>
       <div class="panel-b">
+        <div id="leakingBanner" class="leaking-warning-banner" hidden>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span>ACTIVELY LEAKING — URGENT REPAIR REQUIRED</span>
+        </div>
         <div class="fgrid">
           <div>
             <label class="f-label req" for="fType">Finding Type</label>
@@ -231,6 +279,7 @@
                 <span>Actively Leaking</span>
               </label>
             </div>
+            <div class="hint" id="leakHint" style="display:none; color:#dc2626; margin-top:4px; font-weight:600;">Disabled for coating or support defects</div>
           </div>
           <div class="full">
             <label class="f-label" for="fDescription">Anomaly Description</label>
@@ -248,7 +297,7 @@
       </div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="panelPosition">
       <div class="panel-h"><h2>Position</h2></div>
       <div class="panel-b">
         <div class="coord-row" style="margin-bottom: 10px;">
@@ -260,10 +309,16 @@
             <label class="f-label" for="fLng">Longitude</label>
             <input id="fLng" class="input" type="number" step="0.000001" placeholder="100.887211">
           </div>
-          <button class="btn" data-variant="outline" id="btnClearLoc" type="button" style="height: 36px;">Clear</button>
+          <div style="display:flex; align-items:flex-end; gap:6px;">
+            <button class="btn btn-subtle" id="btnGpsLoc" type="button" style="height: 36px; display:inline-flex; align-items:center; gap:4px;" title="Use current device GPS location">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="12 8 8 12 12 16 12 8"/></svg>
+              <span>GPS</span>
+            </button>
+            <button class="btn" data-variant="outline" id="btnClearLoc" type="button" style="height: 36px;">Clear</button>
+          </div>
         </div>
         <div id="fMap"></div>
-        <div class="hint">Click the map to drop the pin, or type coordinates. Optional — used for the dashboard map.</div>
+        <div class="hint">Click the map to drop the pin, use GPS, or type coordinates. Optional — used for the dashboard map.</div>
       </div>
     </div>
 
@@ -317,7 +372,7 @@
       </div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="panelPlanning">
       <div class="panel-h"><h2>Planning &amp; SAP</h2></div>
       <div class="panel-b">
         <div class="fgrid">
@@ -361,6 +416,10 @@
           </label>
         </div>
         <div class="panel-b" id="aBody">
+          <div class="leaking-warning-banner" id="aLeakingNote" style="display:none; margin-bottom:12px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span>ASME B31.3 wall-loss calculation is disabled for actively leaking lines — immediate emergency repair/clamping required.</span>
+          </div>
           <p class="hint" id="aIntro" style="margin-top:0;">
             Enter the pipe data and the UT reading — the full B31.3 result (status, cross-section, results,
             equations) computes live below and is saved onto the finding.
@@ -471,6 +530,7 @@
         <div class="risk-toolbar-title">Line Risk Ranking</div>
       </div>
       <div class="panel-h-btns">
+        <input id="riskSearch" class="input input-sm" type="search" placeholder="Search line tag or location…" style="width: 210px; height: 32px; font-size: 11.5px;">
         <select id="riskTerminalFilter" class="select">
           <option value="">All terminals</option>
           <option>KBY</option><option>SRC</option><option>BRP</option>
@@ -487,26 +547,26 @@
     </div>
 
     <div class="risk-kpi-band">
-      <div class="risk-kpi rk-total">
+      <div class="risk-kpi rk-total" id="rkCardTotal" data-band="" title="Click to show all lines">
         <div class="rk-label">Lines w/ Findings</div>
         <div class="rk-num" id="riskKpiTotal">0</div>
       </div>
-      <div class="risk-kpi rk-high">
+      <div class="risk-kpi rk-high" id="rkCardHigh" data-band="high" title="Click to filter High Risk lines">
         <div class="rk-label">High Risk</div>
         <div class="rk-num" id="riskKpiHigh">0</div>
         <div class="rk-sub">≥ 1 REPAIR-status finding</div>
       </div>
-      <div class="risk-kpi rk-med">
+      <div class="risk-kpi rk-med" id="rkCardMed" data-band="medium" title="Click to filter Medium Risk lines">
         <div class="rk-label">Medium Risk</div>
         <div class="rk-num" id="riskKpiMed">0</div>
         <div class="rk-sub">MONITOR, no repair yet</div>
       </div>
-      <div class="risk-kpi rk-low">
+      <div class="risk-kpi rk-low" id="rkCardLow" data-band="low" title="Click to filter Low Risk lines">
         <div class="rk-label">Low Risk</div>
         <div class="rk-num" id="riskKpiLow">0</div>
         <div class="rk-sub">within allowable limits</div>
       </div>
-      <div class="risk-kpi rk-na">
+      <div class="risk-kpi rk-na" id="rkCardNa" data-band="na" title="Click to filter Not Assessed lines">
         <div class="rk-label">Not Assessed</div>
         <div class="rk-num" id="riskKpiNa">0</div>
         <div class="rk-sub">findings, no B31.3 yet</div>
@@ -558,122 +618,152 @@
 
   <!-- ================= QUICK CALC (standalone what-if workbench; nothing saves) ================= -->
   <section id="viewCalc" class="view">
-    <div class="toolbar">
-      <a class="back-link" href="#/list">&#8592; Dashboard</a>
-      <div class="panel-h-btns">
-        <button class="btn" data-variant="outline" id="btnQuickReset" type="button">Reset</button>
+    <div class="sticky-page-header">
+      <div class="toolbar">
+        <div class="toolbar-id-row">
+          <a class="back-link" href="#/list">&#8592; Dashboard</a>
+          <div class="risk-toolbar-title">Quick ASME B31.3 Calculator</div>
+        </div>
+        <div class="panel-h-btns">
+          <button class="btn" data-variant="outline" id="btnCopyQuickSummary" type="button" title="Copy calculation summary to clipboard">📋 Copy Summary</button>
+          <button class="btn" data-variant="outline" id="btnQuickReset" type="button">Reset</button>
+        </div>
       </div>
     </div>
 
     <div class="quick-calc-wrap">
-      <div class="panel">
-        <div class="panel-h"><h2>Quick ASME B31.3 Calculator</h2></div>
-        <div class="panel-b">
-          <p class="hint" style="margin-top:0;">
-            A scratch what-if calculation — nothing here is saved. To record an assessment on a
-            finding, use the finding's form instead.
-          </p>
-          <div class="fgrid">
-            <div>
-              <label class="f-label" for="qNps">Nominal Pipe Size</label>
-              <select id="qNps" class="select"></select>
-            </div>
-            <div>
-              <label class="f-label" for="qSch">Schedule</label>
-              <select id="qSch" class="select"></select>
-            </div>
-            <div>
-              <label class="f-label" for="qMat">Material</label>
-              <select id="qMat" class="select"></select>
-            </div>
-            <div>
-              <label class="f-label" for="qTnom">Nominal Thickness (mm)</label>
-              <input id="qTnom" class="input" type="number" step="0.01" placeholder="auto from schedule">
-              <div class="hint">Auto-filled from the schedule; edit for an as-built value.</div>
-            </div>
-          </div>
+      <div class="quick-calc-split">
+        <div class="panel">
+          <div class="panel-h"><h2>Parameters & Readings</h2></div>
+          <div class="panel-b">
+            <p class="hint" style="margin-top:0;">
+              Scratch what-if calculation — nothing here is saved.
+            </p>
 
-          <div class="a-reading">
-            <div class="seg-row" id="qModeSeg" role="tablist" aria-label="Reading type">
-              <span class="seg-pill" aria-hidden="true"></span>
-              <button class="seg-btn active" data-mode="depth" type="button">Wall-loss depth</button>
-              <button class="seg-btn" data-mode="tmeas" type="button">Measured thickness</button>
+            <div class="quick-spec-bar" id="qSpecBar">
+              <div class="q-spec-item"><span>OD:</span> <strong id="qSpecOd">—</strong></div>
+              <div class="q-spec-item"><span>t_nom:</span> <strong id="qSpecTnom">—</strong></div>
+              <div class="q-spec-item"><span>Stress S:</span> <strong id="qSpecS">—</strong></div>
+              <div class="q-spec-item"><span>Uncorroded MAWP:</span> <strong id="qSpecMawp">—</strong></div>
             </div>
+
             <div class="fgrid">
-              <div id="qTmeasGrp" style="display:none;">
-                <label class="f-label req" for="qTmeas">Measured Min. Thickness — UT (mm)</label>
-                <input id="qTmeas" class="input" type="number" step="0.01" placeholder="e.g., 5.40">
+              <div>
+                <label class="f-label" for="qNps">Nominal Pipe Size</label>
+                <select id="qNps" class="select"></select>
               </div>
-              <div id="qDepthGrp">
-                <label class="f-label req" for="qDepth">Wall-Loss Depth (mm)</label>
-                <input id="qDepth" class="input" type="number" step="0.01" placeholder="e.g., 1.20">
+              <div>
+                <label class="f-label" for="qSch">Schedule</label>
+                <select id="qSch" class="select"></select>
+              </div>
+              <div>
+                <label class="f-label" for="qMat">Material</label>
+                <select id="qMat" class="select"></select>
+              </div>
+              <div>
+                <label class="f-label" for="qTnom">Nominal Thickness (mm)</label>
+                <input id="qTnom" class="input" type="number" step="0.01" placeholder="auto from schedule">
+                <div class="hint">Auto-filled from schedule; edit for as-built.</div>
               </div>
             </div>
+
+            <div class="a-reading">
+              <div class="seg-row" id="qModeSeg" role="tablist" aria-label="Reading type">
+                <span class="seg-pill" aria-hidden="true"></span>
+                <button class="seg-btn active" data-mode="depth" type="button">Wall-loss depth</button>
+                <button class="seg-btn" data-mode="tmeas" type="button">Measured thickness</button>
+              </div>
+              <div class="fgrid">
+                <div id="qTmeasGrp" style="display:none;">
+                  <label class="f-label req" for="qTmeas">Measured Min. Thickness — UT (mm)</label>
+                  <input id="qTmeas" class="input" type="number" step="0.01" placeholder="e.g., 5.40">
+                </div>
+                <div id="qDepthGrp">
+                  <label class="f-label req" for="qDepth">Wall-Loss Depth (mm)</label>
+                  <input id="qDepth" class="input" type="number" step="0.01" placeholder="e.g., 1.20">
+                </div>
+              </div>
+            </div>
+
+            <div class="fgrid">
+              <div>
+                <label class="f-label req" for="qP">Design Pressure</label>
+                <div class="p-row">
+                  <input id="qP" class="input" type="number" step="0.1" placeholder="e.g., 7.0">
+                  <select id="qPUnit" class="select"><option selected>bar</option><option>psi</option></select>
+                </div>
+              </div>
+              <div>
+                <label class="f-label" for="qCorrType">Corrosion Type</label>
+                <select id="qCorrType" class="select"><option value="external" selected>External Wall Loss</option><option value="internal">Internal Wall Loss</option></select>
+              </div>
+              <div>
+                <label class="f-label" for="qCa">Corrosion Allowance, CA (mm)</label>
+                <input id="qCa" class="input" type="number" step="0.01" value="1.5">
+                <div class="hint">Design/spec reserve for <em>future</em> corrosion.</div>
+              </div>
+            </div>
+
+            <details class="a-advanced">
+              <summary>Advanced parameters (defaults suit most carbon-steel lines)</summary>
+              <div class="fgrid" style="margin-top:10px;">
+                <div>
+                  <label class="f-label" for="qS">Allowable Stress, S (MPa)</label>
+                  <input id="qS" class="input" type="number" step="0.1">
+                </div>
+                <div>
+                  <label class="f-label" for="qTemp">Design Temperature (°C)</label>
+                  <input id="qTemp" class="input" type="number" step="1" placeholder="e.g., 65">
+                </div>
+                <div>
+                  <label class="f-label" for="qE">Joint Factor, E</label>
+                  <input id="qE" class="input" type="number" step="0.01" value="1.0">
+                </div>
+                <div>
+                  <label class="f-label" for="qW">Weld Strength Factor, W</label>
+                  <input id="qW" class="input" type="number" step="0.01" value="1.0">
+                </div>
+                <div>
+                  <label class="f-label" for="qY">Coefficient, Y</label>
+                  <input id="qY" class="input" type="number" step="0.01" value="0.4">
+                </div>
+                <div>
+                  <label class="f-label" for="qCr">Corrosion Rate (mm/yr)</label>
+                  <input id="qCr" class="input" type="number" step="0.001" placeholder="optional — enables remaining life">
+                </div>
+              </div>
+            </details>
+
+            <div class="validation-alert" id="qCalcHint" style="display:none; margin-top:10px;"></div>
           </div>
-
-          <div class="fgrid">
-            <div>
-              <label class="f-label req" for="qP">Design Pressure</label>
-              <div class="p-row">
-                <input id="qP" class="input" type="number" step="0.1" placeholder="e.g., 7.0">
-                <select id="qPUnit" class="select"><option selected>bar</option><option>psi</option></select>
-              </div>
-            </div>
-            <div>
-              <label class="f-label" for="qCorrType">Corrosion Type</label>
-              <select id="qCorrType" class="select"><option value="external" selected>External Wall Loss</option><option value="internal">Internal Wall Loss</option></select>
-            </div>
-            <div>
-              <label class="f-label" for="qCa">Corrosion Allowance, CA (mm)</label>
-              <input id="qCa" class="input" type="number" step="0.01" value="1.5">
-              <div class="hint">Design/spec reserve for <em>future</em> corrosion — not the loss you measured.</div>
-            </div>
-          </div>
-
-          <details class="a-advanced">
-            <summary>Advanced parameters (defaults suit most carbon-steel lines)</summary>
-            <div class="fgrid" style="margin-top:10px;">
-              <div>
-                <label class="f-label" for="qS">Allowable Stress, S (MPa)</label>
-                <input id="qS" class="input" type="number" step="0.1">
-              </div>
-              <div>
-                <label class="f-label" for="qE">Joint Factor, E</label>
-                <input id="qE" class="input" type="number" step="0.01" value="1.0">
-              </div>
-              <div>
-                <label class="f-label" for="qW">Weld Strength Factor, W</label>
-                <input id="qW" class="input" type="number" step="0.01" value="1.0">
-              </div>
-              <div>
-                <label class="f-label" for="qY">Coefficient, Y</label>
-                <input id="qY" class="input" type="number" step="0.01" value="0.4">
-              </div>
-              <div>
-                <label class="f-label" for="qCr">Corrosion Rate (mm/yr)</label>
-                <input id="qCr" class="input" type="number" step="0.001" placeholder="optional — enables remaining life">
-              </div>
-            </div>
-          </details>
-
-          <div class="validation-alert" id="qCalcHint" style="display:none; margin-top:10px;"></div>
         </div>
-      </div>
 
-      <div id="awQuick"></div>
+        <div id="awQuick"></div>
+      </div>
     </div>
   </section>
 
   <!-- ================= DETAIL ================= -->
   <section id="viewDetail" class="view">
-    <div class="toolbar">
-      <div class="toolbar-id-row">
-        <a class="back-link" href="#/list">&#8592; All findings</a>
-        <div class="detail-head" id="detailHead"></div>
+    <div class="sticky-page-header">
+      <div class="toolbar">
+        <div class="toolbar-id-row">
+          <a class="back-link" href="#/list">&#8592; All findings</a>
+          <div class="detail-head" id="detailHead"></div>
+        </div>
+        <div class="panel-h-btns">
+          <button class="btn" data-variant="outline" id="btnPdf" type="button">Export PDF</button>
+          <button class="btn btn-primary" id="btnEdit" type="button">Edit details</button>
+        </div>
       </div>
-      <div class="panel-h-btns">
-        <button class="btn" data-variant="outline" id="btnPdf" type="button">Export PDF</button>
-        <button class="btn" data-variant="outline" id="btnEdit" type="button">Edit details</button>
+
+      <div class="form-section-nav">
+        <button type="button" class="nav-tab active" data-target="detailPanelDetails">Details</button>
+        <button type="button" class="nav-tab" data-target="detailPanelStatus">Status</button>
+        <button type="button" class="nav-tab" data-target="detailPanelAdvisor">Advisor</button>
+        <button type="button" class="nav-tab" data-target="detailPanelAssess">ASME B31.3</button>
+        <button type="button" class="nav-tab" data-target="detailLocPanel">Location</button>
+        <button type="button" class="nav-tab" data-target="detailPanelPhotos">Photos</button>
       </div>
     </div>
 
@@ -681,7 +771,7 @@
       <!-- LEFT: the finding data — priority order: what/where it is, then lifecycle status,
            then the engineering assessment, then the audit trail. -->
       <div class="detail-col">
-        <div class="panel">
+        <div class="panel" id="detailPanelDetails">
           <div class="panel-h"><h2>Details</h2></div>
           <div class="panel-b">
             <div class="dgrid" id="detailGrid"></div>
@@ -689,7 +779,7 @@
           </div>
         </div>
 
-        <div class="panel">
+        <div class="panel" id="detailPanelStatus">
           <div class="panel-h"><h2>Status</h2></div>
           <div class="panel-b">
             <div class="dgrid" id="lifecycleGrid" style="margin-bottom: 12px;"></div>
@@ -697,12 +787,12 @@
           </div>
         </div>
 
-        <div class="panel">
+        <div class="panel" id="detailPanelAdvisor">
           <div class="panel-h"><h2>Repair Advisor</h2></div>
           <div class="panel-b" id="raDetailBody"></div>
         </div>
 
-        <div class="panel">
+        <div class="panel" id="detailPanelAssess">
           <div class="panel-h">
             <h2>ASME B31.3 Assessment</h2>
             <button class="btn" data-variant="outline" id="btnAssess" type="button">Run assessment</button>
@@ -721,7 +811,7 @@
           <div id="detailMap"></div>
         </div>
 
-        <div class="panel">
+        <div class="panel" id="detailPanelPhotos">
           <div class="panel-h">
             <h2>Photographic Record</h2>
             <span class="hint" style="margin:0;">Tip: paste a screenshot with <kbd>Ctrl</kbd>+<kbd>V</kbd> (uses the last “+ Add” you clicked)</span>

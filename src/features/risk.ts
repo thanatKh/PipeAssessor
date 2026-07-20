@@ -77,10 +77,11 @@ function buildFindingRiskRows() {
 }
 
 // Groups finding-risk-rows into lines (by pipe_tag; ungrouped findings become their own
+// Groups finding-risk-rows into lines (by pipe_tag; ungrouped findings become their own
 // single-finding line keyed by a synthetic id so they don't collide with each other) and rolls
 // each line up to its worst band, its set of distinct locations, and its set of distinct
 // mechanisms — never picking just one of either, per the file-header note.
-export function computeLineRisk() {
+export function computeAllLineRisk() {
   const rows = buildFindingRiskRows();
   const lines = new Map();
   rows.forEach(r => {
@@ -113,12 +114,23 @@ export function computeLineRisk() {
     };
   }).sort((a, b) => {
     if (BAND_RANK[a.band] !== BAND_RANK[b.band]) return BAND_RANK[a.band] - BAND_RANK[b.band];
-    // within a band, most urgent (shortest remaining life) first; lines with no computed
-    // remaining life (e.g. Not Assessed, or CR not entered) sort after ones that have it
     const al = a.worstRes && a.worstRes.remainingLife != null ? a.worstRes.remainingLife : Infinity;
     const bl = b.worstRes && b.worstRes.remainingLife != null ? b.worstRes.remainingLife : Infinity;
     if (al !== bl) return al - bl;
     return (a.displayTag || '').localeCompare(b.displayTag || '');
+  });
+}
+
+export function computeLineRisk() {
+  const all = computeAllLineRisk();
+  return all.filter(l => {
+    if (riskFilters.band && l.band !== riskFilters.band) return false;
+    if (riskFilters.q) {
+      const q = riskFilters.q.toLowerCase();
+      const hay = [l.tag, l.displayTag, ...l.locations, ...l.mechanisms].join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
   });
 }
 
@@ -157,7 +169,7 @@ function childRowHtml(r) {
   const marker = r.band === 'high' ? 'm-high' : r.band === 'medium' ? 'm-med' : r.band === 'low' ? 'm-low' : 'm-na';
   const statusText = r.res ? r.res.status : 'N/A';
   const statusCls = r.band === 'high' ? 'cs-high' : r.band === 'medium' ? 'cs-med' : r.band === 'low' ? 'cs-low' : 'cs-na';
-  return `<tr class="child-row" data-finding-id="${esc(f.id)}">
+  return `<tr class="child-row" data-finding-id="${esc(f.id)}" style="cursor:pointer;" title="Click to view finding detail">
     <td></td>
     <td><div class="child-loc"><span class="child-marker ${marker}"></span><span class="child-loc-text">${esc(f.location_desc || '—')}${f.is_leaking ? ' <span class="leak-flag">· leaking</span>' : ''}</span></div></td>
     <td></td>
@@ -165,16 +177,12 @@ function childRowHtml(r) {
     <td></td>
     <td class="num rl-child">${pctWallHtml(r.res)}</td>
     <td class="rl-child">${r.res ? remainingLifeHtml(r.res) : '<span class="rl-none">—</span>'}</td>
-    <td><span class="child-status ${statusCls}">${esc(statusText)}</span></td>
+    <td><span class="child-status ${statusCls}">${esc(statusText)}</span> <span class="child-arrow" style="font-size:10px; color:var(--button-primary); opacity:0.6; margin-left:3px;">→</span></td>
   </tr>`;
 }
 
 function lineRowHtml(line) {
   const multi = line.findingRows.length > 1;
-  // Always reserve the caret's slot (same markup either way, just invisible when there's nothing
-  // to expand) so every row's tag text starts at the same x position — a single-location row with
-  // no caret markup at all left its tag text flush left, while a multi-location row's caret pushed
-  // its tag text ~19px right, so tag text didn't column-align down the table.
   const caret = `<span class="expand-caret"${multi ? '' : ' style="visibility:hidden"'}>▶</span>`;
   const subParts = [];
   if (multi) subParts.push(`<span class="loc-count">${line.locations.length} location${line.locations.length === 1 ? '' : 's'}</span>`);
@@ -184,7 +192,7 @@ function lineRowHtml(line) {
   const sub = subParts.join(' · ');
 
   const rowCls = multi ? 'line-row' : 'line-row single';
-  const rowsAttr = multi ? ` data-line-key="${esc(line.tag || line.displayTag)}"` : '';
+  const rowsAttr = multi ? ` data-line-key="${esc(line.tag || line.displayTag)}"` : ` data-single-finding-id="${esc(line.findingRows[0].finding.id)}" title="Click to view finding detail"`;
 
   return `<tr class="${rowCls}"${rowsAttr}>
     <td>${bandPillHtml(line.band)}</td>
@@ -194,18 +202,25 @@ function lineRowHtml(line) {
     <td class="num">${line.findingCount}</td>
     <td class="num">${pctWallHtml(line.worstRes)}</td>
     <td>${remainingLifeHtml(line.worstRes)}</td>
-    <td><span class="chip">${esc(line.findingRows[0].finding.status)}</span></td>
+    <td><span class="chip">${esc(line.findingRows[0].finding.status)}</span>${multi ? '' : ' <span style="font-size:10px; color:var(--button-primary); opacity:0.6; margin-left:3px;">→</span>'}</td>
   </tr>` + (multi ? line.findingRows.map(childRowHtml).join('') : '');
 }
 
-export function renderRiskKpis(lines) {
+export function renderRiskKpis(allLines) {
   const counts = { high: 0, medium: 0, low: 0, na: 0 };
-  lines.forEach(l => counts[l.band]++);
-  $('riskKpiTotal').textContent = String(lines.length);
+  allLines.forEach(l => counts[l.band]++);
+  $('riskKpiTotal').textContent = String(allLines.length);
   $('riskKpiHigh').textContent = String(counts.high);
   $('riskKpiMed').textContent = String(counts.medium);
   $('riskKpiLow').textContent = String(counts.low);
   $('riskKpiNa').textContent = String(counts.na);
+
+  const b = riskFilters.band;
+  $('rkCardTotal')?.classList.toggle('active', !b);
+  $('rkCardHigh')?.classList.toggle('active', b === 'high');
+  $('rkCardMed')?.classList.toggle('active', b === 'medium');
+  $('rkCardLow')?.classList.toggle('active', b === 'low');
+  $('rkCardNa')?.classList.toggle('active', b === 'na');
 }
 
 const RISK_LEGEND_HTML = `<div class="legend">
@@ -257,7 +272,7 @@ export function renderRiskTable(lines) {
   const body = $('riskTableBody');
   if (!lines.length) {
     body.innerHTML = `<tr class="empty-row"><td colspan="8">
-      <div class="empty"><header><h2>No lines match the current filters.</h2><p>Try a different terminal or include resolved findings.</p></header></div>
+      <div class="empty"><header><h2>No lines match the current filters.</h2><p>Try a different terminal, clear search, or include resolved findings.</p></header></div>
     </td></tr>`;
     $('riskTableFoot').textContent = '';
     return;
@@ -274,26 +289,51 @@ export function renderRiskTable(lines) {
       }
     });
   });
+  body.querySelectorAll('tr.child-row[data-finding-id]').forEach(row => {
+    row.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = (row as HTMLElement).dataset.findingId;
+      if (id) location.hash = `#/f/${id}`;
+    });
+  });
+  body.querySelectorAll('tr.line-row.single[data-single-finding-id]').forEach(row => {
+    row.addEventListener('click', () => {
+      const id = (row as HTMLElement).dataset.singleFindingId;
+      if (id) location.hash = `#/f/${id}`;
+    });
+  });
   // children start collapsed
   body.querySelectorAll('tr.child-row').forEach(n => { (n as HTMLElement).style.display = 'none'; });
   $('riskTableFoot').textContent = `Showing ${lines.length} line${lines.length === 1 ? '' : 's'} · High → Low risk, then remaining life ascending; Not-Assessed last`;
 }
 
 export function renderRiskPage() {
+  const allLines = computeAllLineRisk();
+  renderRiskKpis(allLines);
   const lines = computeLineRisk();
-  renderRiskKpis(lines);
   renderRiskTerminalChart(lines);
   renderRiskMechanismChart(lines);
   renderRiskTable(lines);
 }
 
 export function initRiskPage() {
-  $('riskTerminalFilter').addEventListener('change', (e) => {
+  $('riskTerminalFilter')?.addEventListener('change', (e) => {
     riskFilters.terminal = (e.target as HTMLSelectElement).value;
     renderRiskPage();
   });
-  $('riskIncludeResolved').addEventListener('change', (e) => {
+  $('riskIncludeResolved')?.addEventListener('change', (e) => {
     riskFilters.includeResolved = (e.target as HTMLInputElement).checked;
     renderRiskPage();
+  });
+  $('riskSearch')?.addEventListener('input', (e) => {
+    riskFilters.q = (e.target as HTMLInputElement).value;
+    renderRiskPage();
+  });
+  document.querySelectorAll('.risk-kpi[data-band]').forEach(card => {
+    card.addEventListener('click', () => {
+      const b = (card as HTMLElement).dataset.band || '';
+      riskFilters.band = (riskFilters.band === b && b !== '') ? '' : b;
+      renderRiskPage();
+    });
   });
 }

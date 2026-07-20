@@ -33,6 +33,9 @@ export const FINDING_TYPES = [
 // import it without a features->workbench->features import cycle.
 export const WALL_LOSS_TYPES = ['External Corrosion', 'Internal Corrosion', 'CUI (Corrosion Under Insulation)', 'CUS (Corrosion Under Support)'];
 
+// Finding types that do not represent fluid-containing pressure boundary breaches
+export const NON_LEAKABLE_TYPES = ['Coating / Painting Damage', 'Pipe Support Defect'];
+
 // Short labels for the map legend's Type mode (core/dashboard.ts's renderMapLegend) — full names
 // like "CUI (Corrosion Under Insulation)" wrap poorly even on the legend's own row.
 export const FINDING_TYPE_SHORT = {

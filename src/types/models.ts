@@ -105,10 +105,7 @@ export interface Finding {
   target_date: string | null;
   next_check_date: string | null;
   inspection_date: string | null;
-  vendor: string | null;
-  report_no: string | null;
   report_link: string | null;
-  method: string | null;
   lat: number | null;
   lng: number | null;
   t_nominal: number | null;

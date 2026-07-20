@@ -18,11 +18,8 @@ create table if not exists public.findings (
   location_desc text,
 
   -- source inspection (vendor report the finding came from)
-  vendor text,
-  report_no text,
   report_link text,  -- link to the source report (e.g. a SharePoint URL)
   inspection_date date,
-  method text,
 
   -- the anomaly
   finding_type text not null,

@@ -24,7 +24,7 @@ async function ensureXLSX() { if (!XLSX) XLSX = await import('xlsx'); return XLS
 
 export const CSV_COLS = [
   'terminal', 'pipe_tag', 'pid_no', 'service', 'location_desc', 'finding_type', 'severity', 'is_leaking',
-  'status', 'description', 'vendor', 'report_no', 'report_link', 'inspection_date', 'method',
+  'status', 'description', 'report_link', 'inspection_date',
   't_nominal', 't_measured', 'defect_length_mm', 'defect_width_mm', 'lat', 'lng',
   'target_date', 'next_check_date', 'sap_notification', 'sap_order', 'estimated_cost',
   'repair_method', 'repaired_date', 'closing_note', 'created_by_email', 'created_at'
@@ -67,11 +67,8 @@ export const IMPORT_COLS = [
   { header: 'Finding Type', field: 'finding_type', required: true },
   { header: 'Severity', field: 'severity' },
   { header: 'Description', field: 'description' },
-  { header: 'Vendor', field: 'vendor' },
-  { header: 'Report No.', field: 'report_no' },
   { header: 'Report Link', field: 'report_link' },
   { header: 'Inspection Date', field: 'inspection_date', type: 'date' },
-  { header: 'Method', field: 'method' },
   { header: 'Nominal Thickness (mm)', field: 't_nominal', type: 'num' },
   { header: 'Measured Thickness (mm)', field: 't_measured', type: 'num' },
   { header: 'Target Date', field: 'target_date', type: 'date' },

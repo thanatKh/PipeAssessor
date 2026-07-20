@@ -63,12 +63,9 @@ export function renderDetail() {
   d.push(dItem('P&ID', esc(f.pid_no || '—')));
   d.push(dItem('Service', esc(f.service || '—')));
   d.push(dItem('Location', esc(f.location_desc || '—')));
-  d.push(dItem('Vendor', esc(f.vendor || '—')));
-  d.push(dItem('Report No.', esc(f.report_no || '—')));
   if (f.report_link) d.push(dItem('Report Link',
     `<a href="${esc(f.report_link)}" target="_blank" rel="noopener" style="color:var(--button-primary);font-weight:600;">Open source report &#8599;</a>`));
   d.push(dItem('Inspection Date', `<span class="mono">${fmtDate(f.inspection_date)}</span>`));
-  d.push(dItem('Method', esc(f.method || '—')));
   d.push(dItem('Severity', esc(f.severity || '—')));
   if (f.is_leaking) d.push(dItem('Leaking', '<span class="ov-badge">ACTIVELY LEAKING</span>'));
   if (f.t_nominal != null) d.push(dItem('Nominal Thk.', `<span class="mono">${fmtN(f.t_nominal, 2)} mm</span>`));

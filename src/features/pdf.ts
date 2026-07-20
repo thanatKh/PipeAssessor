@@ -219,8 +219,6 @@ export async function buildFindingPdf() {
   y += 4;
 
   section('Source Inspection');
-  row('Vendor', f.vendor);
-  row('Report No.', f.report_no);
   if (f.report_link) {
     ensure(6);
     doc.setFont('GoogleSans', 'bold'); doc.setFontSize(8); doc.setTextColor(PDF_MUTED);
@@ -233,7 +231,6 @@ export async function buildFindingPdf() {
     y += 6;
   }
   row('Inspection Date', paFmtDate(f.inspection_date));
-  row('Method', f.method);
   y += 4;
 
   section('Anomaly');

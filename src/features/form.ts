@@ -9,7 +9,7 @@
    ============================================================================ */
 import L from 'leaflet';
 import { $, val, esc, notify, setBusy, positionSegPill, pillHtml, isOverdue } from '../core/dom';
-import { R2_UPLOAD_ENDPOINT, PHOTO_LIMIT_PER_KIND, DEFAULT_MAP_VIEW, SAT_TILES, WALL_LOSS_TYPES } from '../core/constants';
+import { R2_UPLOAD_ENDPOINT, PHOTO_LIMIT_PER_KIND, DEFAULT_MAP_VIEW, SAT_TILES, WALL_LOSS_TYPES, NON_LEAKABLE_TYPES } from '../core/constants';
 import { sb } from '../core/supabase';
 import { computeB313, PA_PIPE_DATABASE, PA_MATERIALS, paDefaultScheduleForNps } from '../engine/compute';
 import { downscaleImage } from '../engine/branding';
@@ -207,6 +207,39 @@ export function applyLeakingSeverityBump() {
   if ($('fIsLeaking').checked) $('fSeverity').value = 'High';
 }
 
+export function syncLeakAndAssessRules() {
+  const fType = $('fType').value;
+  const isNonLeakable = NON_LEAKABLE_TYPES.includes(fType);
+  const isLnk = $('fIsLeaking').checked;
+
+  // Non-leakable types (Coating / Support Damage) cannot activate leaking
+  if (isNonLeakable) {
+    if (isLnk) {
+      $('fIsLeaking').checked = false;
+    }
+    $('fIsLeaking').disabled = true;
+    if ($('leakHint')) $('leakHint').style.display = 'block';
+  } else {
+    $('fIsLeaking').disabled = false;
+    if ($('leakHint')) $('leakHint').style.display = 'none';
+  }
+
+  const effectiveLnk = $('fIsLeaking').checked;
+
+  if ($('leakingBanner')) $('leakingBanner').hidden = !effectiveLnk;
+  if ($('panelAnomaly')) $('panelAnomaly').classList.toggle('is-leaking', effectiveLnk);
+
+  // If line is actively leaking, no ASME B31.3 assessment is needed
+  if (effectiveLnk) {
+    setAssessOn(false);
+    $('aToggle').disabled = true;
+    if ($('aLeakingNote')) $('aLeakingNote').style.display = 'flex';
+  } else {
+    $('aToggle').disabled = false;
+    if ($('aLeakingNote')) $('aLeakingNote').style.display = 'none';
+  }
+}
+
 
 export function aMode() {
   const b = document.querySelector('#aModeSeg .seg-btn.active');
@@ -384,6 +417,7 @@ export function initRepairAdvisor() {
     });
   }
   $('fIsLeaking').addEventListener('change', () => {
+    syncLeakAndAssessRules();
     applyLeakingSeverityBump();
     renderRepairAdvisor();
   });
@@ -432,10 +466,11 @@ export function initAssessment() {
   $('fType').addEventListener('change', () => {
     // corrosion type follows the finding type
     syncCorrTypeFromFinding();
+    syncLeakAndAssessRules();
     // auto-enable the assessment for types where a UT reading is normally already on hand
     // (only when creating, and only if the user hasn't already turned it on/off deliberately for
     // this finding) — CUI/CUS are deliberately excluded, see AUTO_ASSESS_TYPES.
-    if (!editingId && !assessToggleTouched) {
+    if (!editingId && !assessToggleTouched && !$('fIsLeaking').checked) {
       setAssessOn(AUTO_ASSESS_TYPES.includes($('fType').value));
     }
     suggestSeverityFromType();
@@ -629,6 +664,25 @@ export function initQuickCalc() {
   });
 
   let lastQuickRes = null;
+
+  const updateSpecBar = () => {
+    const pipe = PA_PIPE_DATABASE[$('qNps').value];
+    const od = pipe ? pipe.od : null;
+    const tnom = Number($('qTnom').value) || (pipe && pipe.schedules[$('qSch').value] ? pipe.schedules[$('qSch').value].t : null);
+    const S = Number($('qS').value);
+    if ($('qSpecOd')) $('qSpecOd').textContent = od ? `${od.toFixed(2)} mm` : '—';
+    if ($('qSpecTnom')) $('qSpecTnom').textContent = tnom ? `${tnom.toFixed(2)} mm` : '—';
+    if ($('qSpecS')) $('qSpecS').textContent = S ? `${S.toFixed(1)} MPa` : '—';
+
+    if (lastQuickRes && lastQuickRes.mawp_no != null) {
+      const pUnit = $('qPUnit').value;
+      const mawpVal = pUnit === 'psi' ? (lastQuickRes.mawp_no * 145.038).toFixed(1) + ' psi' : (lastQuickRes.mawp_no * 10).toFixed(2) + ' bar';
+      if ($('qSpecMawp')) $('qSpecMawp').textContent = mawpVal;
+    } else if ($('qSpecMawp')) {
+      $('qSpecMawp').textContent = '—';
+    }
+  };
+
   const recalcQuick = () => {
     const res = computeB313(params());
     const hint = $('qCalcHint');
@@ -645,11 +699,63 @@ export function initQuickCalc() {
       hint.style.display = msg ? 'block' : 'none';
       hint.textContent = msg;
       awQuickView.render(res, { neutral: !msg, nps: $('qNps').value });
+      updateSpecBar();
       return;
     }
     lastQuickRes = res;
     hint.style.display = 'none';
     awQuickView.render(res, { nps: $('qNps').value });
+    updateSpecBar();
+  };
+
+  const applyPreset = (key) => {
+    const presets = {
+      hsd: { nps: '10"', sch: 'STD', mat: 'API5LB', P: '10', unit: 'bar', depth: '1.50', ca: '1.5' },
+      lpg: { nps: '4"', sch: '80', mat: 'A106B', P: '18', unit: 'bar', depth: '1.00', ca: '1.5' },
+      fo:  { nps: '8"', sch: 'STD', mat: 'A53B', P: '7', unit: 'bar', depth: '2.00', ca: '1.5' },
+      thin: { nps: '6"', sch: 'STD', mat: 'API5LB', P: '12', unit: 'bar', depth: '5.00', ca: '1.5' }
+    };
+    const p = presets[key];
+    if (!p) return;
+    $('qNps').value = p.nps;
+    updateSchedules(false);
+    if (p.sch && $('qSch').querySelector(`option[value="${p.sch}"]`)) $('qSch').value = p.sch;
+    $('qMat').value = p.mat;
+    applyStress();
+    $('qP').value = p.P; $('qPUnit').value = p.unit;
+    $('qCa').value = p.ca;
+    document.querySelectorAll('#qModeSeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === 'depth'));
+    positionSegPill($('qModeSeg'), false);
+    $('qTmeasGrp').style.display = 'none';
+    $('qDepthGrp').style.display = 'block';
+    $('qDepth').value = p.depth; $('qTmeas').value = '';
+    autofillTnom();
+    recalcQuick();
+  };
+
+  const copyQuickSummary = () => {
+    if (!lastQuickRes) { notify('Enter a valid calculation to copy summary.', true); return; }
+    const res = lastQuickRes;
+    const nps = $('qNps').value;
+    const sch = $('qSch').value;
+    const mat = $('qMat').value;
+    const pVal = $('qP').value;
+    const pUnit = $('qPUnit').value;
+    const text = [
+      `ASME B31.3 What-If Calculation Summary`,
+      `Piping: ${nps} Sch ${sch} (${mat}, OD ${res.od.toFixed(2)}mm, t_nom ${res.t_nom.toFixed(2)}mm)`,
+      `Pressure: ${pVal} ${pUnit} | CA: ${res.ca.toFixed(2)}mm`,
+      `Measured Min. Thickness: ${res.t_meas.toFixed(2)}mm | Wall Loss Depth: ${res.d.toFixed(2)}mm`,
+      `Required Thickness t_req: ${res.t_req.toFixed(2)}mm (w/ CA: ${res.t_req_total.toFixed(2)}mm)`,
+      `Remaining Wall: ${res.pctRemainNom.toFixed(0)}% of t_nom | MAWP: ${(res.mawp_no * 10).toFixed(2)} bar`,
+      `Status: ${res.status} (${res.desc})`
+    ].join('\n');
+
+    navigator.clipboard.writeText(text).then(() => {
+      notify('Calculation summary copied to clipboard!');
+    }).catch(() => {
+      notify('Failed to copy to clipboard.', true);
+    });
   };
 
   setAwQuickView(paCreateAssessView($('awQuick'), {
@@ -680,6 +786,7 @@ export function initQuickCalc() {
     lastQuickRes = null;
     $('qCalcHint').style.display = 'none';
     awQuickView.render(null, { neutral: true });
+    updateSpecBar();
   };
 
   $('qNps').addEventListener('change', () => { updateSchedules(false); recalcQuick(); });
@@ -699,6 +806,10 @@ export function initQuickCalc() {
   ['qTnom', 'qTmeas', 'qDepth', 'qCa', 'qP', 'qPUnit', 'qCorrType', 'qS', 'qE', 'qW', 'qY', 'qCr']
     .forEach(id => $(id).addEventListener('input', recalcQuick));
   $('btnQuickReset').addEventListener('click', reset);
+  $('btnCopyQuickSummary')?.addEventListener('click', copyQuickSummary);
+  document.querySelectorAll('.preset-chip[data-preset]').forEach(btn => {
+    btn.addEventListener('click', () => applyPreset((btn as HTMLElement).dataset.preset));
+  });
 
   reset();
 }
@@ -745,8 +856,10 @@ export function openForm(f) {
   $('fReportLink').value = f ? (f.report_link || '') : '';
   $('fInspDate').value = f ? (f.inspection_date || '') : '';
   $('fType').value = f ? f.finding_type : '';
-  $('fIsLeaking').checked = f ? !!f.is_leaking : false;
+  const isLnk = f ? !!f.is_leaking : false;
+  $('fIsLeaking').checked = isLnk;
   syncCorrTypeFromFinding(); // corrosion type follows the finding type (a saved assessment overrides it below)
+  syncLeakAndAssessRules(); // sync non-leakable type & active leak ASME rules
   renderRepairAdvisor(); // show guidance for the loaded finding type/leak state immediately, not just on next change
   // Populate from the stored value without marking severityTouched — the field shows what was
   // saved, but auto-suggestion (leaking bump, ERF-based bump, finding-type prefill) still applies

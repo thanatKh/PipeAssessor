@@ -125,8 +125,9 @@ export function applyFilters(rows) {
     else if (filters.status === '__outstanding') { if (f.status === 'Repaired' || f.status === 'Closed') return false; }
     else if (filters.status && f.status !== filters.status) return false;
     if (filters.type && f.finding_type !== filters.type) return false;
+    if (filters.severity && f.severity !== filters.severity) return false;
     if (q) {
-      const hay = [f.pipe_tag, f.description, f.location_desc, f.report_no, f.sap_notification, f.sap_order, f.pid_no, f.service]
+      const hay = [f.pipe_tag, f.description, f.location_desc, f.sap_notification, f.sap_order, f.pid_no, f.service]
         .map(x => (x || '').toLowerCase()).join(' ');
       if (!hay.includes(q)) return false;
     }
@@ -157,6 +158,7 @@ export function renderKpis() {
     if (btn.dataset.filter === filters.status) btn.classList.add('active');
     btn.addEventListener('click', () => {
       filters.status = btn.dataset.filter;
+      filters.severity = '';
       $('filStatus').value = filters.status;
       renderList();
     });
@@ -189,10 +191,39 @@ export function renderBudgetKpi() {
   $('kbSub').textContent = `${out.length} finding${out.length === 1 ? '' : 's'}${noEst ? ` · ${noEst} not yet estimated` : ''}`;
   const sev = s => paFmtBahtShort(sum(out.filter(f => f.severity === s)));
   $('kbSev').innerHTML =
-    `<span class="kb-hi"><i></i>High <b>${sev('High')}</b></span>` +
-    `<span class="kb-md"><i></i>Med <b>${sev('Medium')}</b></span>` +
-    `<span class="kb-lo"><i></i>Low <b>${sev('Low')}</b></span>`;
-  $('kpiBudgetCard').classList.toggle('active', filters.status === '__outstanding');
+    `<button type="button" class="kb-sev-btn kb-hi ${filters.severity === 'High' ? 'active' : ''}" data-sev="High"><i></i>High <b>${sev('High')}</b></button>` +
+    `<button type="button" class="kb-sev-btn kb-md ${filters.severity === 'Medium' ? 'active' : ''}" data-sev="Medium"><i></i>Med <b>${sev('Medium')}</b></button>` +
+    `<button type="button" class="kb-sev-btn kb-lo ${filters.severity === 'Low' ? 'active' : ''}" data-sev="Low"><i></i>Low <b>${sev('Low')}</b></button>`;
+
+  $('kbSev').querySelectorAll('.kb-sev-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const s = btn.dataset.sev;
+      filters.severity = filters.severity === s ? '' : s;
+      renderList();
+    });
+  });
+  $('kpiBudgetCard').classList.toggle('active', filters.status === '__outstanding' || !!filters.severity);
+}
+
+export function updateFilterUI() {
+  const isTerm = !!filters.terminal;
+  const isStat = !!filters.status;
+  const isType = !!filters.type;
+  const isSev = !!filters.severity;
+  const isQ = !!filters.q.trim();
+
+  $('filTerminal')?.classList.toggle('has-filter', isTerm);
+  $('filStatus')?.classList.toggle('has-filter', isStat);
+  $('filType')?.classList.toggle('has-filter', isType);
+  $('filSearch')?.classList.toggle('has-filter', isQ);
+
+  const activeCount = [isTerm, isStat, isType, isSev, isQ].filter(Boolean).length;
+  const badge = $('filActiveBadge');
+  if (badge) {
+    badge.hidden = activeCount === 0;
+    badge.textContent = `${activeCount}`;
+  }
 }
 
 /* ---------------- dashboard map ---------------- */
@@ -224,17 +255,33 @@ export function ensureDashMap() {
 
 export function popupHtml(f) {
   const thumb = photoThumbs[f.id];
-  const imgHtml = thumb
-    ? `<div class="mp-img-wrap"><img class="mp-img" src="${esc(photoUrl(thumb.storage_path))}" alt="" loading="lazy"></div>`
-    : '';
-  return `<div class="map-popup">
-    <div class="mp-body">
-      <div class="mp-tag">${esc(f.pipe_tag || f.location_desc || '—')}</div>
-      ${pillHtml(f.status)}${isOverdue(f) ? ' <span class="ov-badge">OVERDUE</span>' : ''}
-      <div class="mp-meta">${esc(f.terminal)} — ${esc(f.finding_type)}</div>
-      <a href="#/f/${esc(f.id)}">Open finding &#8594;</a>
+  const imgUrl = thumb ? photoUrl(thumb.storage_path) : null;
+  const overdueBadge = isOverdue(f) ? '<span class="mp-badge-overdue">OVERDUE</span>' : '';
+
+  return `<div class="mp-card ${imgUrl ? 'has-thumb' : ''}">
+    ${imgUrl ? `
+      <div class="mp-card-banner">
+        <img src="${esc(imgUrl)}" alt="" class="mp-card-img" loading="lazy">
+        ${overdueBadge ? `<div class="mp-card-badges">${overdueBadge}</div>` : ''}
+      </div>
+    ` : ''}
+    <div class="mp-card-content">
+      <div class="mp-card-top">
+        <div class="mp-card-tag" title="${esc(f.pipe_tag || f.location_desc || '')}">${esc(f.pipe_tag || f.location_desc || '—')}</div>
+        ${pillHtml(f.status)}
+      </div>
+      ${!imgUrl && overdueBadge ? `<div style="margin-top:2px;">${overdueBadge}</div>` : ''}
+      <div class="mp-card-meta">
+        <span class="mp-meta-chip">${esc(f.terminal)}</span>
+        <span class="mp-meta-dot">•</span>
+        <span class="mp-meta-type" title="${esc(f.finding_type)}">${esc(f.finding_type)}</span>
+      </div>
+      ${(f.pipe_tag && f.location_desc) ? `<div class="mp-card-loc" title="${esc(f.location_desc)}">Loc: ${esc(f.location_desc)}</div>` : ''}
+      <a href="#/f/${esc(f.id)}" class="mp-card-btn">
+        <span>Open Finding</span>
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+      </a>
     </div>
-    ${imgHtml}
   </div>`;
 }
 
@@ -248,15 +295,16 @@ export function showAddFindingPopup(latlng) {
     radius: 8, color: '#156B95', fillColor: '#38bdf8', fillOpacity: 0.9, weight: 2
   }).addTo(dashLayer));
 
-  // build as a DOM node so the button's handler wires cleanly (no id lookup across popups)
   const node = document.createElement('div');
-  node.className = 'map-popup';
-  node.innerHTML = `<div class="mp-tag">Add a finding here?</div>
-    <div class="mp-meta mono">${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}</div>`;
+  node.className = 'mp-card-content';
+  node.innerHTML = `<div class="mp-card-tag">Add finding here?</div>
+    <div class="mp-card-meta mono">${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}</div>`;
   const btn = document.createElement('button');
-  btn.className = 'btn';
+  btn.className = 'mp-card-btn';
   btn.type = 'button';
-  btn.style.marginTop = '6px';
+  btn.style.border = 'none';
+  btn.style.width = '100%';
+  btn.style.cursor = 'pointer';
   btn.textContent = 'Add finding here';
   btn.addEventListener('click', () => {
     setPendingNewCoords({ lat: latlng.lat, lng: latlng.lng });
@@ -294,9 +342,19 @@ export function renderMap(rows) {
       radius: 8, fillColor: color, fillOpacity: 0.95, color: '#ffffff', weight: 2
     });
     pin.bindPopup(popupHtml(f));
+    pin.bindTooltip(esc(f.pipe_tag || f.location_desc || 'Finding'), { direction: 'top', offset: [0, -6], className: 'map-pin-tooltip' });
+    pin.on('click', () => {
+      const card = document.querySelector(`#presSidebarList .pres-sidebar-card[data-id="${CSS.escape(f.id)}"]`);
+      if (card) {
+        document.querySelectorAll('#presSidebarList .pres-sidebar-card').forEach(c => c.classList.remove('is-selected'));
+        card.classList.add('is-selected');
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
     dashLayer.addLayer(pin);
     dashMarkers[f.id] = pin;
   });
+  renderPresSidebar(pts);
   if (pts.length) {
     dashMap.fitBounds(L.latLngBounds(pts.map(f => [f.lat, f.lng])).pad(0.25), { maxZoom: 17 });
   } else {
@@ -369,7 +427,7 @@ export function renderTable(rows) {
     const photoChip = np ? `<span class="t-photos">${CAMERA_SVG}${np}</span>` : '';
     const thumb = photoThumbs[f.id];
     const thumbHtml = thumb
-      ? `<img class="row-thumb" src="${esc(photoUrl(thumb.storage_path))}" alt="" loading="lazy">`
+      ? `<div class="thumb-preview-wrap"><img class="row-thumb" src="${esc(photoUrl(thumb.storage_path))}" alt="" loading="lazy"><div class="thumb-lightbox"><img src="${esc(photoUrl(thumb.storage_path))}" alt=""></div></div>`
       : `<span class="row-thumb row-thumb-empty"></span>`;
     const dim = (f.status === 'Repaired' || f.status === 'Closed') ? ' row-dim' : '';
     const checked = selectedIds.has(f.id) ? ' checked' : '';
@@ -391,7 +449,7 @@ export function renderTable(rows) {
       </td>
       <td style="font-size:12px;">${esc(f.terminal)}</td>
       <td>${ageHtml(f)}</td>
-      <td>${dueHtml}</td>
+      <td><div class="due-row-flex">${dueHtml}<span class="row-arrow" title="View details">&#8594;</span></div></td>
     </tr>`;
   }).join('');
   body.querySelectorAll('tr[data-id]').forEach(tr => {
@@ -459,8 +517,125 @@ export function buildTagOptions() {
 
 export function renderList() {
   renderKpis();
+  updateFilterUI();
   const rows = sortFindings(applyFilters(findings));
   renderTable(rows);
   renderMap(rows);
 }
 
+export function resetMapView() {
+  if (!dashMap || !lastRenderedRows) return;
+  const pts = lastRenderedRows.filter(f => f.lat != null && f.lng != null);
+  if (pts.length) {
+    dashMap.fitBounds(L.latLngBounds(pts.map(f => [f.lat, f.lng])).pad(0.25), { maxZoom: 17 });
+  } else {
+    dashMap.setView(DEFAULT_MAP_VIEW.center, DEFAULT_MAP_VIEW.zoom);
+  }
+}
+
+export function toggleMapPresentation(forceState?: boolean) {
+  const panel = $('dashMapPanel');
+  const btn = $('btnMapExpand');
+  if (!panel || !btn) return;
+
+  const isPres = typeof forceState === 'boolean' ? forceState : !panel.classList.contains('map-presentation');
+  panel.classList.toggle('map-presentation', isPres);
+
+  const EXPAND_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>`;
+  const COLLAPSE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="10" y1="14" x2="3" y2="21"></line></svg>`;
+
+  btn.innerHTML = isPres
+    ? `${COLLAPSE_ICON}<span>Exit Presentation</span><span class="map-pres-esc-hint"><kbd>ESC</kbd></span>`
+    : `${EXPAND_ICON}<span>Presentation</span>`;
+
+  const presControls = document.querySelectorAll('.pres-only');
+  presControls.forEach(el => { el.hidden = !isPres; });
+
+  const optNote = panel.querySelector('.f-optnote');
+  if (optNote) optNote.style.display = isPres ? 'none' : '';
+
+  const summary = $('presSummaryBar');
+  if (summary) {
+    summary.hidden = !isPres;
+    if (isPres) {
+      const activePts = lastRenderedRows.filter(f => f.lat != null && f.lng != null);
+      const overduePts = activePts.filter(isOverdue).length;
+      summary.textContent = `${activePts.length} Pins • ${overduePts} Overdue`;
+    }
+  }
+
+  const sel = $('presTerminalFilter');
+  if (sel && isPres) sel.value = filters.terminal || '';
+
+  if (isPres) {
+    document.body.style.overflow = 'hidden';
+  } else {
+    document.body.style.overflow = '';
+  }
+
+  if (dashMap) {
+    dashMap.invalidateSize();
+    setTimeout(() => dashMap.invalidateSize(), 50);
+    setTimeout(() => dashMap.invalidateSize(), 250);
+  }
+}
+
+export function renderPresSidebar(rows) {
+  const container = $('presSidebarList');
+  const countEl = $('presSidebarCount');
+  if (!container) return;
+
+  const pts = rows.filter(f => f.lat != null && f.lng != null);
+  if (countEl) countEl.textContent = `${pts.length}`;
+
+  if (!pts.length) {
+    container.innerHTML = `<div class="pres-sidebar-empty">No mapped findings in current view</div>`;
+    return;
+  }
+
+  container.innerHTML = pts.map(f => {
+    const thumb = photoThumbs[f.id];
+    const thumbHtml = thumb
+      ? `<img class="pres-card-thumb" src="${esc(photoUrl(thumb.storage_path))}" alt="" loading="lazy">`
+      : `<div class="pres-card-thumb pres-card-thumb-empty"></div>`;
+    return `<div class="pres-sidebar-card" data-id="${esc(f.id)}">
+      ${thumbHtml}
+      <div class="pres-card-text">
+        <div class="pres-card-row">
+          <span class="pres-card-tag" title="${esc(f.pipe_tag || f.location_desc || '')}">${esc(f.pipe_tag || f.location_desc || '—')}</span>
+          ${pillHtml(f.status)}
+        </div>
+        <div class="pres-card-sub">${esc(f.terminal)} • ${esc(f.finding_type)}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  container.querySelectorAll('.pres-sidebar-card[data-id]').forEach(card => {
+    const id = card.dataset.id;
+    card.addEventListener('click', () => {
+      container.querySelectorAll('.pres-sidebar-card').forEach(c => c.classList.remove('is-selected'));
+      card.classList.add('is-selected');
+      const f = findings.find(x => x.id === id);
+      if (f && f.lat != null && f.lng != null && dashMap) {
+        dashMap.flyTo([f.lat, f.lng], 16, { duration: 0.8 });
+        dashMarkers[id]?.openPopup();
+      }
+    });
+  });
+}
+
+export function togglePresSidebar(forceState?: boolean) {
+  const sidebar = $('presSidebar');
+  const btn = $('btnPresToggleSidebar');
+  if (!sidebar) return;
+
+  const show = typeof forceState === 'boolean' ? forceState : sidebar.hidden;
+  sidebar.hidden = !show;
+  btn?.classList.toggle('active', show);
+
+  if (dashMap) {
+    dashMap.invalidateSize();
+    setTimeout(() => dashMap.invalidateSize(), 50);
+    setTimeout(() => dashMap.invalidateSize(), 250);
+  }
+}

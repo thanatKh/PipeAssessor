@@ -116,4 +116,4 @@ export const filters: any = { terminal: '', status: '', type: '', q: '' };
 export let riskAssessments: any = [];
 export function setRiskAssessments(v: any) { riskAssessments = v; }
 
-export const riskFilters: any = { terminal: '', includeResolved: false };
+export const riskFilters: any = { terminal: '', includeResolved: false, band: '', q: '' };

@@ -63,6 +63,9 @@ async function signIn() {
 /* ---------------- routing ---------------- */
 
 export function show(viewId) {
+  if (viewId !== 'viewList') {
+    toggleMapPresentation(false);
+  }
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === viewId));
   window.scrollTo(0, 0);
   // Seg-row pills measure offsetLeft/offsetWidth, which read 0 while their view was
@@ -124,7 +127,7 @@ async function route() {
 
 
 import {
-  loadFindings, ageDays, STATUS_RANK, sortFindings, loadDetail, photoUrl, applyFilters, KPI_RING_CIRCUMFERENCE, renderKpis, renderBudgetKpi, ensureDashMap, popupHtml, showAddFindingPopup, renderMap, highlightPin, flashRow, CAMERA_SVG, ageHtml, renderTable, updateSelectionUI, buildTagOptions, renderList,
+  loadFindings, ageDays, STATUS_RANK, sortFindings, loadDetail, photoUrl, applyFilters, KPI_RING_CIRCUMFERENCE, renderKpis, renderBudgetKpi, ensureDashMap, popupHtml, showAddFindingPopup, renderMap, highlightPin, flashRow, CAMERA_SVG, ageHtml, renderTable, updateSelectionUI, buildTagOptions, renderList, toggleMapPresentation, resetMapView, togglePresSidebar,
 } from './features/dashboard';
 
 /* ---------------- CSV export (filtered register, Excel-friendly UTF-8 BOM) ---------------- */
@@ -134,7 +137,7 @@ import {
 } from './features/import-export';
 
 import {
-  clearValidation, setPin, clearPin, ensurePickMap, renderPendingGrid, addPendingFiles, imageFilesFromClipboard, onPastePhoto, WALL_LOSS_TYPES, AUTO_ASSESS_TYPES, CORR_TYPE_BY_FINDING, syncCorrTypeFromFinding, SEVERITY_BY_FINDING, suggestSeverityFromType, aMode, setAssessOn, updateAschedules, autofillAtnom, applyMaterialStress, gatherAssessParams, assessThickness, recalcAssessment, loadAssessmentInto, resetAssessment, initAssessment, initRepairAdvisor, applyTagMemory, TAG_COMBO_MAX, initTagCombo, initQuickCalc, openForm, collectForm, collectAssessment, uploadPhoto, saveForm, deleteFinding,
+  clearValidation, setPin, clearPin, ensurePickMap, renderPendingGrid, addPendingFiles, imageFilesFromClipboard, onPastePhoto, WALL_LOSS_TYPES, AUTO_ASSESS_TYPES, CORR_TYPE_BY_FINDING, syncCorrTypeFromFinding, syncLeakAndAssessRules, SEVERITY_BY_FINDING, suggestSeverityFromType, aMode, setAssessOn, updateAschedules, autofillAtnom, applyMaterialStress, gatherAssessParams, assessThickness, recalcAssessment, loadAssessmentInto, resetAssessment, initAssessment, initRepairAdvisor, applyTagMemory, TAG_COMBO_MAX, initTagCombo, initQuickCalc, openForm, collectForm, collectAssessment, uploadPhoto, saveForm, deleteFinding,
 } from './features/form';
 
 import {
@@ -163,7 +166,10 @@ import {
 // the real height into a custom property so their CSS can offset by it exactly.
 function syncHeaderHeight() {
   const header = document.querySelector('body > header');
-  if (header) document.documentElement.style.setProperty('--app-header-h', header.offsetHeight + 'px');
+  if (header) {
+    const h = header.getBoundingClientRect().height;
+    document.documentElement.style.setProperty('--app-header-h', h.toFixed(2) + 'px');
+  }
 }
 
 function initApp() {
@@ -273,12 +279,139 @@ function initApp() {
   });
   $('btnSelClear').addEventListener('click', () => { selectedIds.clear(); renderTable(lastRenderedRows); });
 
-  // map legend + pin coloring mode (Status/Type/Severity) — see renderMapLegend/colorFor in
-  // dashboard.ts; renderMap() renders both together on load and on every filter change.
   $('mapColorBy').addEventListener('change', () => {
     setMapColorBy($('mapColorBy').value);
     renderList();
   });
+
+  $('presTerminalFilter')?.addEventListener('change', () => {
+    filters.terminal = val('presTerminalFilter');
+    $('filTerminal').value = filters.terminal;
+    renderList();
+  });
+
+  $('btnPresReset')?.addEventListener('click', () => resetMapView());
+  $('btnPresToggleSidebar')?.addEventListener('click', () => togglePresSidebar());
+  $('btnPresSidebarClose')?.addEventListener('click', () => togglePresSidebar(false));
+
+  $('btnMapExpand')?.addEventListener('click', () => toggleMapPresentation());
+  window.addEventListener('keydown', (e) => {
+    const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes((document.activeElement?.tagName || ''));
+    const isPresActive = $('dashMapPanel')?.classList.contains('map-presentation');
+
+    if (e.key === 'Escape' && isPresActive) {
+      toggleMapPresentation(false);
+    } else if (e.key === '/' && document.activeElement !== $('filSearch') && !isTyping) {
+      if (document.querySelector('#viewList.active')) {
+        e.preventDefault();
+        $('filSearch')?.focus();
+      }
+    } else if ((e.key === 'f' || e.key === 'F') && !isTyping) {
+      if (document.querySelector('#viewList.active')) {
+        e.preventDefault();
+        toggleMapPresentation();
+      }
+    } else if ((e.key === 'r' || e.key === 'R') && isPresActive && !isTyping) {
+      e.preventDefault();
+      resetMapView();
+    } else if ((e.key === 'l' || e.key === 'L') && isPresActive && !isTyping) {
+      e.preventDefault();
+      togglePresSidebar();
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+      if (document.querySelector('#viewForm.active')) {
+        e.preventDefault();
+        saveForm(false);
+      }
+    }
+  });
+
+  // Section navigation tabs smooth scrolling & scroll spy
+  document.querySelectorAll('.form-section-nav .nav-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const targetId = tab.dataset.target;
+      const targetEl = $(targetId);
+      if (!targetEl) return;
+      tab.parentElement?.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  const sectionObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        const view = entry.target.closest('.view');
+        const nav = view?.querySelector('.form-section-nav');
+        if (nav && id) {
+          const tab = nav.querySelector(`.nav-tab[data-target="${CSS.escape(id)}"]`);
+          if (tab) {
+            nav.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            tab.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+          }
+        }
+      }
+    });
+  }, { rootMargin: '-120px 0px -65% 0px', threshold: 0.1 });
+
+  document.querySelectorAll('.panel[id]').forEach(p => sectionObserver.observe(p));
+
+  // Actively Leaking warning toggle
+  $('fIsLeaking')?.addEventListener('change', () => {
+    syncLeakAndAssessRules();
+  });
+
+  // GPS Location button
+  $('btnGpsLoc')?.addEventListener('click', () => {
+    if (!navigator.geolocation) {
+      notify('Geolocation is not supported by your browser.', true);
+      return;
+    }
+    notify('Detecting GPS location…');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        $('fLat').value = lat.toFixed(6);
+        $('fLng').value = lng.toFixed(6);
+        setPin(lat, lng, true);
+        notify('GPS location updated!');
+      },
+      (err) => {
+        notify('Unable to detect GPS location: ' + err.message, true);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  });
+
+  // Drag and Drop photo upload
+  function setupDragAndDrop(targetEl, onFiles) {
+    if (!targetEl) return;
+    targetEl.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      targetEl.classList.add('drag-active');
+    });
+    targetEl.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      targetEl.classList.remove('drag-active');
+    });
+    targetEl.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      targetEl.classList.remove('drag-active');
+      const files = [...(e.dataTransfer?.files || [])].filter(f => f.type.startsWith('image/'));
+      if (files.length) {
+        await onFiles(files);
+      }
+    });
+  }
+
+  setupDragAndDrop($('pendingPhotoPanel'), async (files) => { await addPendingFiles(files); });
+  setupDragAndDrop($('detailPanelPhotos'), async (files) => { await addDetailPhotos(files, 'found'); });
+  setupDragAndDrop($('editPhotoPanel'), async (files) => { await addDetailPhotos(files, 'found', editingId); });
 
   // line risk ranking
   initRiskPage();
