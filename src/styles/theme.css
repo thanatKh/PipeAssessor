@@ -796,21 +796,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   border: 1px solid var(--card-border, #e2e8f0);
 }
 
-.advisor-container.danger {
-  border-left: 4px solid #dc2626;
-}
 
-.advisor-container.warning {
-  border-left: 4px solid #d97706;
-}
-
-.advisor-container.info {
-  border-left: 4px solid #0284c7;
-}
-
-.advisor-container.success {
-  border-left: 4px solid #16a34a;
-}
 
 .advisor-header-card {
   padding: 8px 12px;
@@ -898,23 +884,25 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   padding-top: 1px;
 }
 
-.advisor-sub-list {
-  margin: 3px 0 0 0;
-  padding-left: 18px;
-}
-
-.advisor-item-body > .advisor-sub-list:first-child {
-  margin-top: 0;
-}
-
-.advisor-sub-list li {
+.advisor-body-text {
   font-size: 12px;
   line-height: 1.4;
-  margin-bottom: 3px;
 }
 
-.advisor-sub-list li:last-child {
-  margin-bottom: 0;
+.advisor-sub-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.advisor-body-text + .advisor-sub-group {
+  margin-top: 4px;
+}
+
+.advisor-sub-item {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted, #475569);
 }
 
 .advisor-standards-note {

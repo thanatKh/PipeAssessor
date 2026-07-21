@@ -253,6 +253,7 @@ export const LINE_LIST_IMPORT_COLS = [
   { header: 'NPS', field: 'nps', required: true },
   { header: 'Schedule', field: 'schedule', required: true },
   { header: 'Material', field: 'material', required: true },
+  { header: 'Design Pressure (barg)', field: 'design_p_barg' },
   { header: 'P&ID No.', field: 'pid_no' },
   { header: 'Service', field: 'service' }
 ];
@@ -260,7 +261,16 @@ export const LINE_LIST_IMPORT_COLS = [
 
 export function lineListHeaderMap() {
   const m = {};
-  LINE_LIST_IMPORT_COLS.forEach(c => { m[normHeader(c.header)] = c; m[normHeader(c.field)] = c; });
+  LINE_LIST_IMPORT_COLS.forEach(c => {
+    m[normHeader(c.header)] = c;
+    m[normHeader(c.field)] = c;
+  });
+  // Alias header matches for flexible Excel imports
+  m['designpressure'] = LINE_LIST_IMPORT_COLS[5];
+  m['designpressurebarg'] = LINE_LIST_IMPORT_COLS[5];
+  m['designpressurebarg'] = LINE_LIST_IMPORT_COLS[5];
+  m['pbarg'] = LINE_LIST_IMPORT_COLS[5];
+  m['barg'] = LINE_LIST_IMPORT_COLS[5];
   return m;
 }
 
@@ -331,6 +341,13 @@ export function validateLineListRow(raw) {
   const mat = resolveMaterialCode(p.material);
   if (!mat) reasons.push(`Material "${p.material || ''}" not recognized`);
   else p.material = mat;
+
+  if (p.design_p_barg != null && p.design_p_barg !== '') {
+    const pVal = parseFloat(p.design_p_barg);
+    if (isNaN(pVal) || pVal < 0) reasons.push(`Design Pressure "${p.design_p_barg}" must be a valid number >= 0`);
+    else p.design_p_barg = pVal;
+  }
+
   return reasons.length ? { reasons } : { payload: p };
 }
 
@@ -351,11 +368,12 @@ export function renderLineListImportPreview(results) {
       <td>${esc(p.nps || '—')}</td>
       <td>${esc(p.schedule || '—')}</td>
       <td>${esc(p.material || '—')}</td>
+      <td>${p.design_p_barg != null ? `${p.design_p_barg} bar(g)` : '—'}</td>
       <td class="import-reason">${ok ? '' : esc(r.reasons.join('; '))}</td>
     </tr>`;
   }).join('');
   box.innerHTML = head +
-    `<div class="import-tbl-scroll"><table class="import-tbl"><thead><tr><th></th><th>Pipe Tag</th><th>Terminal</th><th>NPS</th><th>Schedule</th><th>Material</th><th>Problems</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>` +
+    `<div class="import-tbl-scroll"><table class="import-tbl"><thead><tr><th></th><th>Pipe Tag</th><th>Terminal</th><th>NPS</th><th>Schedule</th><th>Material</th><th>P design</th><th>Problems</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>` +
     (results.length > 40 ? `<div class="hint">Showing first 40 of ${results.length} rows.</div>` : '');
   $('lineListImportConfirm').disabled = valid.length === 0;
   $('lineListImportConfirm').textContent = valid.length ? `Import ${valid.length} entr${valid.length === 1 ? 'y' : 'ies'}` : 'Import';
@@ -414,10 +432,10 @@ export async function downloadLineListTemplate() {
   // P&ID/Service are free text (any value is fine); NPS/Schedule/Material must match one of the
   // exact spellings on the "Valid Values" sheet below.
   const examples = [
-    ['953-P-0001-10"-D1101-N', 'KBY', '10"', '40', 'A106B', '15-3-KBY-906-0117_Rev.Z2', 'Diesel B7'],
-    ['906200-P-6"-D311011-N', 'KBY', '6"', '80', 'API5LB', '', 'Jet A-1'],
-    ['953-P-009-4"-D1101-ET-80', 'SRC', '4"', '40', 'X52', '', ''],
-    ['906200-25-P-4404', 'BRP', '2"', '40', 'TP316', '', '']
+    ['953-P-0001-10"-D1101-N', 'KBY', '10"', '40', 'A106B', 10.5, '15-3-KBY-906-0117_Rev.Z2', 'Diesel B7'],
+    ['906200-P-6"-D311011-N', 'KBY', '6"', '80', 'API5LB', 15.0, '', 'Jet A-1'],
+    ['953-P-009-4"-D1101-ET-80', 'SRC', '4"', '40', 'X52', 7.0, '', ''],
+    ['906200-25-P-4404', 'BRP', '2"', '40', 'TP316', 5.0, '', '']
   ];
   const lineListWs = XLSX.utils.aoa_to_sheet([headers, ...examples]);
 
@@ -475,18 +493,18 @@ export function renderLineListManageTable() {
   const body = $('lineListTableBody');
   const q = ($('lineListSearch').value || '').trim().toLowerCase();
   const rows = q ? lineList.filter(r =>
-    [r.pipe_tag, r.terminal, r.nps, r.schedule, r.material, r.pid_no, r.service]
-      .some(v => (v || '').toLowerCase().includes(q))
+    [r.pipe_tag, r.terminal, r.nps, r.schedule, r.material, r.design_p_barg, r.pid_no, r.service]
+      .some(v => (v || '').toString().toLowerCase().includes(q))
   ) : lineList;
 
   if (!lineList.length) {
-    body.innerHTML = `<tr class="empty-row"><td colspan="8">No line list entries yet — click Import to add some.</td></tr>`;
+    body.innerHTML = `<tr class="empty-row"><td colspan="9">No line list entries yet — click Import to add some.</td></tr>`;
   } else if (!rows.length) {
-    body.innerHTML = `<tr class="empty-row"><td colspan="8">No entries match "${esc(q)}".</td></tr>`;
+    body.innerHTML = `<tr class="empty-row"><td colspan="9">No entries match "${esc(q)}".</td></tr>`;
   } else {
     body.innerHTML = rows.map(r => `<tr data-id="${esc(r.id)}">
       <td>${esc(r.pipe_tag)}</td><td>${esc(r.terminal || '—')}</td><td>${esc(r.nps || '—')}</td><td>${esc(r.schedule || '—')}</td>
-      <td>${esc(r.material || '—')}</td><td>${esc(r.pid_no || '—')}</td>
+      <td>${esc(r.material || '—')}</td><td>${r.design_p_barg != null ? `${r.design_p_barg} bar(g)` : '—'}</td><td>${esc(r.pid_no || '—')}</td>
       <td>${esc(r.service || '—')}</td>
       <td><button type="button" class="link-btn" data-del="${esc(r.id)}">Delete</button></td>
     </tr>`).join('');

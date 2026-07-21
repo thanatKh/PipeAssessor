@@ -256,13 +256,13 @@ export function paRenderRepairAdvisor(root: HTMLElement, findingType: string | n
     const titleText = item.title ? escHtml(item.title) : 'คำแนะนำทางวิศวกรรม:';
     const bodyText = escHtml(item.body);
     const subHtml = item.sub.length
-      ? `<ul class="advisor-sub-list">${item.sub.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>`
+      ? `<div class="advisor-sub-group">${item.sub.map(s => `<div class="advisor-sub-item">${escHtml(s)}</div>`).join('')}</div>`
       : '';
     return `
       <div class="advisor-item-row">
         <div class="advisor-item-title">${titleText}</div>
         <div class="advisor-item-body">
-          ${bodyText ? `<div>${bodyText}</div>` : ''}
+          ${bodyText ? `<div class="advisor-body-text">${bodyText}</div>` : ''}
           ${subHtml}
         </div>
       </div>

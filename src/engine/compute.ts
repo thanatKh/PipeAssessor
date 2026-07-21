@@ -85,8 +85,9 @@ export function computeB313(p: B313Inputs): B313Result {
 
   const ca = num(p.ca, 0);
   const P_input = num(p.pInput, 0);
-  const pUnit = p.pUnit === 'psi' ? 'psi' : 'bar';
-  const P = (pUnit === 'bar') ? P_input * 0.1 : P_input * 0.006894757;
+  const pUnit = p.pUnit || 'bar(g)';
+  const isPsi = pUnit.toLowerCase() === 'psi';
+  const P = isPsi ? P_input * 0.006894757 : P_input * 0.1;
 
   const S = num(p.S, 0);
   const E = num(p.E, 1);
@@ -99,10 +100,6 @@ export function computeB313(p: B313Inputs): B313Result {
   if (mode === 'depth' && depth > t_nom) errors.depth = true;
   if (mode === 'tmeas' && t_meas > t_nom) errors.tmeas = true;
   if (ca < 0) errors.ca = 'CA cannot be negative.';
-  // NOTE: CA >= t_meas is NOT a hard error. CA is a forward-looking reserve, not the loss already
-  // measured; a thin pipe whose remaining wall is already below its corrosion allowance is a valid
-  // (and meaningful) real-world case. The no-CA headline (ERF/MAWP at the measured thickness) still
-  // computes fine — only the secondary "with CA" figures become undefined (mawp_with = null below).
 
   if (Object.keys(errors).length) return { hasErrors: true, errors } as B313Result;
 
@@ -119,7 +116,7 @@ export function computeB313(p: B313Inputs): B313Result {
     const denomM = D - (2 * Y * t_use);
     if (denomM <= 0) return 0;
     const P_mpa = (2 * S * E * W * t_use) / denomM;
-    return (pUnit === 'bar') ? P_mpa / 0.1 : P_mpa / 0.006894757;
+    return isPsi ? P_mpa / 0.006894757 : P_mpa / 0.1;
   }
   // With-CA MAWP is evaluated at the wall left AFTER the reserve is consumed (t_meas − CA). If the
   // remaining wall is already at/below CA there's no valid "with CA" thickness → null (rendered n/a),

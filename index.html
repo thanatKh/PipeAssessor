@@ -467,7 +467,7 @@
               <label class="f-label req" for="aP">Design Pressure</label>
               <div class="p-row">
                 <input id="aP" class="input" type="number" step="0.1" placeholder="e.g., 7.0">
-                <select id="aPUnit" class="select"><option selected>bar</option><option>psi</option></select>
+                <select id="aPUnit" class="select"><option value="bar(g)" selected>bar(g)</option><option value="bar">bar</option><option value="psi">psi</option></select>
               </div>
             </div>
             <div>
@@ -926,7 +926,7 @@
           <thead>
             <tr>
               <th>Pipe Tag</th><th>Terminal</th><th>NPS</th><th>Schedule</th><th>Material</th>
-              <th>P&amp;ID</th><th>Service</th><th></th>
+              <th>P design</th><th>P&amp;ID</th><th>Service</th><th></th>
             </tr>
           </thead>
           <tbody id="lineListTableBody"></tbody>

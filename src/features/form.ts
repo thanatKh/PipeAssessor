@@ -536,9 +536,18 @@ export async function applyTagMemory() {
   }
   if (lineRow && lineRow.nps) {
     if (!$('assessPanel').classList.contains('on')) setAssessOn(true);
-    loadAssessmentInto({ nps: lineRow.nps, schedule: lineRow.schedule, material: lineRow.material }, true);
+    const setupParams = {
+      nps: lineRow.nps,
+      schedule: lineRow.schedule,
+      material: lineRow.material
+    };
+    if (lineRow.design_p_barg != null && lineRow.design_p_barg !== '') {
+      setupParams.P = String(lineRow.design_p_barg);
+      setupParams.pUnit = 'bar(g)';
+    }
+    loadAssessmentInto(setupParams, true);
     recalcAssessment();
-    notify('Pre-filled pipe data from the master line list.');
+    notify('Pre-filled pipe data & design pressure from the master line list.');
   }
 }
 
