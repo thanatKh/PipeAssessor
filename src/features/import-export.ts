@@ -110,7 +110,7 @@ export function toImportNum(v) {
 }
 
 // Validate one spreadsheet row (object keyed by original headers) -> { payload } or { reasons: [] }.
-export function validateImportRow(raw) {
+export function validateImportRow(raw, excelRowIndex = '?') {
   const map = importHeaderMap();
   const p = {};
   const reasons = [];
@@ -144,7 +144,7 @@ export function validateImportRow(raw) {
     const sev = { low: 'Low', medium: 'Medium', high: 'High' }[String(p.severity).toLowerCase()];
     if (sev) p.severity = sev; else delete p.severity; // silently drop unknown severity
   }
-  return reasons.length ? { reasons } : { payload: p };
+  return reasons.length ? { excelRowIndex, reasons, raw } : { excelRowIndex, payload: p, raw };
 }
 
 export function renderImportPreview(results) {
@@ -153,21 +153,61 @@ export function renderImportPreview(results) {
   setImportValidRows(valid.map(r => r.payload));
   const box = $('importPreview');
   box.style.display = 'block';
-  const head = `<div class="import-summary"><span class="ok">${valid.length} ready</span> · <span class="bad">${invalid.length} with problems</span> (of ${results.length} rows)</div>`;
-  const rowsHtml = results.slice(0, 40).map((r, i) => {
+
+  const filterSegment = `
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; gap:8px; flex-wrap:wrap;">
+      <div class="seg-row" id="importFilterSeg" style="margin:0;">
+        <span class="seg-pill" aria-hidden="true"></span>
+        <button type="button" class="seg-btn ${invalid.length ? 'active' : ''}" data-filter="bad">Errors Only (${invalid.length})</button>
+        <button type="button" class="seg-btn ${!invalid.length ? 'active' : ''}" data-filter="all">All Rows (${results.length})</button>
+        <button type="button" class="seg-btn" data-filter="ok">Ready Only (${valid.length})</button>
+      </div>
+      <div style="font-size:11.5px; font-weight:600; color:var(--text-muted);">
+        <span class="ok">${valid.length} ready</span> · <span class="bad">${invalid.length} with errors</span>
+      </div>
+    </div>
+  `;
+
+  const rowsHtml = results.map((r) => {
     const ok = !!r.payload;
-    const p = r.payload || {};
-    return `<tr class="${ok ? '' : 'bad'}">
+    const p = r.payload || r.raw || {};
+    const rowNum = r.excelRowIndex != null ? `Row ${r.excelRowIndex}` : '—';
+    return `<tr class="${ok ? '' : 'bad'}" data-status="${ok ? 'ok' : 'bad'}">
+      <td style="font-weight:600; color:var(--text-muted); font-size:11px; white-space:nowrap;">${rowNum}</td>
       <td class="${ok ? 'rowstat-ok' : 'rowstat-bad'}">${ok ? '✓' : '✕'}</td>
-      <td>${esc(p.terminal || '—')}</td>
       <td>${esc(p.pipe_tag || '—')}</td>
+      <td>${esc(p.terminal || '—')}</td>
       <td>${esc(p.finding_type || '—')}</td>
-      <td class="import-reason">${ok ? '' : esc(r.reasons.join('; '))}</td>
+      <td class="import-reason" style="color:${ok ? 'inherit' : '#dc2626'}; font-weight:${ok ? 'normal' : '600'};">${ok ? '' : esc(r.reasons.join('; '))}</td>
     </tr>`;
   }).join('');
-  box.innerHTML = head +
-    `<div class="import-tbl-scroll"><table class="import-tbl"><thead><tr><th></th><th>Terminal</th><th>Pipe Tag</th><th>Finding Type</th><th>Problems</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>` +
-    (results.length > 40 ? `<div class="hint">Showing first 40 of ${results.length} rows.</div>` : '');
+
+  box.innerHTML = filterSegment +
+    `<div class="import-tbl-scroll" style="max-height:280px; overflow-y:auto;"><table class="import-tbl" id="importPreviewTable"><thead><tr><th>Row #</th><th>Status</th><th>Pipe Tag</th><th>Terminal</th><th>Finding Type</th><th>Validation Details / Problems</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`;
+
+  const seg = box.querySelector('#importFilterSeg');
+  if (seg) {
+    positionSegPill(seg, false);
+    const tableRows = box.querySelectorAll('#importPreviewTable tbody tr');
+    const applyFilter = (f) => {
+      tableRows.forEach(tr => {
+        if (f === 'all') tr.style.display = '';
+        else if (f === 'bad') tr.style.display = tr.dataset.status === 'bad' ? '' : 'none';
+        else if (f === 'ok') tr.style.display = tr.dataset.status === 'ok' ? '' : 'none';
+      });
+    };
+    seg.querySelectorAll('.seg-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.classList.contains('active')) return;
+        seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        positionSegPill(seg, true);
+        applyFilter(btn.dataset.filter);
+      });
+    });
+    applyFilter(invalid.length ? 'bad' : 'all');
+  }
+
   $('importConfirm').disabled = valid.length === 0;
   $('importConfirm').textContent = valid.length ? `Import ${valid.length} finding(s)` : 'Import';
 }
@@ -183,7 +223,7 @@ export async function parseImportFile(file) {
     const sheet = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
     if (!rows.length) { $('errImport').textContent = 'No rows found in the first sheet.'; $('errImport').style.display = 'block'; return; }
-    renderImportPreview(rows.map(validateImportRow));
+    renderImportPreview(rows.map((row, i) => validateImportRow(row, i + 2)));
   } catch (e) {
     $('errImport').textContent = 'Could not read the file: ' + e.message;
     $('errImport').style.display = 'block';
@@ -312,7 +352,7 @@ export function resolveMaterialCode(v) {
 }
 
 // Validate one spreadsheet row (object keyed by original headers) -> { payload } or { reasons: [] }.
-export function validateLineListRow(raw) {
+export function validateLineListRow(raw, excelRowIndex = '?') {
   const map = lineListHeaderMap();
   const p = {};
   const reasons = [];
@@ -348,7 +388,7 @@ export function validateLineListRow(raw) {
     else p.design_p_barg = pVal;
   }
 
-  return reasons.length ? { reasons } : { payload: p };
+  return reasons.length ? { excelRowIndex, reasons, raw } : { excelRowIndex, payload: p, raw };
 }
 
 export function renderLineListImportPreview(results) {
@@ -357,11 +397,27 @@ export function renderLineListImportPreview(results) {
   setLineListValidRows(valid.map(r => r.payload));
   const box = $('lineListImportPreview');
   box.style.display = 'block';
-  const head = `<div class="import-summary"><span class="ok">${valid.length} ready</span> · <span class="bad">${invalid.length} with problems</span> (of ${results.length} rows)</div>`;
-  const rowsHtml = results.slice(0, 40).map((r) => {
+
+  const filterSegment = `
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; gap:8px; flex-wrap:wrap;">
+      <div class="seg-row" id="lineListImportFilterSeg" style="margin:0;">
+        <span class="seg-pill" aria-hidden="true"></span>
+        <button type="button" class="seg-btn ${invalid.length ? 'active' : ''}" data-filter="bad">Errors Only (${invalid.length})</button>
+        <button type="button" class="seg-btn ${!invalid.length ? 'active' : ''}" data-filter="all">All Rows (${results.length})</button>
+        <button type="button" class="seg-btn" data-filter="ok">Ready Only (${valid.length})</button>
+      </div>
+      <div style="font-size:11.5px; font-weight:600; color:var(--text-muted);">
+        <span class="ok">${valid.length} ready</span> · <span class="bad">${invalid.length} with errors</span>
+      </div>
+    </div>
+  `;
+
+  const rowsHtml = results.map((r) => {
     const ok = !!r.payload;
-    const p = r.payload || {};
-    return `<tr class="${ok ? '' : 'bad'}">
+    const p = r.payload || r.raw || {};
+    const rowNum = r.excelRowIndex != null ? `Row ${r.excelRowIndex}` : '—';
+    return `<tr class="${ok ? '' : 'bad'}" data-status="${ok ? 'ok' : 'bad'}">
+      <td style="font-weight:600; color:var(--text-muted); font-size:11px; white-space:nowrap;">${rowNum}</td>
       <td class="${ok ? 'rowstat-ok' : 'rowstat-bad'}">${ok ? '✓' : '✕'}</td>
       <td>${esc(p.pipe_tag || '—')}</td>
       <td>${esc(p.terminal || '—')}</td>
@@ -369,12 +425,36 @@ export function renderLineListImportPreview(results) {
       <td>${esc(p.schedule || '—')}</td>
       <td>${esc(p.material || '—')}</td>
       <td>${p.design_p_barg != null ? `${p.design_p_barg} bar(g)` : '—'}</td>
-      <td class="import-reason">${ok ? '' : esc(r.reasons.join('; '))}</td>
+      <td class="import-reason" style="color:${ok ? 'inherit' : '#dc2626'}; font-weight:${ok ? 'normal' : '600'};">${ok ? '' : esc(r.reasons.join('; '))}</td>
     </tr>`;
   }).join('');
-  box.innerHTML = head +
-    `<div class="import-tbl-scroll"><table class="import-tbl"><thead><tr><th></th><th>Pipe Tag</th><th>Terminal</th><th>NPS</th><th>Schedule</th><th>Material</th><th>P design</th><th>Problems</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>` +
-    (results.length > 40 ? `<div class="hint">Showing first 40 of ${results.length} rows.</div>` : '');
+
+  box.innerHTML = filterSegment +
+    `<div class="import-tbl-scroll" style="max-height:280px; overflow-y:auto;"><table class="import-tbl" id="lineListImportPreviewTable"><thead><tr><th>Row #</th><th>Status</th><th>Pipe Tag</th><th>Terminal</th><th>NPS</th><th>Schedule</th><th>Material</th><th>P design</th><th>Validation Details / Problems</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`;
+
+  const seg = box.querySelector('#lineListImportFilterSeg');
+  if (seg) {
+    positionSegPill(seg, false);
+    const tableRows = box.querySelectorAll('#lineListImportPreviewTable tbody tr');
+    const applyFilter = (f) => {
+      tableRows.forEach(tr => {
+        if (f === 'all') tr.style.display = '';
+        else if (f === 'bad') tr.style.display = tr.dataset.status === 'bad' ? '' : 'none';
+        else if (f === 'ok') tr.style.display = tr.dataset.status === 'ok' ? '' : 'none';
+      });
+    };
+    seg.querySelectorAll('.seg-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.classList.contains('active')) return;
+        seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        positionSegPill(seg, true);
+        applyFilter(btn.dataset.filter);
+      });
+    });
+    applyFilter(invalid.length ? 'bad' : 'all');
+  }
+
   $('lineListImportConfirm').disabled = valid.length === 0;
   $('lineListImportConfirm').textContent = valid.length ? `Import ${valid.length} entr${valid.length === 1 ? 'y' : 'ies'}` : 'Import';
 }
@@ -390,7 +470,7 @@ export async function parseLineListImportFile(file) {
     const sheet = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
     if (!rows.length) { $('errLineListImport').textContent = 'No rows found in the first sheet.'; $('errLineListImport').style.display = 'block'; return; }
-    renderLineListImportPreview(rows.map(validateLineListRow));
+    renderLineListImportPreview(rows.map((row, i) => validateLineListRow(row, i + 2)));
   } catch (e) {
     $('errLineListImport').textContent = 'Could not read the file: ' + e.message;
     $('errLineListImport').style.display = 'block';
