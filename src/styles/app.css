@@ -1130,7 +1130,24 @@
       border: 1px solid var(--card-border);
       background: var(--bg-color);
     }
-    .row-thumb-empty { visibility: hidden; }
+    .row-thumb-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      background: var(--bg-color, #f8fafc);
+      border: 1px dashed var(--card-border, #cbd5e1);
+      color: var(--text-muted, #94a3b8);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      box-sizing: border-box;
+    }
+    .row-thumb-empty svg {
+      opacity: 0.45;
+      color: var(--text-muted, #94a3b8);
+    }
     /* "Hide photos" collapses height only, keeping width reserved — display:none drops the thumb
        from the table's auto layout entirely, so the tag-cell column renegotiates a narrower width
        and .c-tag-text jumps left, reflowing every row's text at once (the horizontal shift the

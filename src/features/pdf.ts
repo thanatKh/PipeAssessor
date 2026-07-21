@@ -843,6 +843,21 @@ export async function buildSummaryPdf(rows, includeBudget) {
     const cnt = (s) => rows.filter(f => f.status === s).length;
     const overdue = rows.filter(isOverdue).length;
 
+    // Ensure photoThumbs covers all rows being exported
+    const missingPhotoRowIds = rows.filter(f => !photoThumbs[f.id]).map(f => f.id);
+    if (missingPhotoRowIds.length) {
+      try {
+        const { data: phData } = await sb.from('finding_photos')
+          .select('finding_id, storage_path, kind, created_at')
+          .in('finding_id', missingPhotoRowIds)
+          .order('created_at', { ascending: true });
+        (phData || []).forEach(p => {
+          const cur = photoThumbs[p.finding_id];
+          if (!cur || (cur.kind !== 'found' && p.kind === 'found')) photoThumbs[p.finding_id] = p;
+        });
+      } catch (_) {}
+    }
+
     // Pre-fetch a small map + the earliest "as found" photo per row. autoTable's didDrawCell
     // runs synchronously during table layout, so every async image fetch has to be resolved
     // before doc.autoTable() is called — there is no way to await inside it. One photo only,
@@ -853,7 +868,18 @@ export async function buildSummaryPdf(rows, includeBudget) {
       Promise.all(rows.map(async f => {
         const p = photoThumbs[f.id];
         if (!p) return null;
-        const durl = await fetchAsDataUrl(photoUrl(p.storage_path), 6000);
+        const pPath = p.storage_path || p.path;
+        if (!pPath) return null;
+        const isFullUrl = pPath.startsWith('http://') || pPath.startsWith('https://') || pPath.startsWith('data:');
+        let durl = null;
+        if (isFullUrl) {
+          durl = await fetchAsDataUrl(pPath, 8000);
+        } else {
+          const primaryUrl = `${R2_UPLOAD_ENDPOINT}/photo?path=${encodeURIComponent(pPath)}`;
+          const fallbackUrl = photoUrl(pPath);
+          durl = await fetchAsDataUrl(primaryUrl, 8000);
+          if (!durl) durl = await fetchAsDataUrl(fallbackUrl, 6000);
+        }
         if (!durl) return null;
         const im = await loadImg(durl);
         return im ? { dataUrl: durl, ratio: im.naturalWidth / im.naturalHeight } : null;

@@ -382,6 +382,7 @@ export function flashRow(id) {
 }
 
 export const CAMERA_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+export const NO_PHOTO_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/><line x1="2" y1="2" x2="22" y2="22" stroke="currentColor" stroke-width="1.5"/></svg>';
 
 export function ageHtml(f) {
   const d = ageDays(f);
@@ -428,7 +429,7 @@ export function renderTable(rows) {
     const thumb = photoThumbs[f.id];
     const thumbHtml = thumb
       ? `<div class="thumb-preview-wrap"><img class="row-thumb" src="${esc(photoUrl(thumb.storage_path))}" alt="" loading="lazy"><div class="thumb-lightbox"><img src="${esc(photoUrl(thumb.storage_path))}" alt=""></div></div>`
-      : `<span class="row-thumb row-thumb-empty"></span>`;
+      : `<div class="row-thumb row-thumb-empty">${NO_PHOTO_SVG}<span>No Photo</span></div>`;
     const dim = (f.status === 'Repaired' || f.status === 'Closed') ? ' row-dim' : '';
     const checked = selectedIds.has(f.id) ? ' checked' : '';
     // data-state="selected" is applied by updateSelectionUI() below (also the row's live sync
@@ -501,7 +502,18 @@ export function updateSelectionUI() {
 // with a location (for search) and a terminal (so the list can be scoped to whichever terminal
 // is selected on the form — a KBY finding has no business suggesting an SRC tag). Findings supply
 // the learned location (most recent wins); line-list-only tags show their service as the sub-line.
+let tagOptionsCache = null;
+let lastCacheKey = null;
+
+export function invalidateTagOptionsCache() {
+  tagOptionsCache = null;
+}
+
 export function buildTagOptions() {
+  const currentKey = `${findings.length}_${lineList.length}`;
+  if (tagOptionsCache && lastCacheKey === currentKey) {
+    return tagOptionsCache;
+  }
   const byTag = new Map();
   // findings newest-first so the first location seen per tag is the most recent
   [...findings].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).forEach(f => {
@@ -512,7 +524,9 @@ export function buildTagOptions() {
     if (!r.pipe_tag) return;
     if (!byTag.has(r.pipe_tag)) byTag.set(r.pipe_tag, { location: r.service || '', terminal: r.terminal || '' });
   });
-  return [...byTag.entries()].map(([tag, o]) => ({ tag, location: o.location, terminal: o.terminal })).sort((a, b) => a.tag.localeCompare(b.tag));
+  tagOptionsCache = [...byTag.entries()].map(([tag, o]) => ({ tag, location: o.location, terminal: o.terminal })).sort((a, b) => a.tag.localeCompare(b.tag));
+  lastCacheKey = currentKey;
+  return tagOptionsCache;
 }
 
 export function renderList() {

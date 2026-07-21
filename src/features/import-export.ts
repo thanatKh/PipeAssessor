@@ -582,12 +582,14 @@ export function renderLineListManageTable() {
   } else if (!rows.length) {
     body.innerHTML = `<tr class="empty-row"><td colspan="9">No entries match "${esc(q)}".</td></tr>`;
   } else {
-    body.innerHTML = rows.map(r => `<tr data-id="${esc(r.id)}">
+    const shown = rows.slice(0, 500);
+    body.innerHTML = shown.map(r => `<tr data-id="${esc(r.id)}">
       <td>${esc(r.pipe_tag)}</td><td>${esc(r.terminal || '—')}</td><td>${esc(r.nps || '—')}</td><td>${esc(r.schedule || '—')}</td>
       <td>${esc(r.material || '—')}</td><td>${r.design_p_barg != null ? `${r.design_p_barg} bar(g)` : '—'}</td><td>${esc(r.pid_no || '—')}</td>
       <td>${esc(r.service || '—')}</td>
       <td><button type="button" class="link-btn" data-del="${esc(r.id)}">Delete</button></td>
-    </tr>`).join('');
+    </tr>`).join('') +
+    (rows.length > 500 ? `<tr class="empty-row"><td colspan="9" style="font-size:11.5px; color:var(--text-muted); text-align:center; padding:8px;">Showing first 500 of ${rows.length} entries — type in search box above to narrow results.</td></tr>` : '');
     body.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => deleteLineListRow(btn.dataset.del)));
   }
   $('lineListCount').textContent = q && rows.length !== lineList.length

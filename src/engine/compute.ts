@@ -32,7 +32,10 @@ export function paGetApi574Min(nps: string): number {
     '16"': 2.8,
     '18"': 2.8,
     '20"': 3.1,
-    '24"': 3.1
+    '24"': 3.1,
+    '28"': 3.1,
+    '32"': 3.1,
+    '36"': 3.1
   };
   return map[nps] || 3.1;
 }

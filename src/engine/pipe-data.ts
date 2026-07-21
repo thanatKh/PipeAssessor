@@ -223,6 +223,51 @@ export const PA_PIPE_DATABASE: Record<string, PipeSize> = {
       '140': { t: 52.37, label: 'Sch 140' },
       '160': { t: 59.54, label: 'Sch 160' }
     }
+  },
+  '28"': {
+    od: 711.20,
+    schedules: {
+      '10': { t: 7.92, label: 'Sch 10' },
+      '20': { t: 9.53, label: 'Sch 20 (STD)' },
+      '30': { t: 12.70, label: 'Sch 30 (XS)' },
+      '40': { t: 15.88, label: 'Sch 40' },
+      '60': { t: 22.22, label: 'Sch 60' },
+      '80': { t: 28.58, label: 'Sch 80' },
+      '100': { t: 34.93, label: 'Sch 100' },
+      '120': { t: 41.28, label: 'Sch 120' },
+      '140': { t: 47.63, label: 'Sch 140' },
+      '160': { t: 53.98, label: 'Sch 160' }
+    }
+  },
+  '32"': {
+    od: 812.80,
+    schedules: {
+      '10': { t: 7.92, label: 'Sch 10' },
+      '20': { t: 9.53, label: 'Sch 20 (STD)' },
+      '30': { t: 12.70, label: 'Sch 30 (XS)' },
+      '40': { t: 17.48, label: 'Sch 40' },
+      '60': { t: 25.40, label: 'Sch 60' },
+      '80': { t: 31.75, label: 'Sch 80' },
+      '100': { t: 39.67, label: 'Sch 100' },
+      '120': { t: 47.63, label: 'Sch 120' },
+      '140': { t: 55.56, label: 'Sch 140' },
+      '160': { t: 63.50, label: 'Sch 160' }
+    }
+  },
+  '36"': {
+    od: 914.40,
+    schedules: {
+      '10': { t: 7.92, label: 'Sch 10' },
+      '20': { t: 9.53, label: 'Sch 20 (STD)' },
+      '30': { t: 12.70, label: 'Sch 30 (XS)' },
+      '40': { t: 19.05, label: 'Sch 40' },
+      '60': { t: 28.58, label: 'Sch 60' },
+      '80': { t: 36.53, label: 'Sch 80' },
+      '100': { t: 44.45, label: 'Sch 100' },
+      '120': { t: 52.37, label: 'Sch 120' },
+      '140': { t: 61.93, label: 'Sch 140' },
+      '160': { t: 71.42, label: 'Sch 160' }
+    }
   }
 };
 
