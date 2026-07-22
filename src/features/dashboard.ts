@@ -109,6 +109,25 @@ export async function loadDetail(id) {
   return true;
 }
 
+// Public read-only load for the QR share link (#/s/<id>) — no sign-in required. Goes through the
+// get_public_finding SECURITY DEFINER RPC (see db/public-share-migration.sql), the ONE public read
+// path, which returns a single finding with PII stripped and its assessments/photos/history. The
+// anon key can call this function but cannot read the tables directly. Populates the same state the
+// authenticated detail page uses, so renderDetail() renders it unchanged.
+export async function loadPublicFinding(id) {
+  try {
+    const { data, error } = await sb.rpc('get_public_finding', { p_id: id });
+    if (error || !data || !data.finding) return false;
+    setCurrent(data.finding);
+    setCurrentPhotos(data.photos || []);
+    setCurrentHistory(data.history || []);
+    setCurrentAssessments(data.assessments || []);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 export function photoUrl(path) {
   return `${R2_PUBLIC_BASE}/${path}`;
 }
@@ -448,7 +467,7 @@ export function renderTable(rows) {
     const photoChip = np ? `<span class="t-photos">${CAMERA_SVG}${np}</span>` : '';
     const thumb = photoThumbs[f.id];
     const thumbHtml = thumb
-      ? `<div class="thumb-preview-wrap"><img class="row-thumb" src="${esc(photoUrl(thumb.storage_path))}" alt="" loading="lazy"><div class="thumb-lightbox"><img src="${esc(photoUrl(thumb.storage_path))}" alt=""></div></div>`
+      ? `<img class="row-thumb" src="${esc(photoUrl(thumb.storage_path))}" alt="" loading="lazy">`
       : `<div class="row-thumb row-thumb-empty">${NO_PHOTO_SVG}<span>No Photo</span></div>`;
     const dim = (f.status === 'Repaired' || f.status === 'Closed') ? ' row-dim' : '';
     const checked = selectedIds.has(f.id) ? ' checked' : '';

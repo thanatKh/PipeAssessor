@@ -3,9 +3,15 @@
    finding/damage type, no longer nested inside (or gated by) the ASME B31.3
    assessment. For the four wall-loss types (WALL_LOSS_TYPES) a live B31.3
    result — when available — REPLACES the generic type guidance with today's
-   precise numeric recommendation (paAdvisorItems, unchanged logic, moved here
-   from the old embedded advisor). Non-wall-loss types always get their own
-   dedicated content, regardless of any stray B31.3 result.
+   precise numeric recommendation (paAdvisorItems). That recommendation is both
+   status-aware (OK / MONITOR / REPAIR) AND mechanism-aware: it takes the finding
+   type so External / Internal / CUI / CUS corrosion each get remediation matched
+   to the damage (external removal+recoat vs. internal process-side control vs.
+   CUI insulation restoration vs. CUS support-detail fix). At OK it still calls
+   out arresting the active corrosion (removal → recoat), and at REPAIR it always
+   offers Replacement / Spool Replacement as an option, not only above 80% loss.
+   Non-wall-loss types always get their own dedicated content, regardless of any
+   stray B31.3 result.
 
    Leaking is orthogonal to finding type (a corrosion/dent/CUI finding can
    independently be actively leaking or not — it is NOT its own finding type,
@@ -43,18 +49,71 @@ export interface ResolvedAdvisor extends FindingAdvisorEntry {
   isNumeric: boolean;
 }
 
-/* Pure PCC-2 advisor content, driven purely by a computeB313 result — unchanged from the
-   pre-refactor version, just relocated. Used only for the four WALL_LOSS_TYPES once a valid
-   result is available; see resolveAdvisor below for the precedence rule. */
-export function paAdvisorItems(res: B313Result | null | undefined): AdvisorItem[] {
+/* The four WALL_LOSS_TYPES are all corrosion mechanisms, but the remediation differs by WHERE the
+   metal loss is and WHAT drives it, so advice must be mechanism-aware — not one-size-fits-all:
+    - external : surface corrosion, arrested by removal + recoat (+ CP).
+    - cui      : external-under-insulation; also needs insulation/cladding + weatherproofing restored.
+    - cus      : external-at-support; also needs the support detail fixed so water can't pool again.
+    - internal : loss is on the bore — external coating does nothing; must be addressed process-side. */
+type CorrMech = 'external' | 'internal' | 'cui' | 'cus';
+
+function corrMechOf(findingType?: string | null): CorrMech {
+  if (findingType === 'Internal Corrosion') return 'internal';
+  if (findingType && findingType.startsWith('CUI')) return 'cui';
+  if (findingType && findingType.startsWith('CUS')) return 'cus';
+  return 'external';
+}
+
+/* Per-mechanism remediation phrasing, kept self-contained (each body is a full sentence) so it can
+   be dropped into any status section without grammar-stitching. `arrest` = how to stop the active
+   mechanism (used at OK/MONITOR, where the wall itself is still acceptable); `cleanAccess` = how to
+   expose/clean the defect so its true extent is known before a REPAIR method is chosen;
+   `postRepair` = how to stop recurrence after a structural repair is placed. */
+const CORR_MITIGATION: Record<CorrMech, { label: string; arrest: string; cleanAccess: string; postRepair: string }> = {
+  external: {
+    label: 'ขจัดการกัดกร่อนและซ่อม Coating (External):',
+    arrest: 'ขจัดสนิม/ผลิตภัณฑ์การกัดกร่อนออกจนถึงเนื้อโลหะดี (Surface Prep ตาม SSPC-SP) วัดความหนาที่เหลือซ้ำหลังทำความสะอาด แล้วเคลือบ Coating ระบบใหม่ที่เข้ากันได้เพื่อหยุดยั้งการกัดกร่อนต่อเนื่อง พร้อมตรวจสอบระบบ Cathodic Protection (ถ้ามี)',
+    cleanAccess: 'ขจัดผลิตภัณฑ์การกัดกร่อนออกจนถึงเนื้อโลหะดีก่อน แล้ววัด UT ซ้ำเพื่อกำหนดขอบเขตและความลึกที่แท้จริงของข้อบกพร่อง ก่อนเลือกวิธีซ่อม',
+    postRepair: 'หลังซ่อม ให้เคลือบ Coating ระบบใหม่ทับบริเวณที่ซ่อมและพื้นที่ข้างเคียง และตรวจสอบ Cathodic Protection เพื่อป้องกันการกัดกร่อนเกิดซ้ำ'
+  },
+  cui: {
+    label: 'ขจัดการกัดกร่อนและฟื้นฟูระบบป้องกัน (CUI):',
+    arrest: 'รื้อ Insulation/Cladding ออก ขจัดการกัดกร่อนจนถึงเนื้อโลหะดี วัดความหนาซ้ำ เคลือบ Coating ทนอุณหภูมิที่เหมาะสม แล้วติดตั้ง Insulation/Cladding และระบบกันน้ำ (Weatherproofing) กลับให้สมบูรณ์เพื่อป้องกันน้ำซึม ตาม API 583 — หากตำแหน่งนี้ไม่จำเป็นต้องมีฉนวน พิจารณาถอดออกถาวร',
+    cleanAccess: 'รื้อ Insulation/Cladding ออกให้พ้นบริเวณกัดกร่อน ขจัดผลิตภัณฑ์การกัดกร่อนจนถึงเนื้อโลหะดี แล้ววัด UT ซ้ำเพื่อกำหนดขอบเขตข้อบกพร่องที่แท้จริง ก่อนเลือกวิธีซ่อม',
+    postRepair: 'หลังซ่อม ให้เคลือบ Coating ใหม่ แล้วติดตั้ง Insulation/Cladding และระบบกันน้ำกลับให้สมบูรณ์ตาม API 583 เพื่อป้องกัน CUI เกิดซ้ำ'
+  },
+  cus: {
+    label: 'ขจัดการกัดกร่อนและปรับปรุงจุดรองรับ (CUS):',
+    arrest: 'ผ่อน/ถอด Support เพื่อเข้าถึง ขจัดการกัดกร่อนจนถึงเนื้อโลหะดี วัดความหนาซ้ำ เคลือบ Coating ใหม่ แล้วปรับปรุงรายละเอียดจุดรองรับ (ติดตั้งแผ่นรอง/Isolation Pad, ยกท่อให้พ้นจุดสะสมน้ำ, ปรับปรุงการระบายน้ำ) เพื่อไม่ให้เกิดการกัดกร่อนซ้ำที่ตำแหน่งเดิม',
+    cleanAccess: 'ผ่อน/ถอด Support เพื่อเข้าถึงจุดกัดกร่อน ขจัดผลิตภัณฑ์การกัดกร่อนจนถึงเนื้อโลหะดี แล้ววัด UT ซ้ำเพื่อกำหนดขอบเขตข้อบกพร่องที่แท้จริง ก่อนเลือกวิธีซ่อม',
+    postRepair: 'หลังซ่อม ให้เคลือบ Coating ใหม่ และปรับปรุงรายละเอียดจุดรองรับ (แผ่นรอง/Isolation Pad, ยกท่อพ้นจุดสะสมน้ำ, ปรับการระบายน้ำ) เพื่อไม่ให้เกิดการกัดกร่อนซ้ำ'
+  },
+  internal: {
+    label: 'ควบคุมการกัดกร่อนภายใน (Internal):',
+    arrest: 'การกัดกร่อนอยู่ที่ผิวในซึ่งการเคลือบภายนอกไม่ช่วยหยุดยั้ง ต้องแก้ที่ต้นเหตุด้านกระบวนการ เช่น การเติมสารยับยั้งการกัดกร่อน (Corrosion Inhibitor), การกำจัดน้ำ/ตะกอน (Dewatering/Pigging), การควบคุมความเร็วการไหล และพิจารณาบุผิวภายใน (Internal Lining) หากเหมาะสม',
+    cleanAccess: 'การกัดกร่อนอยู่ผิวในจึงไม่สามารถขจัดจากภายนอกได้ — ใช้การทำ UT Mapping/Grid หรือ Profile Radiography เพื่อกำหนดขอบเขตและความลึกของข้อบกพร่องก่อนเลือกวิธีซ่อม',
+    postRepair: 'หลังซ่อม ต้องแก้ที่ต้นเหตุด้านกระบวนการ (Corrosion Inhibitor, Dewatering/Pigging, ควบคุมความเร็วการไหล) เพื่อไม่ให้การกัดกร่อนภายในดำเนินต่อและทำให้การซ่อมเสียหายซ้ำ',
+  }
+};
+
+/* PCC-2 / API-driven advisor content, now mechanism-aware (see CORR_MITIGATION) and driven by a
+   computeB313 result. `findingType` selects the corrosion mechanism so the remediation matches the
+   damage; when omitted it defaults to the external-surface case. Used for the four WALL_LOSS_TYPES
+   once a valid result exists (see resolveAdvisor for the precedence rule). */
+export function paAdvisorItems(res: B313Result | null | undefined, findingType?: string | null): AdvisorItem[] {
   if (!res || res.hasErrors) {
     return [{ title: '', body: 'ยังไม่มีผลการคำนวณ กรุณาแก้ไขข้อผิดพลาดแล้วคำนวณใหม่', sub: [] }];
   }
 
+  const mech = CORR_MITIGATION[corrMechOf(findingType)];
+
   if (res.status === 'OK') {
+    // Wall thickness passes, but a corrosion finding means the mechanism is still live — arresting
+    // it (removal + recoat / process control) is the actual action here, not just "keep watching".
     return [
-      { title: 'ความสอดคล้องตาม PCC-2:', body: 'ความหนาผนังท่อสูงกว่าขีดจำกัดออกแบบรวมค่าเผื่อการกัดกร่อน ไม่จำเป็นต้องซ่อมแซมโครงสร้าง', sub: [] },
-      { title: 'คำแนะนำการตรวจติดตาม:', body: 'รักษาความถี่การตรวจสอบตามปกติ และติดตามแนวโน้มการสูญเสียความหนาที่ระดับ Nominal', sub: [] }
+      { title: 'ความสอดคล้องด้านความดัน (PCC-2):', body: 'ความหนาผนังท่อสูงกว่าขีดจำกัดออกแบบรวมค่าเผื่อการกัดกร่อน ยังไม่จำเป็นต้องซ่อมแซมส่วนรับความดันในขณะนี้ — อย่างไรก็ตาม กลไกการกัดกร่อนยังดำเนินอยู่และต้องได้รับการหยุดยั้งเพื่อไม่ให้ลุกลาม', sub: [] },
+      { title: mech.label, body: mech.arrest, sub: [] },
+      { title: 'การตรวจติดตาม:', body: 'รักษาความถี่การตรวจสอบตามปกติ และติดตามแนวโน้มการสูญเสียความหนาที่ระดับ Nominal พร้อมทวนสอบอัตราการกัดกร่อน (Corrosion Rate) หลังการหยุดยั้งกลไก', sub: [] }
     ];
   }
 
@@ -64,35 +123,50 @@ export function paAdvisorItems(res: B313Result | null | undefined): AdvisorItem[
       items.push({ title: 'ความแข็งแรงเชิงโครงสร้าง (API 574):', body: 'ความหนาที่เหลืออยู่ต่ำกว่าเกณฑ์ขั้นต่ำเชิงโครงสร้าง ให้ตรวจสอบช่วงพาดท่อว่ามีการแอ่นตัวหรือไม่ และตรวจสอบระยะห่างของ Support เพื่อป้องกันการโก่งงอหรือวิบัติ', sub: [] });
     }
     items.push(
-      { title: 'แผนการตรวจติดตาม:', body: 'ติดตามแนวโน้มความหนาด้วยการวัด UT แบบ Grid เฉพาะจุด และตรวจสอบอัตราการกัดกร่อน (Corrosion Rate)', sub: [] },
-      { title: 'การป้องกัน (PCC-2 Part 5):', body: 'ปรับปรุงความสมบูรณ์ของ Coating ภายนอกหรือระบบ Cathodic Protection เพื่อลดการกัดกร่อนเฉพาะจุด', sub: [] },
-      { title: '', body: 'วางแผนประเมินซ้ำก่อนถึงรอบหยุดซ่อมบำรุงครั้งถัดไป', sub: [] }
+      { title: 'ใกล้ถึงขีดจำกัด — เร่งหยุดยั้งการกัดกร่อน:', body: 'ความหนาเข้าใกล้ขีดจำกัดออกแบบ/โครงสร้าง การหยุดยั้งกลไกการกัดกร่อนตั้งแต่ตอนนี้จะช่วยยืดอายุการใช้งานและอาจหลีกเลี่ยงการซ่อมเชิงโครงสร้างได้', sub: [] },
+      { title: mech.label, body: mech.arrest, sub: [] },
+      { title: 'แผนการตรวจติดตาม:', body: 'ติดตามแนวโน้มความหนาด้วยการวัด UT แบบ Grid เฉพาะจุด และทวนสอบอัตราการกัดกร่อน (Corrosion Rate) เพื่อยืนยันว่าการหยุดยั้งได้ผล', sub: [] },
+      { title: '', body: 'วางแผนประเมินซ้ำก่อนถึงรอบหยุดซ่อมบำรุงครั้งถัดไป และเตรียมแผนซ่อมสำรองไว้หากแนวโน้มยังลดลงต่อเนื่อง', sub: [] }
     );
     return items;
   }
 
-  // REPAIR Status Recommendations
+  // REPAIR status: metal loss is below the acceptable limit — a repair method must be selected.
+  // Every option below is legitimate; Replacement is always offered (not only at >80% loss) so the
+  // engineer weighs a permanent fix against a reinforcing/temporary one every time.
   const items: AdvisorItem[] = [];
   const pctLoss = (1 - (res.t_meas / res.t_nom)) * 100;
   if (pctLoss > 80) {
-    items.push({ title: 'วิกฤต (PCC-2 Part 3):', body: 'การสูญเสียเนื้อโลหะเกิน 80% ของความหนา Nominal แนะนำให้เปลี่ยนท่อทั้งท่อนโดยเร็ว', sub: [] });
+    items.push({ title: 'วิกฤต (PCC-2 Part 3):', body: 'การสูญเสียเนื้อโลหะเกิน 80% ของความหนา Nominal — แนะนำอย่างยิ่งให้เปลี่ยนท่อช่วงที่เสียหาย (Spool Replacement) โดยเร็ว แทนการซ่อมเสริม', sub: [] });
   }
   items.push(
-    { title: 'Composite Repair (PCC-2 Part 2):', body: 'สามารถใช้วัสดุห่อหุ้มชนิดไม่ใช่โลหะที่ผ่านการออกแบบทางวิศวกรรม (เช่น Carbon Fiber/Epoxy) กับจุดบกพร่องที่ไม่มีการรั่วไหล เพื่อคืนความสามารถในการรับความดัน', sub: [] },
+    { title: 'ขจัดการกัดกร่อน/กำหนดขอบเขตก่อนซ่อม:', body: mech.cleanAccess, sub: [] },
+    { title: 'Composite Repair (PCC-2 Part 2):', body: 'ใช้วัสดุห่อหุ้มชนิดไม่ใช่โลหะที่ผ่านการออกแบบทางวิศวกรรม (เช่น Carbon Fiber/Epoxy) กับจุดบกพร่องที่ไม่มีการรั่วไหล เพื่อคืนความสามารถในการรับความดัน — เหมาะกับการเสริมกำลังโดยไม่ใช้ Hot Work', sub: [] },
     { title: 'Welded Repair (PCC-2 Part 3):', body: '', sub: [
       'Type B Full-Encirclement Split Sleeve ออกแบบให้รับความดันได้เต็มพิกัด',
       'การเชื่อมพอกเนื้อโลหะ (ต้องมี WPS/PQR ที่ผ่านการรับรอง, Pre-heat ก่อนเชื่อม, และ NDT หลังเชื่อม)'
     ] },
-    { title: 'Mechanical Repair (PCC-2 Part 4):', body: 'ใช้ Mechanical Clamp ที่ผ่านการออกแบบทางวิศวกรรม หรือกล่องครอบป้องกันการรั่วไหล (เหมาะเมื่อมีข้อจำกัดด้าน Hot Work หรือการเชื่อม)', sub: [] }
+    { title: 'Mechanical Repair (PCC-2 Part 4):', body: 'ใช้ Mechanical Clamp ที่ผ่านการออกแบบทางวิศวกรรม หรือกล่องครอบ (เหมาะเมื่อมีข้อจำกัดด้าน Hot Work หรือการเชื่อม — มักเป็นมาตรการชั่วคราว)', sub: [] },
+    { title: 'Replacement / Spool Replacement (PCC-2 Part 3):', body: 'ตัดและเปลี่ยนท่อช่วงที่เสียหายด้วยท่อใหม่ตามสเปกเดิม — เป็นทางเลือกที่ให้ความน่าเชื่อถือสูงสุดและเป็นการซ่อมถาวร ควรพิจารณาเทียบกับการซ่อมเสริมทุกครั้ง โดยเฉพาะเมื่อ:', sub: [
+      'ความเสียหายมีขอบเขตกว้างหรือมีหลายจุดในช่วงท่อเดียวกัน',
+      'อายุการใช้งานที่เหลือสั้นจนการซ่อมเสริม/ชั่วคราวไม่คุ้มค่า',
+      'รูปทรงหรือตำแหน่งไม่เหมาะกับ Sleeve/Clamp/Composite',
+      'เคยซ่อมที่ตำแหน่งเดิมแล้วเกิดปัญหาซ้ำ'
+    ] },
+    { title: 'หลังการซ่อม — ป้องกันการเกิดซ้ำ:', body: mech.postRepair, sub: [] }
   );
   return items;
 }
 
 const STATUS_SUMMARY: Record<B313Result['status'], string> = {
-  OK: 'ความหนาผนังท่ออยู่ในเกณฑ์ที่ยอมรับได้ — ยังไม่จำเป็นต้องซ่อมแซมตามค่าที่วัดได้ในขณะนี้',
-  MONITOR: 'ใกล้ถึงขีดจำกัดด้านออกแบบ/โครงสร้าง — เพิ่มความถี่การตรวจติดตามและวางแผนประเมินซ้ำ',
-  REPAIR: 'ต่ำกว่าเกณฑ์ที่ยอมรับได้ — วางแผนซ่อมแซมตามแนวทางด้านล่าง'
+  OK: 'ความหนาผนังท่ออยู่ในเกณฑ์ที่ยอมรับได้ — ยังไม่จำเป็นต้องซ่อมส่วนรับความดัน แต่ยังต้องหยุดยั้งกลไกการกัดกร่อนที่ดำเนินอยู่',
+  MONITOR: 'ใกล้ถึงขีดจำกัดด้านออกแบบ/โครงสร้าง — เร่งหยุดยั้งการกัดกร่อน เพิ่มความถี่การตรวจติดตาม และวางแผนประเมินซ้ำ',
+  REPAIR: 'ต่ำกว่าเกณฑ์ที่ยอมรับได้ — เลือกวิธีซ่อมหรือเปลี่ยนท่อตามแนวทางด้านล่าง'
 };
+
+/* Standards backing the numeric guidance above — surfaced (with the needsReview caveat) on every
+   numeric result so the engineer sees what it's grounded in and that it still wants a sign-off. */
+const NUMERIC_STANDARDS_NOTE = 'อ้างอิง ASME B31.3 (การประเมินความหนา), ASME PCC-2 (วิธีซ่อม/เปลี่ยนท่อ), API 570/574/583 และแนวปฏิบัติ SSPC/NACE (การขจัดการกัดกร่อน/Coating)';
 
 /* Generic, always-available guidance shown for a wall-loss finding type before a valid B31.3
    result exists yet (no reading entered, panel off, or the current inputs have errors). */
@@ -197,7 +271,7 @@ export function resolveAdvisor(findingType: string | null | undefined, res: B313
   let base: ResolvedAdvisor;
   if (WALL_LOSS_TYPES.includes(findingType)) {
     if (res && !res.hasErrors) {
-      base = { summary: STATUS_SUMMARY[res.status], items: paAdvisorItems(res), isNumeric: true };
+      base = { summary: STATUS_SUMMARY[res.status], items: paAdvisorItems(res, findingType), standardsNote: NUMERIC_STANDARDS_NOTE, needsReview: true, isNumeric: true };
     } else {
       const pending = REPAIR_ADVISOR_BY_FINDING[findingType] || WALL_LOSS_PENDING_ENTRY;
       base = { ...pending, isNumeric: false };
@@ -259,13 +333,13 @@ export function paRenderRepairAdvisor(root: HTMLElement, findingType: string | n
       ? `<div class="advisor-sub-group">${item.sub.map(s => `<div class="advisor-sub-item">${escHtml(s)}</div>`).join('')}</div>`
       : '';
     return `
-      <div class="advisor-item-row">
-        <div class="advisor-item-title">${titleText}</div>
-        <div class="advisor-item-body">
+      <tr class="advisor-item-row">
+        <td class="advisor-item-title">${titleText}</td>
+        <td class="advisor-item-body">
           ${bodyText ? `<div class="advisor-body-text">${bodyText}</div>` : ''}
           ${subHtml}
-        </div>
-      </div>
+        </td>
+      </tr>
     `;
   }).join('');
 
@@ -279,10 +353,14 @@ export function paRenderRepairAdvisor(root: HTMLElement, findingType: string | n
         <div class="advisor-banner-tag">${bannerTitle}</div>
         <div class="advisor-summary-text">${escHtml(resolved.summary)}</div>
       </div>
-      <div class="advisor-items-grid">
-        ${itemsHtml}
+      <div class="advisor-body-pad">
+        <table class="advisor-items-grid">
+          <tbody>
+            ${itemsHtml}
+          </tbody>
+        </table>
+        ${noteHtml}
       </div>
-      ${noteHtml}
     </div>
   `;
 }

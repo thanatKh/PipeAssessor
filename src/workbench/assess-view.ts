@@ -8,6 +8,52 @@
    ============================================================================ */
 import { paFmt } from '../engine/format';
 import { computeB313 } from '../engine/compute';
+import { WALL_LOSS_TYPES } from '../core/constants';
+
+/* ---------------- integrity health banner (shared: PDF report + web detail page) ----------------
+   One resolver so the finding PDF's title-block banner and the detail page's banner can never
+   disagree on wording, color, or which state a finding is in. Reflects ENGINEERING health, not
+   workflow: the numeric ASME B31.3 verdict (OK/MONITOR/REPAIR) or leaking when assessed; otherwise
+   ACTION REQUIRED for a non-wall-loss type (the calc doesn't apply but the finding still needs
+   remediation — deliberately blue, out of the green/amber/red numeric palette), PENDING for a
+   wall-loss type awaiting a reading, or NOT ASSESSED when there's no finding type at all. Fills are
+   700-tier shades so white text clears WCAG on all; spine is a darker shade for depth. `finding`
+   only needs { is_leaking, finding_type }; `res` is a computeB313 result or null. */
+export interface IntegrityBanner {
+  key: 'leaking' | 'repair' | 'monitor' | 'ok' | 'action' | 'pending' | 'none';
+  word: string;
+  line: string;
+  fill: string;
+  spine: string;
+  metrics: { erf: string; mawp: string; pct: string } | null;
+}
+
+export function resolveIntegrityBanner(finding: any, res: any): IntegrityBanner {
+  const f3 = (n: number) => (n == null || !isFinite(n)) ? '—' : n.toFixed(3);
+  const f1 = (n: number) => (n == null || !isFinite(n)) ? '—' : n.toFixed(1);
+  const f0 = (n: number) => (n == null || !isFinite(n)) ? '—' : n.toFixed(0);
+  const metrics = res ? {
+    erf: f3(res.mawp_no > 0 ? (res.P_input / res.mawp_no) : 9.99),
+    mawp: `${f1(res.mawp_no)} ${res.pUnit} (no CA)`,
+    pct: f0(res.pctRemainNom),
+  } : null;
+  const ft = finding && finding.finding_type;
+  const isWallLoss = ft && WALL_LOSS_TYPES.includes(ft);
+
+  if (finding && finding.is_leaking)
+    return { key: 'leaking', word: 'INTEGRITY: LEAKING', line: 'Pressure boundary breached — emergency containment required (ASME PCC-2)', fill: '#b91c1c', spine: '#7f1d1d', metrics };
+  if (res && res.status === 'REPAIR')
+    return { key: 'repair', word: 'INTEGRITY: REPAIR REQUIRED', line: 'Below acceptable design limit — plan repair or replacement', fill: '#b91c1c', spine: '#7f1d1d', metrics };
+  if (res && res.status === 'MONITOR')
+    return { key: 'monitor', word: 'INTEGRITY: MONITOR', line: 'Approaching design / structural limit — monitor and plan', fill: '#b45309', spine: '#92400e', metrics };
+  if (res && res.status === 'OK')
+    return { key: 'ok', word: 'INTEGRITY: OK', line: 'Within acceptable design limits — no repair required', fill: '#047857', spine: '#065f46', metrics };
+  if (ft && !isWallLoss)
+    return { key: 'action', word: 'ACTION REQUIRED', line: 'Requires remediation — see the Repair Advisor for the recommended action', fill: '#1e40af', spine: '#1e3a8a', metrics: null };
+  if (ft)
+    return { key: 'pending', word: 'PENDING ASSESSMENT', line: 'Awaiting a UT wall-thickness reading for the ASME B31.3 assessment', fill: '#475569', spine: '#334155', metrics: null };
+  return { key: 'none', word: 'NOT ASSESSED', line: 'No assessment on record for this finding', fill: '#475569', spine: '#334155', metrics: null };
+}
 
 /* Single source of truth for the Scope & Limitations text (on-screen notice + PDF section). */
 export const PA_SCOPE_HTML = '<strong>Scope &amp; Limitations:</strong> This assessment applies ASME B31.3 thickness/MAWP equations to a single uniform wall-loss reading and is intended for general (non-localized) corrosion screening only. It is <strong>not</strong> a Level 1/2 fitness-for-service evaluation (API 579-1/ASME FFS-1) or a B31G/RSTRENG remaining-strength calculation, and is not valid for assessing isolated pits, gouges, or other localized flaws &mdash; a separate FFS assessment is required for those. Results reflect one manually entered reading; they do not represent a full CML survey grid or a multi-survey corrosion-rate trend. Confirm all material- and temperature-dependent inputs (S, E, W, Y) before relying on this output for a repair/replace decision.';

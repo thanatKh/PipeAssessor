@@ -26,6 +26,7 @@ import {
 } from '../core/state';
 import { loadFindings, buildTagOptions } from './dashboard';
 import { loadLineList } from './import-export';
+import { exportQuickCalcPdf } from './pdf';
 // show() is the router's view-switcher — stays in app.ts (the hub).
 import { show } from '../app';
 import { addDetailPhotos, renderPhotoGroups } from './detail';
@@ -393,6 +394,29 @@ export function resetAssessment() {
   renderRepairAdvisor();
 }
 
+// Force the assessment's pipe-setup inputs to the master line list entry for the currently
+// selected Pipe Tag / Line No. Unlike applyTagMemory (which prefers a prior finding's assessment
+// and only fills empty metadata), this deliberately OVERRIDES the current pipe setup with the
+// line-list authority — for when the user has picked/changed the tag and wants a clean reset to
+// the registered line data. Only the pipe setup (NPS/Schedule/Material/design pressure) is reset;
+// the UT reading (depth / t_meas) is left untouched via loadAssessmentInto's skipReading.
+export async function resetAssessmentToLineList() {
+  const tag = $('fTag').value.trim();
+  if (!tag) { notify('Enter or select a Pipe Tag / Line No. first.', true); return; }
+  if (!lineList.length) await loadLineList(); // lazy-load: #/new is reachable without visiting #/list
+  const lineRow = lineList.find(r => r.pipe_tag === tag);
+  if (!lineRow || !lineRow.nps) { notify('No master line list entry found for this tag.', true); return; }
+  if (!$('assessPanel').classList.contains('on')) setAssessOn(true);
+  const setupParams = { nps: lineRow.nps, schedule: lineRow.schedule, material: lineRow.material };
+  if (lineRow.design_p_barg != null && lineRow.design_p_barg !== '') {
+    setupParams.P = String(lineRow.design_p_barg);
+    setupParams.p_unit = 'bar(g)';
+  }
+  loadAssessmentInto(setupParams, true); // skipReading: keep the measured wall-loss, reset only the setup
+  recalcAssessment();
+  notify('Reset pipe setup to the master line list' + (setupParams.P ? ' (incl. design pressure).' : '.'));
+}
+
 /* ---------------- standalone repair advisor (form panel, always available) ---------------- */
 
 // Renders src/workbench/repair-advisor.ts's resolveAdvisor() output into #raBody, and toggles
@@ -446,6 +470,7 @@ export function initAssessment() {
   awFormView.render(null, { neutral: true });
 
   $('aToggle').addEventListener('change', () => setAssessOn($('aToggle').checked));
+  $('btnResetAssessLine').addEventListener('click', resetAssessmentToLineList);
   $('aNps').addEventListener('change', () => { updateAschedules(false); recalcAssessment(); });
   $('aSch').addEventListener('change', () => { autofillAtnom(); recalcAssessment(); });
   $('aMat').addEventListener('change', () => { applyMaterialStress(); recalcAssessment(); });
@@ -543,7 +568,7 @@ export async function applyTagMemory() {
     };
     if (lineRow.design_p_barg != null && lineRow.design_p_barg !== '') {
       setupParams.P = String(lineRow.design_p_barg);
-      setupParams.pUnit = 'bar(g)';
+      setupParams.p_unit = 'bar(g)'; // key must match loadAssessmentInto (reads inp.p_unit, not pUnit)
     }
     loadAssessmentInto(setupParams, true);
     recalcAssessment();
@@ -752,10 +777,10 @@ export function initQuickCalc() {
     const pUnit = $('qPUnit').value;
     const text = [
       `ASME B31.3 What-If Calculation Summary`,
-      `Piping: ${nps} Sch ${sch} (${mat}, OD ${res.od.toFixed(2)}mm, t_nom ${res.t_nom.toFixed(2)}mm)`,
+      `Piping: ${nps} Sch ${sch} (${mat}, OD ${res.D.toFixed(2)}mm, t_nom ${res.t_nom.toFixed(2)}mm)`,
       `Pressure: ${pVal} ${pUnit} | CA: ${res.ca.toFixed(2)}mm`,
-      `Measured Min. Thickness: ${res.t_meas.toFixed(2)}mm | Wall Loss Depth: ${res.d.toFixed(2)}mm`,
-      `Required Thickness t_req: ${res.t_req.toFixed(2)}mm (w/ CA: ${res.t_req_total.toFixed(2)}mm)`,
+      `Measured Min. Thickness: ${res.t_meas.toFixed(2)}mm | Wall Loss Depth: ${res.depth.toFixed(2)}mm`,
+      `Required Thickness t_req: ${res.t_req_noCA.toFixed(2)}mm (w/ CA: ${res.t_req_total.toFixed(2)}mm)`,
       `Remaining Wall: ${res.pctRemainNom.toFixed(0)}% of t_nom | MAWP: ${(res.mawp_no * 10).toFixed(2)} bar`,
       `Status: ${res.status} (${res.desc})`
     ].join('\n');
@@ -765,6 +790,20 @@ export function initQuickCalc() {
     }).catch(() => {
       notify('Failed to copy to clipboard.', true);
     });
+  };
+
+  const exportQuickPdf = () => {
+    if (!lastQuickRes) { notify('Enter a valid calculation to export.', true); return; }
+    const nps = $('qNps').value;
+    const sch = $('qSch').value;
+    const pipe = PA_PIPE_DATABASE[nps];
+    const schLabel = (pipe && pipe.schedules[sch]) ? pipe.schedules[sch].label : (sch || '—');
+    exportQuickCalcPdf({
+      nps, schLabel,
+      matCode: $('qMat').value,
+      mode: qMode(),
+      designTemp: $('qTemp').value
+    }, lastQuickRes);
   };
 
   setAwQuickView(paCreateAssessView($('awQuick'), {
@@ -816,6 +855,7 @@ export function initQuickCalc() {
     .forEach(id => $(id).addEventListener('input', recalcQuick));
   $('btnQuickReset').addEventListener('click', reset);
   $('btnCopyQuickSummary')?.addEventListener('click', copyQuickSummary);
+  $('btnQuickPdf')?.addEventListener('click', exportQuickPdf);
   document.querySelectorAll('.preset-chip[data-preset]').forEach(btn => {
     btn.addEventListener('click', () => applyPreset((btn as HTMLElement).dataset.preset));
   });

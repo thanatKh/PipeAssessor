@@ -14,7 +14,7 @@ import {
 import { sb } from '../core/supabase';
 import { computeB313, PA_MATERIALS } from '../engine/compute';
 import { paFmtBaht } from '../engine/format';
-import { paCreateAssessView } from '../workbench/assess-view';
+import { paCreateAssessView, resolveIntegrityBanner } from '../workbench/assess-view';
 import { paRenderRepairAdvisor } from '../workbench/repair-advisor';
 import {
   current, setCurrent, currentPhotos, setCurrentPhotos, currentHistory, setCurrentHistory,
@@ -82,11 +82,31 @@ export function renderDetail() {
     ? `<div class="d-label">Description</div><p class="d-desc">${esc(f.description)}</p>`
     : '';
 
+  renderHealthBanner();
   renderRepairAdvisor();
   renderAssessments();
   renderDetailMap();
   renderPhotoGroups();
   renderTimeline();
+}
+
+// Integrity health banner at the top of the detail page — same design and (via the shared
+// resolveIntegrityBanner) the exact same wording/color/state as the finding PDF's top banner, so
+// the two can never disagree. Reflects engineering health, not workflow status.
+export function renderHealthBanner() {
+  const host = $('detailHealthBanner');
+  if (!host) return;
+  const latest = currentAssessments.length ? currentAssessments[0] : null;
+  const res = latest ? resFromSnapshot(latest) : null;
+  const hb = resolveIntegrityBanner(current, res);
+  const metricsHtml = hb.metrics
+    ? `<div class="hb-metrics"><div class="hb-erf">ERF ${esc(hb.metrics.erf)}</div>`
+      + `<div class="hb-sub">MAWP ${esc(hb.metrics.mawp)} &middot; ${esc(hb.metrics.pct)}% wall</div></div>`
+    : '';
+  host.innerHTML = `<div class="health-banner hb-${hb.key}">`
+    + `<div class="hb-main"><div class="hb-word">${esc(hb.word)}</div><div class="hb-line">${esc(hb.line)}</div></div>`
+    + metricsHtml
+    + `</div>`;
 }
 
 // Standalone Repair Advisor panel — always available, independent of whether an assessment

@@ -74,9 +74,21 @@ export function show(viewId) {
   document.querySelectorAll(`#${viewId} .seg-row`).forEach(row => positionSegPill(row, false));
 }
 
+// Public read-only share view (#/s/<id>) — no sign-in required. Intercepted before the auth gate;
+// loads via the get_public_finding RPC and renders the normal detail view with read-only chrome
+// (body.public-view hides edit/status/nav — see CSS). Kept minimal: any failure shows viewShareError.
+async function routePublic(id) {
+  document.body.classList.add('public-view');
+  const ok = await loadPublicFinding(id);
+  if (ok) { renderDetail(); show('viewDetail'); }
+  else { show('viewShareError'); }
+}
+
 async function route() {
-  if (!session) { show('viewLogin'); return; }
   const h = location.hash || '#/list';
+  if (h.startsWith('#/s/')) { await routePublic(h.slice(4)); return; }
+  document.body.classList.remove('public-view'); // any non-share route is the normal authed app
+  if (!session) { show('viewLogin'); return; }
 
   if (h.startsWith('#/f/')) {
     const ok = await loadDetail(h.slice(4));
@@ -127,7 +139,7 @@ async function route() {
 
 
 import {
-  loadFindings, ageDays, STATUS_RANK, sortFindings, loadDetail, photoUrl, applyFilters, KPI_RING_CIRCUMFERENCE, renderKpis, renderBudgetKpi, ensureDashMap, popupHtml, showAddFindingPopup, renderMap, highlightPin, flashRow, CAMERA_SVG, ageHtml, renderTable, updateSelectionUI, buildTagOptions, renderList, toggleMapPresentation, resetMapView, togglePresSidebar, toggleMapBaseLayer,
+  loadFindings, ageDays, STATUS_RANK, sortFindings, loadDetail, loadPublicFinding, photoUrl, applyFilters, KPI_RING_CIRCUMFERENCE, renderKpis, renderBudgetKpi, ensureDashMap, popupHtml, showAddFindingPopup, renderMap, highlightPin, flashRow, CAMERA_SVG, ageHtml, renderTable, updateSelectionUI, buildTagOptions, renderList, toggleMapPresentation, resetMapView, togglePresSidebar, toggleMapBaseLayer,
 } from './features/dashboard';
 
 /* ---------------- CSV export (filtered register, Excel-friendly UTF-8 BOM) ---------------- */
@@ -173,6 +185,9 @@ function syncHeaderHeight() {
 }
 
 function initApp() {
+  // If we're arriving on a public share link, hide the app chrome immediately (before the auth
+  // state resolves) so a non-signed-in visitor never sees a flash of the login screen / app nav.
+  if ((location.hash || '').startsWith('#/s/')) document.body.classList.add('public-view');
   syncHeaderHeight();
   window.addEventListener('resize', syncHeaderHeight);
   window.addEventListener('resize', () => {

@@ -12,6 +12,11 @@
 export const R2_UPLOAD_ENDPOINT = 'https://pipeassessor-photo-worker.thanat-kh.workers.dev';
 export const R2_PUBLIC_BASE = 'https://pub-515a1eb709644dedb7c78238192f0edc.r2.dev';
 
+// Deployed origin — used to build the QR-code share URL printed on the finding PDF report
+// (`${PUBLIC_BASE_URL}/#/s/<finding-id>`), which opens the read-only public finding view with no
+// sign-in required (backed by the get_public_finding RPC — see db/public-share-migration.sql).
+export const PUBLIC_BASE_URL = 'https://pipeassessor.onrender.com';
+
 // Leak is NOT a finding type here — it's orthogonal to the damage mechanism (a corrosion, dent,
 // or CUI finding can independently be actively leaking or not). See the "Actively Leaking"
 // checkbox (form.ts's is_leaking field) and the repair advisor's leaking overlay

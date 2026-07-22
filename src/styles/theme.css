@@ -320,6 +320,48 @@ body > header .wrap {
   border-bottom: 1px solid var(--card-border);
 }
 
+/* Right-side cluster in a panel header (e.g. the assessment panel's "Reset to line list"
+   button beside the Include-assessment switch). */
+.panel-h-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Integrity health banner (detail page top) — same design + (via resolveIntegrityBanner) the same
+   wording/color/state as the finding PDF's top banner. White text on a 700-tier fill for contrast;
+   the modifier class supplies --hb-fill / --hb-spine. */
+.health-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-left: 5px solid var(--hb-spine);
+  border-radius: var(--radius);
+  background: var(--hb-fill);
+  color: #fff;
+  margin-bottom: 14px;
+}
+.hb-word { font-size: 16px; font-weight: 800; letter-spacing: 0.2px; line-height: 1.15; }
+.hb-line { font-size: 12.5px; opacity: 0.93; margin-top: 3px; }
+.hb-metrics { text-align: right; flex: 0 0 auto; white-space: nowrap; }
+.hb-erf { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.hb-sub { font-size: 11px; opacity: 0.9; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.hb-ok      { --hb-fill: #047857; --hb-spine: #065f46; }
+.hb-monitor { --hb-fill: #b45309; --hb-spine: #92400e; }
+.hb-repair  { --hb-fill: #b91c1c; --hb-spine: #7f1d1d; }
+.hb-leaking { --hb-fill: #b91c1c; --hb-spine: #7f1d1d; }
+.hb-action  { --hb-fill: #1e40af; --hb-spine: #1e3a8a; }
+.hb-pending { --hb-fill: #475569; --hb-spine: #334155; }
+.hb-none    { --hb-fill: #475569; --hb-spine: #334155; }
+@media (max-width: 640px) {
+  .health-banner { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .hb-metrics { text-align: left; }
+}
+
 /* Collapse variant: the separator only makes sense while open (a closed section has
    nothing below it to separate from) — overrides the always-on border above. */
 .panel-collapse.panel-h {
@@ -442,61 +484,71 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 .aw-plain { margin-bottom: 14px; }
 
 /* Status banner */
+/* Just a label + a small status badge — the same shape/weight as the register's .pill/.st-*
+   finding-status badges (app.css), not a full colored bar. This is a compact numeric readout
+   inside the ASME B31.3 Assessment panel, not the primary recommendation surface; the standalone
+   Repair Advisor above it (workbench/repair-advisor.ts) is what the reader actually acts on and
+   keeps its own full banner. */
 .status-banner {
-  border-radius: 8px;
-  padding: 10px 14px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  border: 1px solid transparent;
+  gap: 8px;
 }
 
-.status-banner.s-ok {
+.status-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+}
+
+/* Same recipe as .pill (app.css): radius = height/2, small uppercase bold text, tinted
+   fill+border+text from one status token trio. */
+.status-value {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.status-banner.s-ok .status-value {
   background: var(--ok-bg);
   border-color: var(--ok-border);
   color: var(--ok-text);
 }
 
-.status-banner.s-mon {
+.status-banner.s-mon .status-value {
   background: var(--warn-bg);
   border-color: var(--warn-border);
   color: var(--warn-text);
 }
 
-.status-banner.s-rep {
+.status-banner.s-rep .status-value {
   background: var(--danger-bg);
   border-color: var(--danger-border);
   color: var(--danger-text);
 }
 
 /* Cold-load state: nothing touched yet, so a blank form isn't flagged red. */
-.status-banner.s-neutral {
+.status-banner.s-neutral .status-value {
   background: var(--card-bg);
   border-color: var(--card-border);
   color: var(--text-muted);
 }
 
-.status-label {
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.status-value {
-  font-size: 24px;
-  font-weight: 900;
-  letter-spacing: -0.5px;
-}
-
 .status-desc {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
-  margin-top: 8px;
+  margin-top: 5px;
   line-height: 1.4;
-  padding: 8px 12px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.03);
+  color: var(--text-muted);
 }
 
 /* Scope & Limitations disclaimer */
@@ -789,40 +841,55 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 .advisor-container {
   display: flex;
   flex-direction: column;
-  gap: 10px;
   border-radius: 8px;
-  padding: 10px;
   background: var(--card-bg, #ffffff);
   border: 1px solid var(--card-border, #e2e8f0);
+  /* Clips .advisor-header-card's square corners to match the container's rounded ones, now that
+     the header bleeds flush to the edges instead of sitting padded/inset. */
+  overflow: hidden;
 }
 
-
-
+/* Bleeds flush to the container's top/left/right edges (no padding gap, no border of its own) so
+   the status tint reads as one unified colored surface — same visual weight as .status-banner —
+   instead of a pale card inset inside a neutral white/gray-bordered frame, which read as "gray"
+   overall regardless of how saturated the inner tint was. */
 .advisor-header-card {
-  padding: 8px 12px;
-  border-radius: 6px;
+  padding: 10px 14px;
   background: var(--svg-bg, #f8fafc);
-  border: 1px solid var(--card-border, #e2e8f0);
+  border-bottom: 1px solid var(--card-border, #e2e8f0);
 }
 
+/* Same --ok-bg/--warn-bg/--danger-bg tokens as .status-banner (the ASME B31.3 assessment's own
+   status banner) — REPAIR/MONITOR/OK must render as the exact same red/amber/green in both
+   places, since they're describing the same status. .info has no status-banner equivalent (it's
+   the non-numeric/no-result fallback), so it keeps its own neutral blue tint. */
 .advisor-container.danger .advisor-header-card {
-  background: rgba(220, 38, 38, 0.06);
-  border-color: rgba(220, 38, 38, 0.2);
+  background: var(--danger-bg);
+  border-bottom-color: var(--danger-border);
 }
 
 .advisor-container.warning .advisor-header-card {
-  background: rgba(217, 119, 6, 0.06);
-  border-color: rgba(217, 119, 6, 0.2);
+  background: var(--warn-bg);
+  border-bottom-color: var(--warn-border);
 }
 
 .advisor-container.info .advisor-header-card {
   background: rgba(2, 132, 199, 0.06);
-  border-color: rgba(2, 132, 199, 0.2);
+  border-bottom-color: rgba(2, 132, 199, 0.2);
 }
 
 .advisor-container.success .advisor-header-card {
-  background: rgba(22, 163, 74, 0.06);
-  border-color: rgba(22, 163, 74, 0.2);
+  background: var(--ok-bg);
+  border-bottom-color: var(--ok-border);
+}
+
+/* Everything below the header keeps the container's original inset padding — only the header
+   itself bleeds edge-to-edge. */
+.advisor-body-pad {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
 }
 
 .advisor-banner-tag {
@@ -834,9 +901,9 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   margin-bottom: 3px;
 }
 
-.advisor-container.danger .advisor-banner-tag { color: #dc2626; }
-.advisor-container.warning .advisor-banner-tag { color: #d97706; }
-.advisor-container.success .advisor-banner-tag { color: #16a34a; }
+.advisor-container.danger .advisor-banner-tag { color: var(--danger-text); }
+.advisor-container.warning .advisor-banner-tag { color: var(--warn-text); }
+.advisor-container.success .advisor-banner-tag { color: var(--ok-text); }
 
 .advisor-summary-text {
   font-size: 12.5px;
@@ -845,31 +912,37 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   line-height: 1.4;
 }
 
+/* One table with a hairline row-divider between recommendations, matching table.list's row
+   language elsewhere in the app — replaces the old stack of individually-bordered/boxed cards,
+   which read as N separate panels rather than one set of related recommendations. */
 .advisor-items-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
 }
 
-.advisor-item-row {
-  display: grid;
-  grid-template-columns: 210px 1fr;
-  gap: 12px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: var(--card-bg, #ffffff);
-  border: 1px solid var(--card-border, #e2e8f0);
-  align-items: start;
+.advisor-item-row td {
+  border-bottom: 1px solid var(--card-border, #e2e8f0);
+  padding: 9px 4px;
+  vertical-align: top;
+}
+
+.advisor-item-row:last-child td {
+  border-bottom: none;
 }
 
 @media (max-width: 640px) {
-  .advisor-item-row {
-    grid-template-columns: 1fr;
-    gap: 3px;
+  .advisor-items-grid, .advisor-items-grid tbody, .advisor-item-row, .advisor-item-row td {
+    display: block;
+    width: auto;
   }
+  .advisor-item-row td { padding: 0; }
+  .advisor-item-row td:first-child { padding: 9px 0 2px; }
+  .advisor-item-row td:last-child { padding: 0 0 9px; }
 }
 
 .advisor-item-title {
+  width: 200px;
   font-size: 12px;
   font-weight: 700;
   color: var(--text-color, #1e293b);
@@ -882,6 +955,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   color: var(--text-muted, #475569);
   line-height: 1.4;
   padding-top: 1px;
+  padding-left: 12px;
 }
 
 .advisor-body-text {

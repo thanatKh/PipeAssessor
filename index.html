@@ -23,10 +23,12 @@
       </div>
     </div>
     <div class="header-actions">
+      <!-- Read-only badge shown only on public share links (body.public-view) -->
+      <span class="public-only public-badge">Read-only shared view — no sign-in required</span>
       <span class="hdr-user authed-only" id="hdrUser"></span>
       <div class="hdr-btn-group">
         <a class="btn hdr-btn authed-only" data-variant="outline" href="#/risk">Line Risk</a>
-        <a class="btn hdr-btn" data-variant="outline" href="#/calc">Quick Calc</a>
+        <a class="btn hdr-btn not-public" data-variant="outline" href="#/calc">Quick Calc</a>
         <button class="btn hdr-btn authed-only" data-variant="outline" id="btnSignOut" type="button">Sign out</button>
       </div>
     </div>
@@ -54,6 +56,18 @@
             <input id="loginPass" class="input" type="password" autocomplete="current-password">
           </div>
           <button class="btn" id="btnSignIn" type="button">Sign in</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============= PUBLIC SHARE ERROR (invalid / unshared QR link) ============= -->
+  <section id="viewShareError" class="view">
+    <div class="login-wrap">
+      <div class="panel">
+        <div class="panel-b" style="text-align:center; gap:10px;">
+          <h2 class="login-title">Finding not available</h2>
+          <p class="login-sub">This shared link is invalid, or the finding is no longer available. Please ask for an up-to-date link.</p>
         </div>
       </div>
     </div>
@@ -418,10 +432,13 @@
       <div class="panel" id="assessPanel">
         <div class="panel-h">
           <h2>ASME B31.3 Assessment</h2>
-          <label class="switch-inline">
-            <input class="input" type="checkbox" role="switch" id="aToggle">
-            <span>Include assessment</span>
-          </label>
+          <div class="panel-h-actions">
+            <button class="btn" data-variant="outline" id="btnResetAssessLine" type="button" title="Reset the pipe setup (NPS / Schedule / Material / design pressure) to the master line list entry for the selected Pipe Tag. The UT reading is kept.">Reset to line list</button>
+            <label class="switch-inline">
+              <input class="input" type="checkbox" role="switch" id="aToggle">
+              <span>Include assessment</span>
+            </label>
+          </div>
         </div>
         <div class="panel-b" id="aBody">
           <div class="leaking-warning-banner" id="aLeakingNote" style="display:none; margin-bottom:12px;">
@@ -634,6 +651,7 @@
         </div>
         <div class="panel-h-btns">
           <button class="btn" data-variant="outline" id="btnCopyQuickSummary" type="button" title="Copy calculation summary to clipboard">📋 Copy Summary</button>
+          <button class="btn" data-variant="outline" id="btnQuickPdf" type="button" title="Export this calculation as a PDF report">Export PDF</button>
           <button class="btn" data-variant="outline" id="btnQuickReset" type="button">Reset</button>
         </div>
       </div>
@@ -774,6 +792,10 @@
         <button type="button" class="nav-tab" data-target="detailPanelPhotos">Photos</button>
       </div>
     </div>
+
+    <!-- Integrity health banner (same design/logic as the finding PDF's top banner, via the shared
+         resolveIntegrityBanner) — the at-a-glance health verdict at the top of the detail content. -->
+    <div id="detailHealthBanner"></div>
 
     <div class="detail-split">
       <!-- LEFT: the finding data — priority order: what/where it is, then lifecycle status,
