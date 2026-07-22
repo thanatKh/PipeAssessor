@@ -10,23 +10,36 @@ import { paFmt } from '../engine/format';
 import { computeB313 } from '../engine/compute';
 import { WALL_LOSS_TYPES } from '../core/constants';
 
-/* ---------------- integrity health banner (shared: PDF report + web detail page) ----------------
+/* ---------------- severity health banner (shared: PDF report + web detail page) ----------------
    One resolver so the finding PDF's title-block banner and the detail page's banner can never
-   disagree on wording, color, or which state a finding is in. Reflects ENGINEERING health, not
-   workflow: the numeric ASME B31.3 verdict (OK/MONITOR/REPAIR) or leaking when assessed; otherwise
-   ACTION REQUIRED for a non-wall-loss type (the calc doesn't apply but the finding still needs
-   remediation — deliberately blue, out of the green/amber/red numeric palette), PENDING for a
-   wall-loss type awaiting a reading, or NOT ASSESSED when there's no finding type at all. Fills are
-   700-tier shades so white text clears WCAG on all; spine is a darker shade for depth. `finding`
-   only needs { is_leaking, finding_type }; `res` is a computeB313 result or null. */
+   disagree on wording, color, or which state a finding is in. Reflects ENGINEERING risk, not
+   workflow — headlined as SEVERITY (CRITICAL/HIGH/MEDIUM/LOW), not a compliance/"integrity"
+   verdict: a plain OK/MONITOR/REPAIR framing reads as "MONITOR = just watch, nothing to do",
+   which is wrong — every tier except a genuinely closed-out finding has a real action attached
+   (arrest the corrosion mechanism, increase inspection frequency, repair/replace), and the line
+   text always names it. Wall-loss types (WALL_LOSS_TYPES) with a computed result map the numeric
+   ASME B31.3 verdict to a severity tier (REPAIR->HIGH, MONITOR->MEDIUM, OK->LOW) — precise and
+   always wins when available. Non-wall-loss types (Coating, Support, Dent, Other) have no numeric
+   result, so the banner falls back to the finding's own Severity field instead (High/Medium/Low
+   map the same way) — same red/amber/green language, just sourced from a human judgment call
+   rather than a calculation. is_leaking is the top override regardless of type, its own CRITICAL
+   tier. PENDING is a wall-loss type still awaiting a reading; NOT ASSESSED is no finding type at
+   all — neither has a severity yet. Fills are 700-tier shades so white text clears WCAG; spine is
+   a darker shade for depth. `finding` needs { is_leaking, finding_type, severity }; `res` is a
+   computeB313 result or null. */
 export interface IntegrityBanner {
-  key: 'leaking' | 'repair' | 'monitor' | 'ok' | 'action' | 'pending' | 'none';
+  key: 'leaking' | 'repair' | 'monitor' | 'ok' | 'pending' | 'none';
   word: string;
   line: string;
   fill: string;
   spine: string;
   metrics: { erf: string; mawp: string; pct: string } | null;
 }
+
+const HB_REPAIR  = { fill: '#b91c1c', spine: '#7f1d1d' };
+const HB_MONITOR = { fill: '#b45309', spine: '#92400e' };
+const HB_OK      = { fill: '#047857', spine: '#065f46' };
+const HB_NEUTRAL = { fill: '#475569', spine: '#334155' };
 
 export function resolveIntegrityBanner(finding: any, res: any): IntegrityBanner {
   const f3 = (n: number) => (n == null || !isFinite(n)) ? '—' : n.toFixed(3);
@@ -41,18 +54,24 @@ export function resolveIntegrityBanner(finding: any, res: any): IntegrityBanner 
   const isWallLoss = ft && WALL_LOSS_TYPES.includes(ft);
 
   if (finding && finding.is_leaking)
-    return { key: 'leaking', word: 'INTEGRITY: LEAKING', line: 'Pressure boundary breached — emergency containment required (ASME PCC-2)', fill: '#b91c1c', spine: '#7f1d1d', metrics };
+    return { key: 'leaking', word: 'SEVERITY: CRITICAL', line: 'Pressure boundary breached — emergency containment required (ASME PCC-2)', ...HB_REPAIR, metrics };
   if (res && res.status === 'REPAIR')
-    return { key: 'repair', word: 'INTEGRITY: REPAIR REQUIRED', line: 'Below acceptable design limit — plan repair or replacement', fill: '#b91c1c', spine: '#7f1d1d', metrics };
+    return { key: 'repair', word: 'SEVERITY: HIGH', line: 'Wall loss below acceptable limit — repair or replacement required', ...HB_REPAIR, metrics };
   if (res && res.status === 'MONITOR')
-    return { key: 'monitor', word: 'INTEGRITY: MONITOR', line: 'Approaching design / structural limit — monitor and plan', fill: '#b45309', spine: '#92400e', metrics };
+    return { key: 'monitor', word: 'SEVERITY: MEDIUM', line: 'Wall loss approaching design/structural limit — corrosion mitigation action needed now, increase inspection frequency', ...HB_MONITOR, metrics };
   if (res && res.status === 'OK')
-    return { key: 'ok', word: 'INTEGRITY: OK', line: 'Within acceptable design limits — no repair required', fill: '#047857', spine: '#065f46', metrics };
-  if (ft && !isWallLoss)
-    return { key: 'action', word: 'ACTION REQUIRED', line: 'Requires remediation — see the Repair Advisor for the recommended action', fill: '#1e40af', spine: '#1e3a8a', metrics: null };
+    return { key: 'ok', word: 'SEVERITY: LOW', line: 'Within acceptable design limits — no pressure-boundary repair required, continue corrosion mitigation per the Repair Advisor', ...HB_OK, metrics };
+  if (ft && !isWallLoss) {
+    const sev = finding && finding.severity;
+    if (sev === 'High')
+      return { key: 'repair', word: 'SEVERITY: HIGH', line: 'Requires remediation — see the Repair Advisor for the recommended action', ...HB_REPAIR, metrics: null };
+    if (sev === 'Medium')
+      return { key: 'monitor', word: 'SEVERITY: MEDIUM', line: 'Requires ongoing remediation action — see the Repair Advisor', ...HB_MONITOR, metrics: null };
+    return { key: 'ok', word: 'SEVERITY: LOW', line: 'No pressure-boundary repair required — see the Repair Advisor for routine maintenance actions', ...HB_OK, metrics: null };
+  }
   if (ft)
-    return { key: 'pending', word: 'PENDING ASSESSMENT', line: 'Awaiting a UT wall-thickness reading for the ASME B31.3 assessment', fill: '#475569', spine: '#334155', metrics: null };
-  return { key: 'none', word: 'NOT ASSESSED', line: 'No assessment on record for this finding', fill: '#475569', spine: '#334155', metrics: null };
+    return { key: 'pending', word: 'PENDING ASSESSMENT', line: 'Awaiting a UT wall-thickness reading for the ASME B31.3 assessment', ...HB_NEUTRAL, metrics: null };
+  return { key: 'none', word: 'NOT ASSESSED', line: 'No assessment on record for this finding', ...HB_NEUTRAL, metrics: null };
 }
 
 /* Single source of truth for the Scope & Limitations text (on-screen notice + PDF section). */

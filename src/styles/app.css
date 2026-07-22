@@ -496,6 +496,34 @@
     .map-layer-toggle.is-street .map-layer-toggle-thumb {
       transform: translateX(12px);
     }
+    /* Generic "on" modifier for any other boolean map-toolbar switch built on .map-layer-toggle
+       (e.g. #btnRiskRadius) — same track/thumb behavior as .is-street, just not tied to base-layer
+       naming. */
+    .map-layer-toggle.is-on .map-layer-toggle-track {
+      background: var(--button-primary, #156B95);
+    }
+    .map-layer-toggle.is-on .map-layer-toggle-thumb {
+      transform: translateX(12px);
+    }
+
+    /* Presentation-mode risk-radius circles (dashboard.ts's renderRiskRadius): Leaflet's SVG
+       renderer draws L.circle as an SVG <path>, not a native <circle>, so a CSS transform: scale()
+       needs transform-box: fill-box + transform-origin: center to scale around the shape's own
+       center rather than the shared SVG viewport's origin. A gentle breathing pulse — a common
+       "risk/radar zone" visual cue — not a sharp blink, so it reads calmly on a big presentation
+       screen without being distracting. */
+    .risk-radius-circle {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: riskRadiusPulse 2.6s ease-in-out infinite;
+    }
+    @keyframes riskRadiusPulse {
+      0%, 100% { opacity: 0.55; transform: scale(0.96); }
+      50% { opacity: 1; transform: scale(1.06); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .risk-radius-circle { animation: none; }
+    }
 
     /* Inline shortcut-key badge shown next to a presentation control's label, e.g. "Reset View R".
        .btn-subtle has no CSS rule anywhere in the app (basecoat doesn't define it either), so
@@ -1404,14 +1432,14 @@
       color: var(--button-primary);
       background: var(--plan-bg);
       border: 1px solid var(--plan-border);
+      border-radius: 6px;
+      padding: 6px 12px;
+      margin: 10px 14px 0;
     }
     /* author display:flex above always wins over the browser's default [hidden]{display:none} —
        an explicit guard is required or the bar shows even while the hidden attribute is set. */
     .sel-bar[hidden] {
       display: none;
-      border-radius: 6px;
-      padding: 6px 12px;
-      margin: 10px 14px 0;
     }
     .link-btn {
       background: none;

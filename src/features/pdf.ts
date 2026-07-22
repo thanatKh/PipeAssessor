@@ -484,36 +484,35 @@ export async function buildFindingPdf() {
   };
 
   // Row 1 — identity.
-  tbCell(M,             tbCol, y, 'Line Tag', f.pipe_tag || f.location_desc || '—', { fs: 7.5 });
-  tbCell(M + tbCol,     tbCol, y, 'Terminal', f.terminal || '—', { fs: 7.5 });
-  tbCell(M + tbCol * 2, tbCol, y, 'Finding Type', f.finding_type || '—', { fs: 7 });
-  tbCell(M + tbCol * 3, tbCol, y, 'Severity', f.severity || '—');
+  tbCell(M,             tbCol, y, 'Line Tag', f.pipe_tag || f.location_desc || '—', { fs: 8.5 });
+  tbCell(M + tbCol,     tbCol, y, 'Terminal', f.terminal || '—', { fs: 8.5 });
+  tbCell(M + tbCol * 2, tbCol, y, 'Finding Type', f.finding_type || '—', { fs: 8 });
+  tbCell(M + tbCol * 3, tbCol, y, 'Severity', f.severity || '—', { fs: 9.5 });
   // Row 2 — workflow + reference.
   const tbY2 = y + tbRowH;
-  tbCell(M,             tbCol, tbY2, 'Report Ref', reportRef, { fs: 7 });
-  tbCell(M + tbCol,     tbCol, tbY2, 'Finding Status', (f.status || '—').toUpperCase(), { swatch: stColor, color: stColor, fs: 8 });
+  tbCell(M,             tbCol, tbY2, 'Report Ref', reportRef, { fs: 8 });
+  tbCell(M + tbCol,     tbCol, tbY2, 'Finding Status', (f.status || '—').toUpperCase(), { swatch: stColor, color: stColor, fs: 9 });
   if (isOverdue(f)) {
     doc.setFont('GoogleSans', 'bold'); doc.setFontSize(5.7); doc.setTextColor(PDF_DANGER);
     doc.text('OVERDUE', M + tbCol * 2 - 2.4, tbY2 + 3.3, { align: 'right' });
   }
-  tbCell(M + tbCol * 2, tbCol, tbY2, 'Inspection Date', paFmtDate(f.inspection_date), { fs: 7.5 });
-  tbCell(M + tbCol * 3, tbCol, tbY2, 'Recorded By', f.created_by_email || '—', { fs: 6.5 });
+  tbCell(M + tbCol * 2, tbCol, tbY2, 'Inspection Date', paFmtDate(f.inspection_date), { fs: 8.5 });
+  tbCell(M + tbCol * 3, tbCol, tbY2, 'Recorded By', f.created_by_email || '—', { fs: 7.5 });
 
-  // QR share code (right zone, top-aligned with the grid)
+  // QR share code (right zone, vertically centered against the two-row grid) — no caption text
+  // beneath it any more (kept the block tighter to the next section; the QR is self-explanatory
+  // next to the "no sign-in" badge already implied by scanning it).
   if (qrShown) {
-    const qs = 22;
+    const qs = 24;
     const qx = M + gridW + qrGap + (qrZoneW - qs) / 2;
-    doc.addImage(qrDataUrl, 'PNG', qx, y, qs, qs);
-    doc.link(qx, y, qs, qs, { url: shareUrl }); // tappable in a PDF viewer
-    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(6); doc.setTextColor(PDF_MUTED);
-    doc.text('Scan to view online', qx + qs / 2, y + qs + 2.6, { align: 'center' });
-    doc.text('(no sign-in required)', qx + qs / 2, y + qs + 5.0, { align: 'center' });
-    doc.setTextColor(PDF_TEXT);
+    const qy = y + (tbRowH * 2 - qs) / 2;
+    doc.addImage(qrDataUrl, 'PNG', qx, qy, qs, qs);
+    doc.link(qx, qy, qs, qs, { url: shareUrl }); // tappable in a PDF viewer
   }
-  y += Math.max(tbRowH * 2, qrShown ? 27.5 : 0) + 5;
+  y += tbRowH * 2 + 5;
 
   // (No separate "ACTIVELY LEAKING" bar here — the health banner above already reads
-  // "INTEGRITY: LEAKING" with the same emergency-containment line, so a second red bar was a
+  // "SEVERITY: CRITICAL" with the same emergency-containment line, so a second red bar was a
   // duplicate. Leaking is still surfaced in detail by the Repair Advisor's leaking overlay and the
   // ASME B31.3 Integrity Evaluation Note below.)
 
@@ -1263,6 +1262,7 @@ export function runExport() {
   const rows = selectedIds.size ? filtered.filter(f => selectedIds.has(f.id)) : filtered;
   closeDialog($('exportDlg'));
   if (fmt === 'csv') exportCsv(rows, includeBudget);
+  else if (fmt === 'slides') exportSlidesPdf(rows, includeBudget);
   else exportSummaryPdf(rows, includeBudget);
 }
 
@@ -1492,5 +1492,452 @@ export async function buildSummaryPdf(rows, includeBudget) {
     if (doc.putTotalPages) doc.putTotalPages('{tp}');
     return doc.output('blob');
   }
+}
+
+/* ---------------- Presentation slides PDF (one finding per 16:9 page) ----------------
+   A slide deck for meetings / risk reviews: each finding fills one full 16:9 page sized to the
+   exact PowerPoint Widescreen canvas (338.67 x 190.5 mm = 13.333 x 7.5 in), so a page drops onto
+   a slide with no letterboxing. Web-UI look, not a document: a full-width integrity health banner
+   (shared resolveIntegrityBanner — same wording/color as the detail page + finding PDF) over a
+   3-column card layout — FINDING DETAILS / SITE EVIDENCE / ASME B31.3 ASSESSMENT. Only the info a
+   reviewer needs; NO full Repair Advisor, just one derived recommended-action line
+   (resolveAdvisor(...).summary). Single- or multi-finding — one page per row, in the caller's
+   (risk-ordered) row order. */
+export async function exportSlidesPdf(rows, includeBudget) {
+  if (!rows || !rows.length) { notify('No findings to present with the current filters.', true); return; }
+  const btn = $('btnExport');
+  setBusy(btn, true, 'Building…');
+  try {
+    const blob = await buildSlidesPdf(rows, includeBudget);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) {
+    notify('Presentation PDF failed: ' + e.message, true);
+  } finally {
+    setBusy(btn, false);
+  }
+}
+
+export async function buildSlidesPdf(rows, includeBudget) {
+  const { jsPDF } = await import('jspdf');
+  // 16:9 PowerPoint Widescreen canvas in mm — pass explicit [w, h] so pages are exactly slide-sized.
+  const PW = 338.67, PH = 190.5;
+  const doc = new jsPDF({ unit: 'mm', format: [PW, PH], orientation: 'landscape' });
+  await registerGoogleSansFonts(doc); // Sarabun (Latin + Thai in one face) under the 'GoogleSans' jsPDF font name
+  const M = 10, CW = PW - 2 * M;
+  const HEADER_H = 12, FOOTER_H = 9;
+  const now = new Date();
+  const thb = n => (n == null || !isFinite(n)) ? '—' : 'THB ' + Math.round(n).toLocaleString('en-US');
+
+  const logo = (typeof OR_LOGO_DATAURL !== 'undefined' && OR_LOGO_DATAURL) || await fetchAsDataUrl('/RGB_OR_Full color.png', 3000);
+  const logoIm = logo ? await loadImg(logo) : null;
+
+  // --- Bulk pre-load per-finding data (never per-page fetching inside the draw loop) ---
+  const ids = rows.map(f => f.id);
+  // latest assessment per finding (mirrors risk.ts's single bulk load, kept newest per finding_id)
+  const assessByFinding = {};
+  try {
+    const { data: aData } = await sb.from('assessments')
+      .select('finding_id, inputs, results, created_at')
+      .in('finding_id', ids)
+      .order('created_at', { ascending: false });
+    (aData || []).forEach(a => { if (!assessByFinding[a.finding_id]) assessByFinding[a.finding_id] = a; });
+  } catch (_) {}
+  // earliest as-found photo per finding (prefer kind 'found', else whatever exists)
+  const photoByFinding = {};
+  try {
+    const { data: pData } = await sb.from('finding_photos')
+      .select('finding_id, storage_path, kind, created_at')
+      .in('finding_id', ids)
+      .order('created_at', { ascending: true });
+    (pData || []).forEach(p => {
+      const cur = photoByFinding[p.finding_id];
+      const isFound = (p.kind || 'found').toLowerCase().trim() === 'found';
+      if (!cur || (cur.kind !== 'found' && isFound)) photoByFinding[p.finding_id] = p;
+    });
+  } catch (_) {}
+
+  // Map framing tuned to match the finding detail page (its Leaflet map uses zoom 17 in a ~550px
+  // container -> ~640 m across). Rendering at zoom 18 with ~2x the pixels reproduces that same
+  // site-level framing while staying crisp on the ~96mm slide tile (~290 dpi) — the old zoom 17 at
+  // 1000px covered ~1.8x more ground, reading zoomed-out vs. the detail page.
+  const MAP_ZOOM = 18;
+  const MAP_PX = { w: 1100, h: 700 };
+  const perRow = await Promise.all(rows.map(async f => {
+    const a = assessByFinding[f.id];
+    const res = a ? resFromSnapshot(a) : null;
+    const [mapImg, xsec, photo] = await Promise.all([
+      (f.lat != null && f.lng != null) ? composeMapPng(f.lat, f.lng, MAP_ZOOM, MAP_PX.w, MAP_PX.h) : Promise.resolve(null),
+      res ? paCrossSectionPng(res, 2).catch(() => null) : Promise.resolve(null),
+      (async () => {
+        const p = photoByFinding[f.id];
+        const pPath = p && (p.storage_path || p.path);
+        if (!pPath) return null;
+        const isFullUrl = pPath.startsWith('http://') || pPath.startsWith('https://') || pPath.startsWith('data:');
+        let durl = null;
+        if (isFullUrl) durl = await fetchAsDataUrl(pPath, 8000);
+        else {
+          durl = await fetchAsDataUrl(`${R2_UPLOAD_ENDPOINT}/photo?path=${encodeURIComponent(pPath)}`, 8000);
+          if (!durl) durl = await fetchAsDataUrl(photoUrl(pPath), 6000);
+        }
+        if (!durl) return null;
+        const im = await loadImg(durl);
+        return im ? { src: durl, ratio: im.naturalWidth / im.naturalHeight } : null;
+      })()
+    ]);
+    let xsecRatio = 500 / 270;
+    if (xsec) { const xi = await loadImg(xsec); if (xi && xi.naturalWidth) xsecRatio = xi.naturalWidth / xi.naturalHeight; }
+    return { res, inputs: a ? a.inputs : null, mapImg, xsec, xsecRatio, photo };
+  }));
+
+  // ---- shared draw helpers ----
+  const fmt2 = n => (n == null || !isFinite(n)) ? '—' : n.toFixed(2);
+  const fmt3 = n => (n == null || !isFinite(n)) ? '—' : n.toFixed(3);
+
+  // Web design tokens (theme.css) so the slide reads as the actual app UI, not a document:
+  const PAGE_BG = '#f8fafc';    // --bg-color (app canvas behind the white cards)
+  const CARD = '#ffffff';       // --card-bg
+  const CARD_BORDER = '#e2e8f0';// --card-border
+  const SOFT = '#f8fafc';       // tile / soft-fill background
+  const HDR_A = '#156B95', HDR_B = '#38bdf8'; // --header-accent -> --header-accent-2 (the app's accent bar gradient)
+
+  // hex lerp + a horizontal gradient bar reproducing the app header's teal->sky .header-accent-bar
+  const lerpHex = (a, b, t) => {
+    const pa = [parseInt(a.slice(1, 3), 16), parseInt(a.slice(3, 5), 16), parseInt(a.slice(5, 7), 16)];
+    const pb = [parseInt(b.slice(1, 3), 16), parseInt(b.slice(3, 5), 16), parseInt(b.slice(5, 7), 16)];
+    const c = pa.map((v, i) => Math.round(v + (pb[i] - v) * t));
+    return '#' + c.map(v => v.toString(16).padStart(2, '0')).join('');
+  };
+  const accentBar = (bx, by, bw, bh) => {
+    const n = 48;
+    for (let i = 0; i < n; i++) { doc.setFillColor(lerpHex(HDR_A, HDR_B, i / (n - 1))); doc.rect(bx + (bw * i) / n, by, bw / n + 0.25, bh, 'F'); }
+  };
+
+  // letterbox-fit an image inside a box, centered, on a light backing
+  const drawFit = (dataUrl, ratio, bx, by, bw, bh) => {
+    doc.setFillColor('#f1f5f9'); doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+    doc.roundedRect(bx, by, bw, bh, 1.4, 1.4, 'FD');
+    if (!dataUrl) {
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(8); doc.setTextColor('#94a3b8');
+      doc.text('—', bx + bw / 2, by + bh / 2, { align: 'center', baseline: 'middle' });
+      doc.setTextColor(PDF_TEXT);
+      return;
+    }
+    const pad = 1.2;
+    const availW = bw - pad * 2, availH = bh - pad * 2;
+    let w = availW, h = w / ratio;
+    if (h > availH) { h = availH; w = h * ratio; }
+    const ix = bx + (bw - w) / 2, iy = by + (bh - h) / 2;
+    try { doc.addImage(dataUrl, 'JPEG', ix, iy, w, h); } catch (_) { try { doc.addImage(dataUrl, 'PNG', ix, iy, w, h); } catch (__) {} }
+  };
+  const emptyBox = (label, bx, by, bw, bh) => {
+    doc.setFillColor('#f8fafc'); doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+    doc.roundedRect(bx, by, bw, bh, 1.4, 1.4, 'FD');
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(7.5); doc.setTextColor('#94a3b8');
+    doc.text(label, bx + bw / 2, by + bh / 2, { align: 'center', baseline: 'middle' });
+    doc.setTextColor(PDF_TEXT);
+  };
+  // "cover"-fit an image so it FILLS the whole box (no letterbox gap / grey backing — matches the web
+  // map + photo tiles): scale to cover, center, and clip the overflow to the box's rounded rect.
+  // Photos/maps use this; the cross-section diagram keeps drawFit (contain) so its labels aren't cropped.
+  const drawCover = (dataUrl, ratio, bx, by, bw, bh, label) => {
+    if (!dataUrl) { emptyBox(label || '—', bx, by, bw, bh); return; }
+    const r = ratio || 1, boxR = bw / bh;
+    let dw, dh;
+    if (r > boxR) { dh = bh; dw = bh * r; } else { dw = bw; dh = bw / r; } // cover
+    const ix = bx - (dw - bw) / 2, iy = by - (dh - bh) / 2;
+    doc.saveGraphicsState();
+    doc.roundedRect(bx, by, bw, bh, 1.6, 1.6, null); // path only (null style) -> clip region
+    doc.clip(); doc.discardPath();
+    try { doc.addImage(dataUrl, 'JPEG', ix, iy, dw, dh); } catch (_) { try { doc.addImage(dataUrl, 'PNG', ix, iy, dw, dh); } catch (__) {} }
+    doc.restoreGraphicsState();
+    doc.setDrawColor(CARD_BORDER); doc.setLineWidth(0.2); doc.roundedRect(bx, by, bw, bh, 1.6, 1.6, 'S'); // hairline frame
+  };
+  // .panel-style card: white body, 8px-ish rounded corners, hairline border, and a light header row
+  // (dark uppercase title + a small navy accent tick + a bottom hairline) — mirrors theme.css's
+  // .panel / .panel-h exactly, instead of a solid navy strip. Returns the inner-content top y.
+  const card = (x, y, w, h, title) => {
+    doc.setFillColor(CARD); doc.setDrawColor(CARD_BORDER); doc.setLineWidth(0.3);
+    doc.roundedRect(x, y, w, h, 2, 2, 'FD');
+    const hHead = 8;
+    doc.setFillColor(PDF_NAVY);
+    doc.roundedRect(x + 3.4, y + hHead / 2 - 1.6, 1.5, 3.2, 0.5, 0.5, 'F'); // accent tick
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(7.8); doc.setTextColor(PDF_TEXT);
+    doc.text(String(title).toUpperCase(), x + 6.4, y + hHead / 2 + 1.25);
+    doc.setDrawColor(CARD_BORDER); doc.setLineWidth(0.3);
+    doc.line(x, y + hHead, x + w, y + hHead); // .panel-h border-bottom
+    doc.setTextColor(PDF_TEXT);
+    return y + hHead;
+  };
+
+  // per-status light-tint / spine / text palette for the recommended-action callout, keyed off the
+  // shared banner state (resolveIntegrityBanner's `key`) so the slide's action strip matches its
+  // banner color language. Keys mirror the resolver exactly: leaking/repair/monitor/ok/pending/none.
+  const ACTION_THEME = {
+    leaking: { tint: '#fef2f2', spine: '#b91c1c', text: '#b91c1c' },
+    repair:  { tint: '#fef2f2', spine: '#b91c1c', text: '#b91c1c' },
+    monitor: { tint: '#fffbeb', spine: '#b45309', text: '#b45309' },
+    ok:      { tint: '#ecfdf5', spine: '#047857', text: '#15803d' },
+    pending: { tint: '#f1f5f9', spine: '#475569', text: '#475569' },
+    none:    { tint: '#f1f5f9', spine: '#475569', text: '#475569' },
+  };
+
+  rows.forEach((f, idx) => {
+    if (idx > 0) doc.addPage([PW, PH], 'landscape');
+    const { res, inputs, mapImg, xsec, xsecRatio, photo } = perRow[idx];
+    const hb = resolveIntegrityBanner(f, res);
+    const theme = ACTION_THEME[hb.key] || ACTION_THEME.none;
+    // DOC REF + Record ID (same scheme as the finding PDF's title block / record footnote)
+    const reportRef = `PA-RPT-${(f.pipe_tag || f.location_desc || (f.id || '').slice(0, 8)).replace(/[^a-zA-Z0-9-]/g, '_')}`;
+    const recordId = `PA-${f.id}`;
+
+    // ---- page canvas: the app's --bg-color behind the white cards + a white app-header band ----
+    doc.setFillColor(PAGE_BG); doc.rect(0, 0, PW, PH, 'F');
+    doc.setFillColor('#ffffff'); doc.rect(0, 0, PW, HEADER_H, 'F');
+
+    // ---- header chrome (company logo left, title right, teal->sky accent bar) ----
+    const textOR = () => { doc.setFont('GoogleSans', 'bold'); doc.setFontSize(11); doc.setTextColor(PDF_NAVY); doc.text('OR', M, 8.5); };
+    if (logoIm) { const lh = 7.5, lw = lh * logoIm.naturalWidth / logoIm.naturalHeight; try { doc.addImage(logo, 'PNG', M, 2.4, lw, lh); } catch (_) { textOR(); } }
+    else textOR();
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(10); doc.setTextColor(PDF_NAVY);
+    doc.text('PIPING FINDING', PW - M, 6.2, { align: 'right' });
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(7); doc.setTextColor(PDF_MUTED);
+    doc.text(`${f.terminal || '—'}  ·  ${paFmtDate(now)}`, PW - M, 10, { align: 'right' });
+    accentBar(0, HEADER_H, PW, 1.2); // the app header's .header-accent-bar (teal -> sky)
+
+    // ---- integrity health banner (the hero — rounded, left spine, white text: matches .health-banner) ----
+    const bandY = HEADER_H + 4, bandH = 17, bandR = 1.8;
+    doc.setFillColor(hb.fill); doc.roundedRect(M, bandY, CW, bandH, bandR, bandR, 'F');
+    doc.setFillColor(hb.spine); doc.rect(M, bandY + bandR, 1.8, bandH - bandR * 2, 'F');
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(15); doc.setTextColor('#ffffff');
+    doc.text(hb.word, M + 6.5, bandY + 8);
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(9); doc.setTextColor('#f1f5f9');
+    doc.text(doc.splitTextToSize(hb.line, CW - 120)[0], M + 6.5, bandY + 13.5);
+    // finding identity on the banner's right, plus ERF/MAWP/%wall metrics when assessed
+    const bandLabel = f.pipe_tag || f.location_desc || '—';
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(11.5); doc.setTextColor('#ffffff');
+    doc.text(doc.splitTextToSize(bandLabel, 90)[0], PW - M - 6, bandY + 7, { align: 'right' });
+    if (hb.metrics) {
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(7.8); doc.setTextColor('#f1f5f9');
+      doc.text(`ERF ${hb.metrics.erf}  ·  MAWP ${hb.metrics.mawp}  ·  ${hb.metrics.pct}% wall`, PW - M - 6, bandY + 12.5, { align: 'right' });
+    } else {
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(7.8); doc.setTextColor('#f1f5f9');
+      doc.text(`${f.finding_type || 'Uncategorised'}  ·  ${f.severity || '—'} severity`, PW - M - 6, bandY + 12.5, { align: 'right' });
+    }
+
+    // ---- 3-column card grid ----
+    const gTop = bandY + bandH + 3.5;
+    const gBottom = PH - FOOTER_H - 2.5;
+    const gH = gBottom - gTop;
+    const gGap = 4.5;
+    const colW = (CW - gGap * 2) / 3;
+    const x1 = M, x2 = M + colW + gGap, x3 = M + (colW + gGap) * 2;
+
+    /* ===== Card 1 — FINDING DETAILS ===== */
+    {
+      let cy = card(x1, gTop, colW, gH, 'Finding Details') + 3.2;
+      const padX = 3.5;
+      const labelW = 26;
+      const valX = x1 + padX + labelW;
+      const valW = colW - padX * 2 - labelW;
+      const rh = 7.3;
+      const kv = (label, value, opts) => {
+        opts = opts || {};
+        doc.setFont('GoogleSans', 'bold'); doc.setFontSize(5.9); doc.setTextColor(PDF_MUTED);
+        doc.text(String(label).toUpperCase(), x1 + padX, cy + 2.4);
+        let vx = valX;
+        if (opts.swatch) { doc.setFillColor(opts.swatch); doc.circle(valX + 1.5, cy + 1.4, 1.35, 'F'); vx = valX + 4.6; }
+        doc.setFont('GoogleSans', opts.bold ? 'bold' : 'normal'); doc.setFontSize(opts.fs || 8);
+        doc.setTextColor(opts.color || PDF_TEXT);
+        const v = (value == null || value === '') ? '—' : String(value);
+        doc.text(doc.splitTextToSize(v, valW - (vx - valX))[0], vx, cy + 2.4);
+        if (opts.tag) {
+          doc.setFont('GoogleSans', 'bold'); doc.setFontSize(5.9); doc.setTextColor(PDF_DANGER);
+          doc.text(opts.tag, x1 + colW - padX, cy + 2.4, { align: 'right' });
+        }
+        doc.setDrawColor('#eef2f7'); doc.setLineWidth(0.15);
+        doc.line(x1 + padX, cy + rh - 2, x1 + colW - padX, cy + rh - 2);
+        cy += rh;
+      };
+      kv('Line Tag / No.', f.pipe_tag || f.location_desc || '—', { bold: true, fs: 8.4 });
+      kv('Terminal', f.terminal || '—');
+      kv('Location', f.location_desc || '—');
+      kv('P&ID', f.pid_no || '—');
+      kv('Service / Fluid', f.service || '—');
+      kv('Finding Type', f.finding_type || '—');
+      kv('Severity', f.severity || '—', { swatch: SEVERITY_HEX(f.severity), bold: true });
+      kv('Status', (f.status || '—').toUpperCase(), { swatch: STATUS_COLORS[f.status] || PDF_MUTED, color: STATUS_COLORS[f.status] || PDF_TEXT, bold: true, tag: isOverdue(f) ? 'OVERDUE' : '' });
+      kv('Active Leak', f.is_leaking ? 'Yes — boundary breached' : 'No', { color: f.is_leaking ? PDF_DANGER : PDF_TEXT, bold: !!f.is_leaking });
+      kv('Inspected', paFmtDate(f.inspection_date));
+      kv('Target / Due', (dueDateOf(f) ? paFmtDate(dueDateOf(f)) : '—'), { color: isOverdue(f) ? PDF_DANGER : PDF_TEXT });
+      if (includeBudget) kv('Est. Cost', thb(f.estimated_cost));
+      kv('Recorded By', f.created_by_email || '—', { fs: 7.2 });
+
+      // recommended-action callout geometry (fixed at the card's bottom)
+      const aH = 21;
+      const aY = gTop + gH - 3.5 - aH;
+
+      // finding Description (moved here from Site Evidence, so the map gets that room) — fills the
+      // space between the identity list and the action callout, capped so it never overruns it.
+      cy += 1.4;
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(5.9); doc.setTextColor(PDF_MUTED);
+      doc.text('DESCRIPTION', x1 + padX, cy); cy += 3.6;
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(6.8); doc.setTextColor(PDF_TEXT);
+      const dcLimit = aY - 2 - cy;
+      doc.splitTextToSize(f.description ? String(f.description) : 'No anomaly description recorded.', colW - padX * 2)
+        .slice(0, Math.max(1, Math.floor(dcLimit / 3.4)))
+        .forEach(l => { doc.text(l, x1 + padX, cy); cy += 3.4; });
+
+      // recommended-action callout (single derived line — NOT the full Repair Advisor)
+      const adv = resolveAdvisor(f.finding_type, res, f.is_leaking);
+      const actionText = adv ? adv.summary : 'Assign a finding type and record an assessment to generate a recommendation.';
+      doc.setFillColor(theme.tint); doc.setDrawColor(theme.spine); doc.setLineWidth(0.2);
+      doc.roundedRect(x1 + padX, aY, colW - padX * 2, aH, 1.4, 1.4, 'FD');
+      doc.setFillColor(theme.spine); doc.rect(x1 + padX, aY, 1.8, aH, 'F');
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(6.2); doc.setTextColor(theme.text);
+      doc.text('RECOMMENDED ACTION', x1 + padX + 3.6, aY + 3.6);
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(7.2); doc.setTextColor(PDF_TEXT);
+      const aLines = doc.splitTextToSize(actionText, colW - padX * 2 - 6).slice(0, 5);
+      let ly = aY + 7.4;
+      aLines.forEach(line => { doc.text(line, x1 + padX + 3.6, ly); ly += 3.3; });
+    }
+
+    /* ===== Card 2 — SITE EVIDENCE (photo + location + description; cross-section moved to Card 3) ===== */
+    {
+      let cy = card(x2, gTop, colW, gH, 'Site Evidence') + 3;
+      const padX = 3.5;
+      const innerW = colW - padX * 2;
+      // large as-found photo — cover-fit (fills the box, no grey letterbox — like the web tile)
+      const photoH = 58;
+      drawCover(photo ? photo.src : null, photo ? photo.ratio : 1, x2 + padX, cy, innerW, photoH, 'No site photo');
+      cy += photoH + 3;
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(5.4); doc.setTextColor(PDF_MUTED);
+      doc.text('AS-FOUND PHOTO', x2 + padX + 0.5, cy); cy += 3.4;
+      // location map — cover-fit, now expanded to fill ALL remaining card height (description moved
+      // to Finding Details), so the aerial reads large and crisp for a projected slide.
+      const mapTop = cy;
+      const mapH = (gTop + gH - 3.5 - 3.4) - mapTop; // leave room for the LOCATION label below
+      drawCover(mapImg, MAP_PX.w / MAP_PX.h, x2 + padX, mapTop, innerW, mapH, 'No location on record');
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(5.4); doc.setTextColor(PDF_MUTED);
+      doc.text('LOCATION', x2 + padX + 0.5, mapTop + mapH + 2.6);
+      doc.setTextColor(PDF_TEXT);
+    }
+
+    /* ===== Card 3 — ASME B31.3 ASSESSMENT ===== */
+    {
+      let cy = card(x3, gTop, colW, gH, 'ASME B31.3 Assessment') + 3.4;
+      const padX = 3.5;
+      const innerW = colW - padX * 2;
+      const tile = (tx, ty, tw, th, label, value, note, valColor) => {
+        doc.setFillColor(SOFT); doc.setDrawColor(CARD_BORDER); doc.setLineWidth(0.2);
+        doc.roundedRect(tx, ty, tw, th, 1.4, 1.4, 'FD');
+        doc.setFont('GoogleSans', 'bold'); doc.setFontSize(5.7); doc.setTextColor(PDF_MUTED);
+        doc.text(String(label).toUpperCase(), tx + 2.4, ty + 3.6);
+        doc.setFont('GoogleSans', 'bold'); doc.setFontSize(12); doc.setTextColor(valColor || PDF_TEXT);
+        doc.text(String(value), tx + 2.4, ty + 10.2);
+        if (note) { doc.setFont('GoogleSans', 'normal'); doc.setFontSize(5.7); doc.setTextColor(PDF_MUTED); doc.text(String(note), tx + 2.4, ty + 14); }
+        doc.setTextColor(PDF_TEXT);
+      };
+      // sub-section label helper (muted uppercase eyebrow)
+      const eyebrow = (label) => { doc.setFont('GoogleSans', 'bold'); doc.setFontSize(5.9); doc.setTextColor(PDF_MUTED); doc.text(label, x3 + padX, cy); cy += 3.8; doc.setTextColor(PDF_TEXT); };
+      // 2-column label/value row (two metrics per line to pack the engineering numbers densely)
+      const half = innerW / 2;
+      const kv2 = (ry, col, label, val, valColor) => {
+        const bx = x3 + padX + (col ? half : 0);
+        doc.setFont('GoogleSans', 'normal'); doc.setFontSize(6.3); doc.setTextColor(PDF_MUTED);
+        doc.text(label, bx, ry);
+        doc.setFont('GoogleSans', 'bold'); doc.setFontSize(6.9); doc.setTextColor(valColor || PDF_TEXT);
+        doc.text(String(val), bx + 22, ry);
+        doc.setTextColor(PDF_TEXT);
+      };
+      const defect = (f.defect_length_mm != null || f.defect_width_mm != null) ? `${f.defect_length_mm ?? '—'} x ${f.defect_width_mm ?? '—'} mm` : '—';
+
+      if (res) {
+        const erf = res.mawp_no > 0 ? (res.P_input / res.mawp_no) : 9.99;
+        const erfCa = (res.mawp_with != null && res.mawp_with > 0) ? (res.P_input / res.mawp_with) : null;
+
+        // 1. wall cross-section figure (moved here from Site Evidence)
+        const figH = 34;
+        drawFit(xsec, xsecRatio, x3 + padX, cy, innerW, figH);
+        cy += figH + 2.4;
+        eyebrow('WALL CROSS-SECTION');
+
+        // 2. pipe & design basis setup line
+        const setupBits = [
+          `NPS ${inputs?.nps ?? '—'}`, `Sch ${inputs?.schedule ?? '—'}`,
+          (materialName(inputs?.material) || inputs?.material || '—'),
+          `OD ${fmt2(res.D)} mm`,
+          inputs?.design_temp ? `${inputs.design_temp} C` : null,
+          res.isInternal ? 'Internal corr.' : 'External corr.'
+        ].filter(Boolean).join('  ·  ');
+        doc.setFont('GoogleSans', 'normal'); doc.setFontSize(6.5); doc.setTextColor(PDF_MUTED);
+        doc.splitTextToSize(setupBits, innerW).slice(0, 2).forEach(l => { doc.text(l, x3 + padX, cy); cy += 3.4; });
+        doc.setTextColor(PDF_TEXT); cy += 1.6;
+
+        // 3. headline metric tiles
+        const tileW = (innerW - 3) / 2, tileH = 14, tGap = 3;
+        const life = res.remainingLife != null ? (res.remainingLife >= 0 ? `${fmt2(res.remainingLife)}y` : '0y') : '—';
+        tile(x3 + padX, cy, tileW, tileH, 'ERF (no CA)', fmt3(erf), erf <= 1 ? 'PASS  (<= 1.0)' : 'CHECK  (> 1.0)', erf <= 1 ? PDF_OK : PDF_DANGER);
+        tile(x3 + padX + tileW + tGap, cy, tileW, tileH, 'MAWP (no CA)', `${fmt2(res.mawp_no)}`, `${res.pUnit} · P ${fmt2(res.P_input)}`, res.mawp_no >= res.P_input ? PDF_OK : PDF_DANGER);
+        cy += tileH + tGap;
+        tile(x3 + padX, cy, tileW, tileH, '% Wall Remaining', `${(res.pctRemainNom == null ? '—' : res.pctRemainNom.toFixed(0))}%`, res.pctRemainNom >= 50 ? 'PASS  (>= 50%)' : 'CHECK  (< 50%)', res.pctRemainNom >= 50 ? PDF_OK : PDF_WARN);
+        tile(x3 + padX + tileW + tGap, cy, tileW, tileH, 'Remaining Life', life, res.CR > 0 ? `at ${fmt3(res.CR)} mm/yr` : 'no CR trend', (res.remainingLife != null && res.remainingLife <= 0) ? PDF_DANGER : PDF_TEXT);
+        cy += tileH + tGap + 1.2;
+
+        // 4. wall thickness & flaw geometry (two columns, mm)
+        eyebrow('WALL THICKNESS & FLAW (mm)');
+        kv2(cy, 0, 'Nominal t_nom', fmt2(res.t_nom)); kv2(cy, 1, 'Required t_req', fmt2(res.t_req_noCA)); cy += 3.9;
+        kv2(cy, 0, 'Measured t_meas', fmt2(res.t_meas)); kv2(cy, 1, 'Req + CA', fmt2(res.t_req_total), res.margin >= 0 ? PDF_OK : PDF_DANGER); cy += 3.9;
+        kv2(cy, 0, 'Wall loss', fmt2(res.depth)); kv2(cy, 1, 'Struct min', fmt2(res.t_struct), res.t_meas >= res.t_struct ? PDF_OK : PDF_DANGER); cy += 3.9;
+        kv2(cy, 0, 'Flaw L x W', defect); kv2(cy, 1, 'Margin', `${fmt2(res.margin)}`, res.margin >= 0 ? PDF_OK : PDF_DANGER); cy += 4.6;
+
+        // 5. design basis (pressure / corrosion inputs)
+        eyebrow('DESIGN BASIS');
+        kv2(cy, 0, 'Design P', `${fmt2(res.P_input)} ${res.pUnit}`); kv2(cy, 1, 'Allow. S', `${fmt2(res.S)} MPa`); cy += 3.9;
+        kv2(cy, 0, 'Corr. allow CA', `${fmt2(res.ca)} mm`); kv2(cy, 1, 'Corr. rate', res.CR > 0 ? `${fmt3(res.CR)} mm/yr` : '—'); cy += 3.9;
+        kv2(cy, 0, 'MAWP w/ CA', res.mawp_with == null ? 'n/a' : `${fmt2(res.mawp_with)} ${res.pUnit}`); kv2(cy, 1, 'ERF w/ CA', erfCa == null ? 'n/a' : fmt3(erfCa), erfCa == null ? PDF_TEXT : (erfCa <= 1 ? PDF_OK : PDF_DANGER)); cy += 3.9;
+      } else {
+        // no numeric assessment — say why (from the shared banner state), don't fake a verdict
+        doc.setFillColor(theme.tint); doc.setDrawColor(theme.spine); doc.setLineWidth(0.2);
+        doc.roundedRect(x3 + padX, cy, innerW, 14, 1.4, 1.4, 'FD');
+        doc.setFillColor(theme.spine); doc.rect(x3 + padX, cy, 1.8, 14, 'F');
+        doc.setFont('GoogleSans', 'bold'); doc.setFontSize(7.4); doc.setTextColor(theme.text);
+        doc.text(hb.word, x3 + padX + 3.6, cy + 5);
+        doc.setFont('GoogleSans', 'normal'); doc.setFontSize(6.6); doc.setTextColor(PDF_TEXT);
+        doc.splitTextToSize(hb.line, innerW - 6).slice(0, 2).forEach((line, i) => doc.text(line, x3 + padX + 3.6, cy + 9 + i * 3.2));
+        cy += 14 + 5;
+        eyebrow('FLAW GEOMETRY');
+        kv2(cy, 0, 'Flaw L x W', defect); kv2(cy, 1, 'Finding type', f.finding_type || '—'); cy += 4.4;
+        doc.setFont('GoogleSans', 'normal'); doc.setFontSize(6.5); doc.setTextColor(PDF_MUTED);
+        doc.splitTextToSize('No ASME B31.3 wall-loss calculation applies until a UT reading is recorded (or the finding type is a wall-loss mechanism).', innerW).slice(0, 3).forEach(l => { doc.text(l, x3 + padX, cy); cy += 3.4; });
+        doc.setTextColor(PDF_TEXT);
+      }
+    }
+
+    // ---- footer (DOC REF + Record ID, same identifiers as the finding PDF) ----
+    doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2); doc.line(M, PH - FOOTER_H, PW - M, PH - FOOTER_H);
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(6.6); doc.setTextColor(PDF_MUTED);
+    doc.text(`DOC REF  ${reportRef}`, M, PH - FOOTER_H + 3.6);
+    doc.text(`Finding ${idx + 1} of ${rows.length}`, PW / 2, PH - FOOTER_H + 3.6, { align: 'center' });
+    doc.text(`Generated ${paFmtDateTime(now)}`, PW - M, PH - FOOTER_H + 3.6, { align: 'right' });
+    doc.setFontSize(5.8); doc.setTextColor('#94a3b8');
+    doc.text(`Record ID  ${recordId}`, M, PH - FOOTER_H + 7);
+    doc.text('Central and Eastern Engineering and Maintenance Division — PTT Oil and Retail Business Public Company Limited', PW / 2, PH - FOOTER_H + 7, { align: 'center' });
+    doc.setTextColor(PDF_TEXT);
+  });
+
+  return doc.output('blob');
+}
+
+/* Severity swatch hex for the slide identity list — kept local (the map-legend SEVERITY_COLORS in
+   core/constants is keyed the same, but this small helper avoids importing it just for three keys
+   and tolerates a missing/unknown severity gracefully). */
+function SEVERITY_HEX(sev) {
+  if (sev === 'High') return '#dc2626';
+  if (sev === 'Medium') return '#d97706';
+  if (sev === 'Low') return '#059669';
+  return '#94a3b8';
 }
 

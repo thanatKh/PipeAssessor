@@ -9,7 +9,7 @@
 import L from 'leaflet';
 import { $, val, esc, notify, todayISO, isOverdue, fmtDate, fmtDateTime, pillHtml, openDialog, closeDialog, setBusy } from '../core/dom';
 import {
-  PHOTO_LIMIT_PER_KIND, SAT_TILES, STATUSES, STATUS_COLORS,
+  PHOTO_LIMIT_PER_KIND, SAT_TILES, STATUSES, STATUS_COLORS, REPAIR_METHOD_OPTIONS,
 } from '../core/constants';
 import { sb } from '../core/supabase';
 import { computeB313, PA_MATERIALS } from '../engine/compute';
@@ -60,9 +60,10 @@ export function renderDetail() {
 
   const d = [];
   d.push(dItem('Terminal', esc(f.terminal)));
+  d.push(dItem('Location', esc(f.location_desc || '—')));
+  d.push(dItem('Pipe Tag / Line', esc(f.pipe_tag || '—')));
   d.push(dItem('P&ID', esc(f.pid_no || '—')));
   d.push(dItem('Service', esc(f.service || '—')));
-  d.push(dItem('Location', esc(f.location_desc || '—')));
   if (f.report_link) d.push(dItem('Report Link',
     `<a href="${esc(f.report_link)}" target="_blank" rel="noopener" style="color:var(--button-primary);font-weight:600;">Open source report &#8599;</a>`));
   d.push(dItem('Inspection Date', `<span class="mono">${fmtDate(f.inspection_date)}</span>`));
@@ -382,10 +383,20 @@ export function openStatusDialog(target) {
     extra = `<label class="f-label req" for="dlgDate">Target repair date</label>
              <input id="dlgDate" class="input" type="date" value="${esc(current.target_date || '')}">`;
   } else if (target === 'Repaired') {
+    // Free-text was the old shape; a saved value that doesn't match one of the fixed options is
+    // legacy data — select "Other" and prefill the free-text field with it rather than silently
+    // dropping it (per-user note: existing rows get fixed up manually over time).
+    const savedMethod = current.repair_method || '';
+    const isKnownMethod = REPAIR_METHOD_OPTIONS.includes(savedMethod);
+    const selVal = savedMethod && !isKnownMethod ? 'Other' : savedMethod;
     extra = `<label class="f-label req" for="dlgDate">Repaired date</label>
              <input id="dlgDate" class="input" type="date" value="${todayISO()}">
-             <label class="f-label" for="dlgRepairMethod" style="margin-top:12px;">Repair method (PCC-2 / description)</label>
-             <input id="dlgRepairMethod" class="input" type="text" value="${esc(current.repair_method || '')}" placeholder="e.g., Weld overlay / clamp / replacement spool">
+             <label class="f-label" for="dlgRepairMethod" style="margin-top:12px;">Repair method (PCC-2)</label>
+             <select id="dlgRepairMethod" class="select">
+               <option value="" ${selVal ? '' : 'selected'} disabled>Select method…</option>
+               ${REPAIR_METHOD_OPTIONS.map(m => `<option value="${esc(m)}" ${m === selVal ? 'selected' : ''}>${esc(m)}</option>`).join('')}
+             </select>
+             <input id="dlgRepairMethodOther" class="input" type="text" style="margin-top:8px; display:${selVal === 'Other' ? 'block' : 'none'};" value="${esc(!isKnownMethod ? savedMethod : '')}" placeholder="Describe the repair method">
              <div class="photo-group" style="margin-top:12px;">
                <div class="photo-group-h">
                  <h3>After Repair photos</h3>
@@ -400,6 +411,9 @@ export function openStatusDialog(target) {
   if (target === 'Repaired') {
     renderDlgRepairedPhotos();
     $('dlgAddRepairedPhoto').addEventListener('click', () => $('fileDlgRepaired').click());
+    $('dlgRepairMethod').addEventListener('change', () => {
+      $('dlgRepairMethodOther').style.display = val('dlgRepairMethod') === 'Other' ? 'block' : 'none';
+    });
   }
   openDialog($('statusDlg'));
 }
@@ -453,7 +467,8 @@ export async function confirmStatusChange() {
   } else if (target === 'Repaired') {
     if (!dateEl.value) { err.textContent = 'Repaired date is required.'; err.style.display = 'block'; return; }
     patch.repaired_date = dateEl.value;
-    const rm = val('dlgRepairMethod').trim();
+    const rmSel = val('dlgRepairMethod');
+    const rm = rmSel === 'Other' ? val('dlgRepairMethodOther').trim() : rmSel;
     if (rm) patch.repair_method = rm;
     const hasRepairedPhoto = currentPhotos.some(p => p.kind === 'repaired');
     if (!hasRepairedPhoto &&

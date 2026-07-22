@@ -139,7 +139,7 @@ async function route() {
 
 
 import {
-  loadFindings, ageDays, STATUS_RANK, sortFindings, loadDetail, loadPublicFinding, photoUrl, applyFilters, KPI_RING_CIRCUMFERENCE, renderKpis, renderBudgetKpi, ensureDashMap, popupHtml, showAddFindingPopup, renderMap, highlightPin, flashRow, CAMERA_SVG, ageHtml, renderTable, updateSelectionUI, buildTagOptions, renderList, toggleMapPresentation, resetMapView, togglePresSidebar, toggleMapBaseLayer,
+  loadFindings, ageDays, STATUS_RANK, sortFindings, loadDetail, loadPublicFinding, photoUrl, applyFilters, KPI_RING_CIRCUMFERENCE, renderKpis, renderBudgetKpi, ensureDashMap, popupHtml, showAddFindingPopup, renderMap, highlightPin, flashRow, CAMERA_SVG, ageHtml, renderTable, updateSelectionUI, buildTagOptions, renderList, toggleMapPresentation, resetMapView, togglePresSidebar, toggleMapBaseLayer, toggleRiskRadius,
 } from './features/dashboard';
 
 /* ---------------- CSV export (filtered register, Excel-friendly UTF-8 BOM) ---------------- */
@@ -310,6 +310,7 @@ function initApp() {
   $('btnPresReset')?.addEventListener('click', () => resetMapView());
   $('btnPresToggleSidebar')?.addEventListener('click', () => togglePresSidebar());
   $('btnPresSidebarClose')?.addEventListener('click', () => togglePresSidebar(false));
+  $('btnRiskRadius')?.addEventListener('click', () => toggleRiskRadius());
 
   $('btnMapExpand')?.addEventListener('click', () => toggleMapPresentation());
   $('btnPresBack')?.addEventListener('click', () => toggleMapPresentation(false));

@@ -55,7 +55,25 @@ export const FINDING_TYPE_SHORT = {
 };
 
 export const STATUSES = ['Open', 'Monitoring', 'Repair Planned', 'Repaired', 'Closed'];
-export const PHOTO_LIMIT_PER_KIND = 5; // As Found and After Repair each capped at 5 -> 10 total per finding
+export const PHOTO_LIMIT_PER_KIND = 4; // As Found and After Repair each capped at 4 -> 8 total per finding
+
+// Repair method options for the "Repaired" status-change dialog's dropdown — the same PCC-2
+// category names used by workbench/repair-advisor.ts's numeric REPAIR-status guidance, plus a few
+// non-pressure-repair categories (Coating, Support, non-repair dispositions) for the non-wall-loss
+// finding types, and a trailing 'Other' that reveals a free-text field. Kept here (not derived from
+// repair-advisor.ts's item titles) since this is a fixed closed list for data entry, independent of
+// any specific finding's advisor content.
+export const REPAIR_METHOD_OPTIONS = [
+  'Composite Repair (PCC-2 Part 2)',
+  'Welded Sleeve (PCC-2 Part 3)',
+  'Weld Overlay / Buildup (PCC-2 Part 3)',
+  'Mechanical Clamp (PCC-2 Part 4)',
+  'Replacement / Spool Replacement (PCC-2 Part 3)',
+  'Coating / Recoat Repair',
+  'Support Repair / Replacement',
+  'No Repair Required (Monitoring Cleared)',
+  'Other',
+];
 
 export const STATUS_META = {
   'Open':           { cls: 'st-open' },

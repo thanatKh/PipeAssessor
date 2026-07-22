@@ -73,6 +73,18 @@ export function setDashMarkers(v: any) { dashMarkers = v; }
 export let mapColorBy: 'status' | 'type' | 'severity' = 'status';
 export function setMapColorBy(v: 'status' | 'type' | 'severity') { mapColorBy = v; }
 
+// Presentation-mode-only overlay: a translucent real-world-radius circle around each pin, a
+// visual risk-zone aid (not a computed consequence distance) so an engineer walking through
+// findings on the big screen can see clustering/proximity. Off by default (kept off outside
+// presentation mode entirely — see toggleMapPresentation/renderRiskRadius in dashboard.ts).
+export let mapShowRiskRadius = false;
+export function setMapShowRiskRadius(v: boolean) { mapShowRiskRadius = v; }
+
+// Separate Leaflet layer group for the risk-radius circles (kept apart from dashLayer's pins so
+// toggling the overlay just clears/refills this group, without touching pins/popups/tooltips).
+export let dashRiskLayer: any = null;
+export function setDashRiskLayer(v: any) { dashRiskLayer = v; }
+
 export let dashAddMarker: any = null;
 export function setDashAddMarker(v: any) { dashAddMarker = v; }
 

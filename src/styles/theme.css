@@ -103,6 +103,13 @@
   transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s;
 }
 
+html {
+  /* Reserve the vertical scrollbar's width at all times, so a page-height change that crosses the
+     scroll threshold (e.g. the register's selection bar appearing/disappearing) never toggles the
+     scrollbar on/off and shifts the whole page's content left/right by its width. */
+  scrollbar-gutter: stable;
+}
+
 html, body {
   background: var(--bg-color);
   color: var(--text-color);
@@ -354,7 +361,6 @@ body > header .wrap {
 .hb-monitor { --hb-fill: #b45309; --hb-spine: #92400e; }
 .hb-repair  { --hb-fill: #b91c1c; --hb-spine: #7f1d1d; }
 .hb-leaking { --hb-fill: #b91c1c; --hb-spine: #7f1d1d; }
-.hb-action  { --hb-fill: #1e40af; --hb-spine: #1e3a8a; }
 .hb-pending { --hb-fill: #475569; --hb-spine: #334155; }
 .hb-none    { --hb-fill: #475569; --hb-spine: #334155; }
 @media (max-width: 640px) {

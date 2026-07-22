@@ -179,9 +179,16 @@ const WALL_LOSS_PENDING_ENTRY: FindingAdvisorEntry = {
 
 /* Safety-first guidance prepended to whatever the base finding type resolves to, whenever the
    "Actively Leaking" flag is set — see resolveAdvisor's isLeaking parameter below. Independent of
-   finding type: applies the same whether the underlying damage is corrosion, a dent, CUI, etc. */
+   finding type: applies the same whether the underlying damage is corrosion, a dent, CUI, etc.
+
+   Summary line is deliberately leak-first, not UT-first: a leak already requires immediate
+   isolation/containment action regardless of whether a UT reading exists yet. UT only sharpens
+   the *permanent* repair method selection (Composite/Sleeve/Clamp/Replacement) — it is never a
+   prerequisite for the immediate safety response. resolveAdvisor swaps this in as the leading
+   summary (instead of the base entry's own summary, e.g. the wall-loss "need UT first" pending
+   line) whenever isLeaking is true, so the banner never reads as "wait for UT before acting". */
 const LEAKING_OVERLAY: FindingAdvisorEntry = {
-  summary: 'ข้อค้นพบที่เกี่ยวข้องกับความปลอดภัย — ตรวจสอบสถานะการแยกระบบก่อนวางแผนซ่อมแซม',
+  summary: 'พบการรั่วไหล — ดำเนินการด้านความปลอดภัย/กักเก็บทันที ไม่ต้องรอผลวัด UT ก่อน (UT ใช้เพื่อเลือกวิธีซ่อมถาวรในขั้นตอนถัดไป)',
   standardsNote: 'คำแนะนำทั่วไปตาม API 570 และขั้นตอนฉุกเฉินของหน่วยงาน — โปรดตรวจสอบกับเอกสารขั้นตอนตอบสนองเหตุฉุกเฉินของหน่วยงานของท่าน',
   needsReview: true,
   items: [
@@ -262,8 +269,11 @@ export const REPAIR_ADVISOR_BY_FINDING: Record<string, FindingAdvisorEntry> = {
  *  3. Non-wall-loss type → its own dedicated entry, regardless of any stray B31.3 result.
  *  4. Empty/unknown finding type → null (caller renders an empty-state prompt).
  *
- * When isLeaking is true, LEAKING_OVERLAY's items are prepended to the base entry's items (the
- * base entry's own summary stays the lead line — avoids juggling two summary strings).
+ * When isLeaking is true, LEAKING_OVERLAY's items are prepended to the base entry's items, AND
+ * LEAKING_OVERLAY's own summary replaces the base entry's summary as the lead line — a leak is an
+ * immediate safety condition, so the banner must never lead with the base entry's non-leak framing
+ * (e.g. the wall-loss-pending entry's "need a UT reading before advice" line, which would misread
+ * as "wait for UT before acting" when a leak is already present and containment can't wait).
  */
 export function resolveAdvisor(findingType: string | null | undefined, res: B313Result | null | undefined, isLeaking?: boolean): ResolvedAdvisor | null {
   if (!findingType) return null;
@@ -285,6 +295,7 @@ export function resolveAdvisor(findingType: string | null | undefined, res: B313
   if (!isLeaking) return base;
   return {
     ...base,
+    summary: LEAKING_OVERLAY.summary,
     items: [...LEAKING_OVERLAY.items, ...base.items],
     standardsNote: [LEAKING_OVERLAY.standardsNote, base.standardsNote].filter(Boolean).join(' '),
     needsReview: base.needsReview || LEAKING_OVERLAY.needsReview

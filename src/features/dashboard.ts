@@ -18,7 +18,13 @@ import {
   dashMap, setDashMap, dashLayer, setDashLayer, dashMarkers, setDashMarkers,
   dashAddMarker, setDashAddMarker, pendingNewCoords, setPendingNewCoords, lastRenderedRows, setLastRenderedRows,
   mapColorBy, mapBaseLayer, setMapBaseLayer, dashSatLayer, setDashSatLayer, dashStreetLayer, setDashStreetLayer,
+  mapShowRiskRadius, setMapShowRiskRadius, dashRiskLayer, setDashRiskLayer,
 } from '../core/state';
+
+// Real-world radius (metres) of the presentation-mode risk-zone circle — a fixed visual proximity
+// aid, not a computed consequence/PHA distance (the app has no such model; see CLAUDE.md's Line
+// Risk Ranking note on avoiding anything that reads like a certified quantitative figure).
+const RISK_RADIUS_M = 40;
 
 // Resolves a finding's map/legend color for the current mapColorBy mode. Falls back to the
 // status palette's default ('#64748b') when a value has no palette entry (e.g. severity unset).
@@ -265,6 +271,14 @@ export function ensureDashMap() {
   setDashSatLayer(L.tileLayer(SAT_TILES.url, { maxZoom: SAT_TILES.maxZoom, attribution: SAT_TILES.attribution }));
   setDashStreetLayer(L.tileLayer(STREET_TILES.url, { maxZoom: STREET_TILES.maxZoom, attribution: STREET_TILES.attribution }));
   (mapBaseLayer === 'street' ? dashStreetLayer : dashSatLayer).addTo(dashMap);
+  // Risk-radius circles get their OWN pane, z-indexed below Leaflet's default overlayPane (400,
+  // where circleMarker pins live). This guarantees pins always paint on top of the circles
+  // regardless of DOM insertion order — relying on layer-group creation order isn't enough, since
+  // toggling the risk overlay redraws only dashRiskLayer (not the pins), and a shared-pane SVG
+  // stacks purely by insertion order, which that toggle would otherwise disturb.
+  dashMap.createPane('riskPane');
+  dashMap.getPane('riskPane').style.zIndex = 350;
+  setDashRiskLayer(L.layerGroup().addTo(dashMap));
   setDashLayer(L.layerGroup().addTo(dashMap));
   // scroll-zoom only after the user clicks the map — otherwise page scrolling gets hijacked
   dashMap.on('focus click', () => dashMap.scrollWheelZoom.enable());
@@ -355,6 +369,38 @@ export function showAddFindingPopup(latlng) {
   L.popup({ closeButton: true }).setLatLng(latlng).setContent(node).openOn(dashMap);
 }
 
+// Presentation-mode risk-zone overlay: a small translucent, gently pulsing L.circle (real-world
+// metres, so it scales correctly with zoom, unlike a pixel-radius circleMarker) around every
+// plotted pin, colored to match that pin's current color-by fill. Purely a proximity/clustering
+// visual aid for the big screen — not a computed consequence distance — so it's deliberately
+// fixed-radius and only ever shown when mapShowRiskRadius is on (presentation mode's toggle; see
+// toggleRiskRadius below). Drawn into its own 'riskPane' (z-indexed below the pins' default
+// overlayPane in ensureDashMap) so the pin markers always stay visually on top of the circles no
+// matter which function (this one, or a full renderMap) last touched either layer. The pulse
+// animation is pure CSS (`.risk-radius-circle` in app.css) driven off Leaflet's `className` option.
+function renderRiskRadius(pts) {
+  if (!dashRiskLayer) return;
+  dashRiskLayer.clearLayers();
+  if (!mapShowRiskRadius) return;
+  pts.forEach(f => {
+    dashRiskLayer.addLayer(L.circle([f.lat, f.lng], {
+      pane: 'riskPane', className: 'risk-radius-circle',
+      radius: RISK_RADIUS_M, color: colorFor(f), weight: 1.5, opacity: 0.55,
+      fillColor: colorFor(f), fillOpacity: 0.12, interactive: false
+    }));
+  });
+}
+
+// Toggles the presentation-mode risk-radius overlay and redraws it against whatever's currently
+// plotted — cheap, since it only touches dashRiskLayer, not the pins/legend/sidebar.
+export function toggleRiskRadius(forceState) {
+  const next = typeof forceState === 'boolean' ? forceState : !mapShowRiskRadius;
+  setMapShowRiskRadius(next);
+  const btn = $('btnRiskRadius');
+  if (btn) { btn.classList.toggle('is-on', next); btn.setAttribute('aria-checked', String(next)); }
+  renderRiskRadius(lastRenderedRows.filter(f => f.lat != null && f.lng != null));
+}
+
 export function renderMap(rows) {
   ensureDashMap();
   const pts = rows.filter(f => f.lat != null && f.lng != null);
@@ -367,6 +413,7 @@ export function renderMap(rows) {
   // (fonts/webfont swap, etc.) on the first paint.
   dashMap.invalidateSize();
   setTimeout(() => dashMap.invalidateSize(), 100);
+  renderRiskRadius(pts); // drawn first so pins stack visually above the circles
   dashLayer.clearLayers();
   setDashMarkers({});
   pts.forEach(f => {
@@ -643,6 +690,7 @@ export function toggleMapPresentation(forceState?: boolean) {
   } else {
     document.body.style.overflow = '';
     togglePresSidebar(false);
+    if (mapShowRiskRadius) toggleRiskRadius(false); // presentation-mode-only overlay, off outside it
     // Play the reverse animation, then swap the fixed-overlay class off once it finishes so the
     // panel doesn't just disappear on the same frame Exit is clicked. animationend can fail to
     // fire (browser quirks, animations disabled, reduced-motion) — a timeout fallback guarantees
