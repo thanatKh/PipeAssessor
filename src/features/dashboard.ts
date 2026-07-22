@@ -8,7 +8,7 @@
    ============================================================================ */
 import L from 'leaflet';
 import { $, esc, notify, fmtDate, isOverdue, dueDateOf, pillHtml } from '../core/dom';
-import { FINDING_TYPE_SHORT, STATUS_COLORS, TYPE_COLORS, SEVERITY_COLORS, DEFAULT_MAP_VIEW, SAT_TILES, R2_PUBLIC_BASE } from '../core/constants';
+import { FINDING_TYPE_SHORT, STATUS_COLORS, TYPE_COLORS, SEVERITY_COLORS, DEFAULT_MAP_VIEW, SAT_TILES, STREET_TILES, R2_PUBLIC_BASE } from '../core/constants';
 import { paFmtBahtShort } from '../engine/format';
 import { sb } from '../core/supabase';
 import {
@@ -17,7 +17,7 @@ import {
   currentAssessments, setCurrentAssessments, photoCounts, setPhotoCounts, photoThumbs, setPhotoThumbs,
   dashMap, setDashMap, dashLayer, setDashLayer, dashMarkers, setDashMarkers,
   dashAddMarker, setDashAddMarker, pendingNewCoords, setPendingNewCoords, lastRenderedRows, setLastRenderedRows,
-  mapColorBy,
+  mapColorBy, mapBaseLayer, setMapBaseLayer, dashSatLayer, setDashSatLayer, dashStreetLayer, setDashStreetLayer,
 } from '../core/state';
 
 // Resolves a finding's map/legend color for the current mapColorBy mode. Falls back to the
@@ -241,7 +241,11 @@ export function ensureDashMap() {
   }
   if (dashMap) { setTimeout(() => dashMap.invalidateSize(), 80); return; }
   setDashMap(L.map(el, { center: DEFAULT_MAP_VIEW.center, zoom: DEFAULT_MAP_VIEW.zoom, scrollWheelZoom: false }));
-  L.tileLayer(SAT_TILES.url, { maxZoom: SAT_TILES.maxZoom, attribution: SAT_TILES.attribution }).addTo(dashMap);
+  // Both base layers are created up front and swapped via toggleMapBaseLayer (add/remove) rather
+  // than re-created per toggle, so switching is instant and each tile source keeps its own cache.
+  setDashSatLayer(L.tileLayer(SAT_TILES.url, { maxZoom: SAT_TILES.maxZoom, attribution: SAT_TILES.attribution }));
+  setDashStreetLayer(L.tileLayer(STREET_TILES.url, { maxZoom: STREET_TILES.maxZoom, attribution: STREET_TILES.attribution }));
+  (mapBaseLayer === 'street' ? dashStreetLayer : dashSatLayer).addTo(dashMap);
   setDashLayer(L.layerGroup().addTo(dashMap));
   // scroll-zoom only after the user clicks the map — otherwise page scrolling gets hijacked
   dashMap.on('focus click', () => dashMap.scrollWheelZoom.enable());
@@ -251,6 +255,22 @@ export function ensureDashMap() {
   dashMap.on('dblclick', (e) => showAddFindingPopup(e.latlng));
   dashMap.on('popupclose', () => { if (dashAddMarker) { dashLayer.removeLayer(dashAddMarker); setDashAddMarker(null); } });
   setTimeout(() => dashMap.invalidateSize(), 150);
+}
+
+export function toggleMapBaseLayer(mode) {
+  const next = mode === 'street' || mode === 'satellite' ? mode : (mapBaseLayer === 'satellite' ? 'street' : 'satellite');
+  if (next === mapBaseLayer) return;
+  setMapBaseLayer(next);
+  if (dashMap && dashSatLayer && dashStreetLayer) {
+    dashMap.removeLayer(next === 'street' ? dashSatLayer : dashStreetLayer);
+    (next === 'street' ? dashStreetLayer : dashSatLayer).addTo(dashMap);
+  }
+  const btn = $('btnMapBaseLayer');
+  if (btn) {
+    btn.classList.toggle('is-street', next === 'street');
+    btn.setAttribute('aria-checked', String(next === 'street'));
+    btn.querySelector('span').textContent = next === 'street' ? 'Street' : 'Satellite';
+  }
 }
 
 export function popupHtml(f) {
@@ -553,20 +573,18 @@ export function toggleMapPresentation(forceState?: boolean) {
   if (!panel || !btn) return;
 
   const isPres = typeof forceState === 'boolean' ? forceState : !panel.classList.contains('map-presentation');
-  panel.classList.toggle('map-presentation', isPres);
+  const wasPres = panel.classList.contains('map-presentation');
+  if (isPres === wasPres) return;
 
-  const EXPAND_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>`;
-  const COLLAPSE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="10" y1="14" x2="3" y2="21"></line></svg>`;
+  const EXPAND_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>`;
+  const COLLAPSE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="10" y1="14" x2="3" y2="21"></line></svg>`;
 
   btn.innerHTML = isPres
-    ? `${COLLAPSE_ICON}<span>Exit Presentation</span><span class="map-pres-esc-hint"><kbd>ESC</kbd></span>`
+    ? `${COLLAPSE_ICON}<span>Exit Presentation</span><span class="pres-key-hint map-pres-esc-hint">ESC</span>`
     : `${EXPAND_ICON}<span>Presentation</span>`;
 
   const presControls = document.querySelectorAll('.pres-only');
   presControls.forEach(el => { el.hidden = !isPres; });
-
-  const optNote = panel.querySelector('.f-optnote');
-  if (optNote) optNote.style.display = isPres ? 'none' : '';
 
   const summary = $('presSummaryBar');
   if (summary) {
@@ -581,11 +599,46 @@ export function toggleMapPresentation(forceState?: boolean) {
   const sel = $('presTerminalFilter');
   if (sel && isPres) sel.value = filters.terminal || '';
 
+  // Every other view/table/register on the dashboard is still in the DOM underneath the fixed
+  // overlay; without this, Tab can leave the presentation surface and land on a background
+  // control the user can't see. Restored on exit so normal dashboard keyboard nav resumes.
+  const dashTop = document.querySelector('.dash-top');
+  const dashSplit = document.querySelector('.dash-split');
+  [dashTop, dashSplit].forEach(el => {
+    if (!(el instanceof HTMLElement) || el.contains(panel)) return;
+    if (isPres) el.setAttribute('inert', ''); else el.removeAttribute('inert');
+  });
+
+  // Double-click drops an "Add finding here" pin — a real hazard during a hands-off screen-share
+  // presentation, so disarm it for the duration rather than merely hiding the hint text.
+  if (dashMap) {
+    if (isPres) dashMap.doubleClickZoom.disable();
+    dashMap.off('dblclick');
+    if (!isPres) dashMap.on('dblclick', (e: any) => showAddFindingPopup(e.latlng));
+  }
+
   if (isPres) {
+    panel.classList.remove('map-presentation-out');
+    panel.classList.add('map-presentation');
     document.body.style.overflow = 'hidden';
   } else {
     document.body.style.overflow = '';
     togglePresSidebar(false);
+    // Play the reverse animation, then swap the fixed-overlay class off once it finishes so the
+    // panel doesn't just disappear on the same frame Exit is clicked. animationend can fail to
+    // fire (browser quirks, animations disabled, reduced-motion) — a timeout fallback guarantees
+    // the exit always completes even if the visual animation doesn't run.
+    panel.classList.add('map-presentation-out');
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      panel.classList.remove('map-presentation', 'map-presentation-out');
+      panel.removeEventListener('animationend', finish);
+      if (dashMap) dashMap.invalidateSize();
+    };
+    panel.addEventListener('animationend', finish, { once: true });
+    setTimeout(finish, 200);
   }
 
   if (dashMap) {
@@ -612,7 +665,7 @@ export function renderPresSidebar(rows) {
     const thumb = photoThumbs[f.id];
     const thumbHtml = thumb
       ? `<img class="pres-card-thumb" src="${esc(photoUrl(thumb.storage_path))}" alt="" loading="lazy">`
-      : `<div class="pres-card-thumb pres-card-thumb-empty"></div>`;
+      : `<div class="pres-card-thumb pres-card-thumb-empty">${NO_PHOTO_SVG}</div>`;
     return `<div class="pres-sidebar-card" data-id="${esc(f.id)}">
       ${thumbHtml}
       <div class="pres-card-text">

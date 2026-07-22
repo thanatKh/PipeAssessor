@@ -106,4 +106,11 @@ export const SAT_TILES = {
   attribution: 'Imagery (c) Esri, Maxar, Earthstar Geographics',
   maxZoom: 19
 };
+// Same Esri tile family as SAT_TILES (no new provider/API key) — the dashboard map's street-mode
+// alternative to satellite imagery.
+export const STREET_TILES = {
+  url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+  attribution: 'Esri, HERE, Garmin, FAO, NOAA, USGS, (c) OpenStreetMap contributors',
+  maxZoom: 19
+};
 

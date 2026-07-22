@@ -148,6 +148,7 @@ create table if not exists public.line_list (
   nps text,              -- must match a PA_PIPE_DATABASE key, e.g. 2"
   schedule text,         -- must match a schedule key under that nps, e.g. 40
   material text,         -- must match a PA_MATERIALS[].code, e.g. A106B
+  design_p_barg numeric, -- design pressure, bar(g) — prefills the assessment's P + p_unit on tag select
   pid_no text,
   service text,
 
@@ -169,6 +170,7 @@ create trigger trg_line_list_touch
 -- without the terminal column / with the now-removed location_desc column).
 alter table public.line_list add column if not exists terminal text check (terminal in ('KBY','SRC','BRP'));
 alter table public.line_list drop column if exists location_desc;
+alter table public.line_list add column if not exists design_p_barg numeric;
 
 -- ---------------------------------------------------------------------------
 -- 6. Row Level Security — any logged-in user (you + inspectors) has full

@@ -65,25 +65,33 @@
       <!-- LEFT: map -->
       <div class="panel dash-map-panel" id="dashMapPanel">
         <div class="panel-h">
-          <h2>Map <span class="f-optnote" style="font-size:11px;">— double-click to add a finding here</span><span id="presSummaryBar" class="pres-summary-bar" hidden></span></h2>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <select id="presTerminalFilter" class="select pres-only" style="width:auto; height:26px; font-size:11px; padding:2px 22px 2px 8px;" hidden>
+          <div class="toolbar-id-row pres-head-row">
+            <button type="button" class="back-link pres-only" id="btnPresBack" title="Back to Dashboard" hidden>&#8592; Dashboard</button>
+            <h2>Map <span class="f-optnote pres-hide-note">— double-click to add a finding here</span><span id="presSummaryBar" class="pres-pill pres-summary-bar" role="status" aria-live="polite" hidden></span></h2>
+          </div>
+          <div class="map-toolbar">
+            <select id="presTerminalFilter" class="select pres-only" hidden>
               <option value="" selected>All terminals</option>
               <option value="KBY">KBY</option>
               <option value="SRC">SRC</option>
               <option value="BRP">BRP</option>
             </select>
-            <select id="mapColorBy" class="select" style="width:auto; height:26px; font-size:11px; padding:2px 22px 2px 8px;"><option value="status" selected>Color by: Status</option><option value="type">Color by: Type</option><option value="severity">Color by: Severity</option></select>
-            <button type="button" class="btn btn-sm btn-subtle pres-only" id="btnPresReset" title="Reset map view to fit all markers (press R)" style="height:26px; font-size:11px; padding:0 8px; display:inline-flex; align-items:center; gap:4px;" hidden>
+            <button type="button" class="map-layer-toggle" id="btnMapBaseLayer" role="switch" aria-checked="false" title="Switch between satellite imagery and street map">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>
+              <span>Satellite</span>
+              <span class="map-layer-toggle-track" aria-hidden="true"><span class="map-layer-toggle-thumb"></span></span>
+            </button>
+            <select id="mapColorBy" class="select"><option value="status" selected>Color by: Status</option><option value="type">Color by: Type</option><option value="severity">Color by: Severity</option></select>
+            <button type="button" class="btn btn-sm btn-subtle pres-only" id="btnPresReset" title="Reset map view to fit all markers" hidden>
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-              <span>Reset View</span>
+              <span>Reset View</span><span class="pres-key-hint">R</span>
             </button>
-            <button type="button" class="btn btn-sm btn-subtle pres-only" id="btnPresToggleSidebar" title="Toggle interactive findings list panel" style="height:26px; font-size:11px; padding:0 8px; display:inline-flex; align-items:center; gap:4px;" hidden>
+            <button type="button" class="btn btn-sm btn-subtle pres-only" id="btnPresToggleSidebar" title="Toggle interactive findings list panel" hidden>
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-              <span>Findings List</span>
+              <span>Findings List</span><span class="pres-key-hint">L</span>
             </button>
-            <button type="button" class="btn btn-sm btn-subtle" id="btnMapExpand" title="Toggle full-screen presentation mode (press F)" style="height:26px; font-size:11px; padding:0 8px; display:inline-flex; align-items:center; gap:5px;">
-              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+            <button type="button" class="btn btn-sm btn-subtle" id="btnMapExpand" title="Toggle full-screen presentation mode (press F)">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
               <span>Presentation</span>
             </button>
           </div>

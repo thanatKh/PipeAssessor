@@ -127,7 +127,7 @@ async function route() {
 
 
 import {
-  loadFindings, ageDays, STATUS_RANK, sortFindings, loadDetail, photoUrl, applyFilters, KPI_RING_CIRCUMFERENCE, renderKpis, renderBudgetKpi, ensureDashMap, popupHtml, showAddFindingPopup, renderMap, highlightPin, flashRow, CAMERA_SVG, ageHtml, renderTable, updateSelectionUI, buildTagOptions, renderList, toggleMapPresentation, resetMapView, togglePresSidebar,
+  loadFindings, ageDays, STATUS_RANK, sortFindings, loadDetail, photoUrl, applyFilters, KPI_RING_CIRCUMFERENCE, renderKpis, renderBudgetKpi, ensureDashMap, popupHtml, showAddFindingPopup, renderMap, highlightPin, flashRow, CAMERA_SVG, ageHtml, renderTable, updateSelectionUI, buildTagOptions, renderList, toggleMapPresentation, resetMapView, togglePresSidebar, toggleMapBaseLayer,
 } from './features/dashboard';
 
 /* ---------------- CSV export (filtered register, Excel-friendly UTF-8 BOM) ---------------- */
@@ -284,6 +284,8 @@ function initApp() {
     renderList();
   });
 
+  $('btnMapBaseLayer')?.addEventListener('click', () => toggleMapBaseLayer());
+
   $('presTerminalFilter')?.addEventListener('change', () => {
     filters.terminal = val('presTerminalFilter');
     $('filTerminal').value = filters.terminal;
@@ -295,6 +297,7 @@ function initApp() {
   $('btnPresSidebarClose')?.addEventListener('click', () => togglePresSidebar(false));
 
   $('btnMapExpand')?.addEventListener('click', () => toggleMapPresentation());
+  $('btnPresBack')?.addEventListener('click', () => toggleMapPresentation(false));
   window.addEventListener('keydown', (e) => {
     const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes((document.activeElement?.tagName || ''));
     const isPresActive = $('dashMapPanel')?.classList.contains('map-presentation');
