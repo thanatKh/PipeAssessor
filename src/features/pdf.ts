@@ -421,7 +421,7 @@ export async function buildFindingPdf() {
     doc.text(`Page ${doc.internal.getNumberOfPages()} of {tp}`, PW / 2, PH - FOOTER_H + 4, { align: 'center' });
     doc.text(`Generated ${paFmtDateTime(now)}`, PW - M, PH - FOOTER_H + 4, { align: 'right' });
     doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor('#94a3b8');
-    doc.text('Central and Eastern Engineering and Maintenance Division — PTT Oil and Retail Business Public Company Limited', PW / 2, PH - FOOTER_H + 9, { align: 'center' });
+    doc.text(['Central and Eastern Engineering and Maintenance Division', 'PTT Oil and Retail Business Public Company Limited'], PW / 2, PH - FOOTER_H + 9, { align: 'center', lineHeightFactor: 1.35 });
     doc.setTextColor(PDF_TEXT);
     y = HEADER_H + 4;
   }
@@ -1045,7 +1045,7 @@ export async function buildQuickCalcPdf(inputs, res) {
     doc.text(`Page ${doc.internal.getNumberOfPages()} of {tp}`, PW / 2, PH - FOOTER_H + 4, { align: 'center' });
     doc.text(`Generated ${paFmtDateTime(now)}`, PW - M, PH - FOOTER_H + 4, { align: 'right' });
     doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor('#94a3b8');
-    doc.text('Central and Eastern Engineering and Maintenance Division — PTT Oil and Retail Business Public Company Limited', PW / 2, PH - FOOTER_H + 9, { align: 'center' });
+    doc.text(['Central and Eastern Engineering and Maintenance Division', 'PTT Oil and Retail Business Public Company Limited'], PW / 2, PH - FOOTER_H + 9, { align: 'center', lineHeightFactor: 1.35 });
     doc.setTextColor(PDF_TEXT);
     y = HEADER_H + 4;
   }
@@ -1417,7 +1417,7 @@ export async function buildSummaryPdf(rows, includeBudget) {
       doc.text(`Page ${doc.internal.getNumberOfPages()} of {tp}`, PW / 2, PH - FOOTER_H + 4, { align: 'center' });
       doc.text(`Generated ${paFmtDateTime(now)}`, PW - M, PH - FOOTER_H + 4, { align: 'right' });
       doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor('#94a3b8');
-      doc.text('Central and Eastern Engineering and Maintenance Division — PTT Oil and Retail Business Public Company Limited', PW / 2, PH - FOOTER_H + 9, { align: 'center' });
+      doc.text(['Central and Eastern Engineering and Maintenance Division', 'PTT Oil and Retail Business Public Company Limited'], PW / 2, PH - FOOTER_H + 8, { align: 'center', lineHeightFactor: 1.3 });
       doc.setTextColor(PDF_TEXT);
     }
 

@@ -22,7 +22,7 @@ import {
   lastLoadedAssessInputs, setLastLoadedAssessInputs,
   awFormView, setAwFormView, assessToggleTouched, setAssessToggleTouched,
   awQuickView, setAwQuickView, photoPasteTarget, setPhotoPasteTarget,
-  findings, lineList, pendingNewCoords, setPendingNewCoords, setCurrentPhotos, dlgTarget,
+  findings, lineList, pendingNewCoords, setPendingNewCoords, setCurrentPhotos, dlgTarget, isMaintenance,
 } from '../core/state';
 import { loadFindings, buildTagOptions } from './dashboard';
 import { loadLineList } from './import-export';
@@ -992,7 +992,7 @@ export function collectForm() {
   const assessOn = $('assessPanel').classList.contains('on');
   const thk = assessOn ? assessThickness() : { t_nom: null, t_meas: null };
 
-  return {
+  const patch = {
     terminal: val('fTerminal'),
     pipe_tag: sOrNull('fTag'),
     pid_no: sOrNull('fPid'),
@@ -1010,11 +1010,21 @@ export function collectForm() {
     defect_width_mm: nOrNull('fDefWid'),
     lat: nOrNull('fLat'),
     lng: nOrNull('fLng'),
-    target_date: dOrNull('fTargetDate'),
     sap_notification: sOrNull('fSapNotif'),
-    sap_order: sOrNull('fSapOrder'),
-    estimated_cost: nOrNull('fEstCost')
+    sap_order: sOrNull('fSapOrder')
   };
+
+  /* Repair schedule + budget are maintenance-only. Their inputs still exist in the DOM for an
+     inspector (the .maintenance-only wrappers are only visually hidden), so they must be OMITTED
+     from the patch rather than sent as null: PostgREST writes only the keys present, so an absent
+     key leaves the column untouched (NEW.x = OLD.x) and the pa_guard_repair_fields trigger passes.
+     Sending them would both wipe a maintenance-set date/budget on every inspector save AND trip
+     that trigger, failing the save. See db/schema.sql section 9. */
+  if (isMaintenance()) {
+    patch.target_date = dOrNull('fTargetDate');
+    patch.estimated_cost = nOrNull('fEstCost');
+  }
+  return patch;
 }
 
 // Snapshot the assessment (inputs + full result) for the assessments table, or null if the
@@ -1132,6 +1142,11 @@ export async function saveForm(addAnother) {
 
 export async function deleteFinding() {
   if (!editingId) return;
+  // Deletion is maintenance-only (RLS enforces it; this is the friendly message).
+  if (!isMaintenance()) {
+    notify('Only the Maintenance role can delete a finding.', true);
+    return;
+  }
   const f = findings.find(x => x.id === editingId) || current;
   const tag = f ? f.pipe_tag : '';
   if (!window.confirm(`Delete this finding (${tag})? Its photos and history are removed permanently.`)) return;

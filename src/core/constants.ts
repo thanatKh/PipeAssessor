@@ -55,6 +55,17 @@ export const FINDING_TYPE_SHORT = {
 };
 
 export const STATUSES = ['Open', 'Monitoring', 'Repair Planned', 'Repaired', 'Closed'];
+
+// Statuses an `inspector` may set. The rest (Repair Planned / Repaired / Closed) are the repair
+// handover and belong to `maintenance`. Enforced for real by the pa_guard_repair_fields trigger in
+// db/schema.sql section 9 — this list only drives which buttons the detail page renders.
+export const INSPECTOR_STATUSES = ['Open', 'Monitoring'];
+
+// Self-registration is restricted to these email domains. The real gate is the
+// pa_enforce_signup_domain trigger on auth.users (db/schema.sql section 9); this copy exists only
+// so the sign-up form can reject a bad address with a friendly message before calling Supabase.
+export const ALLOWED_SIGNUP_DOMAINS = ['pttor.com', 'pttplc.com'];
+
 export const PHOTO_LIMIT_PER_KIND = 4; // As Found and After Repair each capped at 4 -> 8 total per finding
 
 // Repair method options for the "Repaired" status-change dialog's dropdown — the same PCC-2

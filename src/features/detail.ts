@@ -9,7 +9,7 @@
 import L from 'leaflet';
 import { $, val, esc, notify, todayISO, isOverdue, fmtDate, fmtDateTime, pillHtml, openDialog, closeDialog, setBusy } from '../core/dom';
 import {
-  PHOTO_LIMIT_PER_KIND, SAT_TILES, STATUSES, STATUS_COLORS, REPAIR_METHOD_OPTIONS,
+  PHOTO_LIMIT_PER_KIND, SAT_TILES, STATUSES, INSPECTOR_STATUSES, STATUS_COLORS, REPAIR_METHOD_OPTIONS,
 } from '../core/constants';
 import { sb } from '../core/supabase';
 import { computeB313, PA_MATERIALS } from '../engine/compute';
@@ -20,6 +20,7 @@ import {
   current, setCurrent, currentPhotos, setCurrentPhotos, currentHistory, setCurrentHistory,
   currentAssessments, editingId, dlgTarget, setDlgTarget,
   detailMap, setDetailMap, detailMarker, setDetailMarker, photoPasteTarget, setPhotoPasteTarget,
+  isMaintenance,
 } from '../core/state';
 import { loadDetail, photoUrl } from './dashboard';
 import { uploadPhoto, deletePhotos } from './form';
@@ -50,8 +51,11 @@ export function renderDetail() {
   if (f.closing_note) life.push(dItem('Closing Note', esc(f.closing_note)));
   $('lifecycleGrid').innerHTML = life.join('');
 
-  // status actions: every other status is reachable (single-team tool — flexibility beats ceremony)
-  $('statusActions').innerHTML = STATUSES.filter(s => s !== f.status)
+  // Status actions: within a role, every other status is reachable (single-team tool — flexibility
+  // beats ceremony). Inspectors only get Open/Monitoring; the repair handover (Repair Planned /
+  // Repaired / Closed) is maintenance's, enforced by the pa_guard_repair_fields trigger.
+  const reachable = isMaintenance() ? STATUSES : INSPECTOR_STATUSES;
+  $('statusActions').innerHTML = reachable.filter(s => s !== f.status)
     .map(s => `<button type="button" class="btn" data-variant="outline" data-st="${esc(s)}">&#8594; ${esc(s)}</button>`)
     .join('');
   $('statusActions').querySelectorAll('button').forEach(btn => {
@@ -329,6 +333,12 @@ export async function addDetailPhotos(files, kind, findingId) {
   if (!files || !files.length) return;
   const id = findingId || (current && current.id);
   if (!id) return;
+  // After-repair photos are part of the repair handover — maintenance only (RLS also blocks the
+  // finding_photos insert, so this is just the friendly message before wasting an upload).
+  if (kind === 'repaired' && !isMaintenance()) {
+    notify('Only the Maintenance role can add After Repair photos.', true);
+    return;
+  }
   const already = currentPhotos.filter(p => p.kind === kind).length;
   const room = Math.max(0, PHOTO_LIMIT_PER_KIND - already);
   if (room <= 0) {
@@ -370,6 +380,12 @@ export function renderTimeline() {
 
 
 export function openStatusDialog(target) {
+  // Belt-and-braces: renderDetail already only renders the allowed buttons, but this also covers
+  // any other caller. The DB trigger is the real gate.
+  if (!isMaintenance() && !INSPECTOR_STATUSES.includes(target)) {
+    notify(`Only the Maintenance role can set a finding to ${target}.`, true);
+    return;
+  }
   setDlgTarget(target);
   $('dlgTitle').textContent = `${current.status} → ${target}`;
   $('dlgNote').value = '';

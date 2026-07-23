@@ -9,6 +9,14 @@
 export let session: any = null;
 export function setSession(v: any) { session = v; }
 
+/* Signed-in user's role, from public.profiles (db/schema.sql section 9). Defaults to the LEAST
+   privileged value so a failed/pending profile fetch can never accidentally expose maintenance-only
+   controls — the DB enforces the real boundary either way (RLS + the pa_guard_repair_fields
+   trigger), this only drives which chrome is rendered. */
+export let userRole: 'inspector' | 'maintenance' = 'inspector';
+export function setUserRole(v: 'inspector' | 'maintenance') { userRole = v; }
+export function isMaintenance() { return userRole === 'maintenance'; }
+
 export let findings: any = [];
 export function setFindings(v: any) { findings = v; }
 

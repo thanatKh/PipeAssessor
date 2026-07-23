@@ -12,7 +12,7 @@ import { $, esc, notify, openDialog, closeDialog, setBusy, todayISO, positionSeg
 import { FINDING_TYPES } from '../core/constants';
 import {
   importValidRows, setImportValidRows, lineListValidRows, setLineListValidRows,
-  lineList, setLineList, findings,
+  lineList, setLineList, findings, isMaintenance,
 } from '../core/state';
 import { sb } from '../core/supabase';
 import { PA_PIPE_DATABASE, PA_MATERIALS } from '../engine/compute';
@@ -71,7 +71,9 @@ export const IMPORT_COLS = [
   { header: 'Inspection Date', field: 'inspection_date', type: 'date' },
   { header: 'Nominal Thickness (mm)', field: 't_nominal', type: 'num' },
   { header: 'Measured Thickness (mm)', field: 't_measured', type: 'num' },
-  { header: 'Target Date', field: 'target_date', type: 'date' },
+  // No 'Target Date' column: the repair due date is maintenance-only (see db/schema.sql section 9
+  // — the pa_guard_repair_fields trigger blocks target_date on INSERT as well as UPDATE for
+  // inspectors, and bulk import is inspector-allowed). Repair dates are set in-app by maintenance.
   { header: 'SAP Notification', field: 'sap_notification' },
   { header: 'SAP Order', field: 'sap_order' },
   { header: 'Latitude', field: 'lat', type: 'num' },
@@ -252,13 +254,35 @@ export async function doImport() {
   }
 }
 
+// Worked example for the downloadable template, keyed BY FIELD rather than by position.
+// Positional arrays silently drift out of alignment whenever a column is added or removed from
+// IMPORT_COLS — this file shipped with exactly that bug (20 values against 17 headers, three stale
+// leftovers from long-deleted columns, shifting every value from Report Link onward into the wrong
+// column). Keying by field makes that class of bug impossible: a column with no example here just
+// renders blank, and an example for a removed column is simply ignored.
+const IMPORT_EXAMPLE_BY_FIELD = {
+  terminal: 'KBY',
+  pipe_tag: '953-P-0001-10"-D1101-N',
+  pid_no: '15-3-KBY-906-0117_Rev.Z2',
+  service: 'Diesel B7',
+  location_desc: 'Elbow downstream of P-101',
+  finding_type: 'External Corrosion',
+  severity: 'High',
+  description: 'Severe external corrosion at extrados',
+  report_link: 'https://pttor.sharepoint.com/…',
+  inspection_date: '2026-06-20',
+  t_nominal: 9.27,
+  t_measured: 5.4,
+  sap_notification: '10012345',
+  sap_order: '40012345',
+  lat: 13.097720,
+  lng: 100.887211
+};
+
 export async function downloadImportTemplate() {
   await ensureXLSX();
   const headers = IMPORT_COLS.map(c => c.header);
-  const example = ['KBY', '953-P-0001-10"-D1101-N', '15-3-KBY-906-0117_Rev.Z2', 'Diesel B7',
-    'Elbow downstream of P-101', 'External Corrosion', 'High', 'Severe external corrosion at extrados',
-    'ABC Inspection Co.', 'RPT-2026-014', 'https://pttor.sharepoint.com/…', '2026-06-20', 'UT',
-    9.27, 5.4, '2026-08-01', '10012345', '40012345', 13.097720, 100.887211];
+  const example = IMPORT_COLS.map(c => IMPORT_EXAMPLE_BY_FIELD[c.field] ?? '');
   const ws = XLSX.utils.aoa_to_sheet([headers, example]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Findings');
@@ -479,6 +503,12 @@ export async function parseLineListImportFile(file) {
 
 export async function doLineListImport() {
   if (!lineListValidRows.length) return;
+  // The master line list is maintenance-owned reference data (RLS enforces it).
+  if (!isMaintenance()) {
+    $('errLineListImport').textContent = 'Only the Maintenance role can import the line list.';
+    $('errLineListImport').style.display = 'block';
+    return;
+  }
   const btn = $('lineListImportConfirm');
   setBusy(btn, true, 'Importing…');
   try {
@@ -647,6 +677,10 @@ export function initLineListTabs() {
 }
 
 export async function deleteLineListRow(id) {
+  if (!isMaintenance()) {
+    notify('Only the Maintenance role can edit the line list.', true);
+    return;
+  }
   const row = lineList.find(r => r.id === id);
   if (!window.confirm(`Delete line list entry "${row ? row.pipe_tag : ''}"?`)) return;
   try {
@@ -675,3 +709,66 @@ export function openLineListManageDialog() {
   positionSegPill(seg, false); // dialog was display:none until openDialog(); offsetLeft/Width are only valid now
 }
 
+
+/* ============================================================================
+   Users & roles (maintenance only) — assign Inspector / Maintenance.
+   Reads/writes public.profiles, which is RLS-gated so only a maintenance user
+   can update a role (db/schema.sql section 9). The guards here are just for a
+   friendly message; the database is the real boundary.
+   ============================================================================ */
+export async function openUsersDialog() {
+  if (!isMaintenance()) {
+    notify('Only the Maintenance role can manage users.', true);
+    return;
+  }
+  $('errUsers').style.display = 'none';
+  $('usersTableBody').innerHTML = '<tr><td colspan="2" class="hint">Loading…</td></tr>';
+  openDialog($('usersDlg'));
+  try {
+    const { data, error } = await sb.from('profiles').select('id, email, role').order('email');
+    if (error) throw error;
+    renderUsersTable(data || []);
+  } catch (e) {
+    $('usersTableBody').innerHTML = '';
+    $('errUsers').textContent = 'Could not load users: ' + e.message;
+    $('errUsers').style.display = 'block';
+  }
+}
+
+function renderUsersTable(rows) {
+  $('usersCount').textContent = `${rows.length} user${rows.length === 1 ? '' : 's'}`;
+  if (!rows.length) {
+    $('usersTableBody').innerHTML = '<tr><td colspan="2" class="hint">No users found.</td></tr>';
+    return;
+  }
+  $('usersTableBody').innerHTML = rows.map(r => `
+    <tr data-uid="${esc(r.id)}">
+      <td>${esc(r.email || '—')}</td>
+      <td>
+        <select class="select user-role-sel" data-uid="${esc(r.id)}">
+          <option value="inspector"${r.role === 'inspector' ? ' selected' : ''}>Inspector</option>
+          <option value="maintenance"${r.role === 'maintenance' ? ' selected' : ''}>Maintenance</option>
+        </select>
+      </td>
+    </tr>`).join('');
+  $('usersTableBody').querySelectorAll('.user-role-sel').forEach(sel => {
+    sel.addEventListener('change', () => setUserRoleFor(sel.dataset.uid, sel.value, sel));
+  });
+}
+
+async function setUserRoleFor(uid, role, selEl) {
+  const previous = role === 'maintenance' ? 'inspector' : 'maintenance';
+  $('errUsers').style.display = 'none';
+  selEl.disabled = true;
+  try {
+    const { error } = await sb.from('profiles').update({ role }).eq('id', uid);
+    if (error) throw error;
+    notify(`Role updated to ${role === 'maintenance' ? 'Maintenance' : 'Inspector'}.`);
+  } catch (e) {
+    selEl.value = previous; // roll the dropdown back so it never shows a role that did not save
+    $('errUsers').textContent = 'Could not update role: ' + e.message;
+    $('errUsers').style.display = 'block';
+  } finally {
+    selEl.disabled = false;
+  }
+}

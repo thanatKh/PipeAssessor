@@ -422,7 +422,7 @@
       #dashMap { min-height: 340px; }
     }
 
-    .panel-h-btns { display: flex; gap: 8px; }
+    .panel-h-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 
     /* Map panel header toolbar: color-by select + presentation-mode controls. Own small-control
        sizing (26px height / 11px text) rather than the default .select/.btn-sm size, since this
@@ -902,6 +902,20 @@
       margin: -4px -12px 16px -12px;
       box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
       overflow-x: auto;
+    }
+    /* Edge fade hint that the pill strip scrolls horizontally — without it, a tab strip cut off
+       flush against a phone's screen edge reads as clipped/broken rather than swipeable. Always
+       present rather than conditionally shown on overflow; harmless (invisible against empty
+       space) when the strip already fits. */
+    .form-section-nav::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 28px;
+      background: linear-gradient(to right, transparent, var(--bg-color, #f8fafc));
+      pointer-events: none;
     }
     .form-section-nav .nav-tab {
       font-family: 'Google Sans', sans-serif;
@@ -1556,6 +1570,10 @@
       margin: 0 0 12px;
       border-bottom: 1px solid var(--card-border);
     }
+
+    /* Fixed 210px on desktop, but capped to its container so it shrinks instead of forcing
+       overflow once .panel-h-btns wraps this onto its own row on a narrow phone. */
+    #riskSearch { width: 210px; max-width: 100%; height: 32px; font-size: var(--fs-sm); }
 
     .back-link {
       display: inline-flex;
@@ -2350,4 +2368,59 @@ body.public-view #detailPanelStatus .panel-h h2::after {
 }
 @media (max-width: 640px) {
   .public-badge { font-size: var(--fs-xs); /* was 10.5px */ padding: 3px 8px; }
+}
+
+/* ---- Roles: Inspector vs Maintenance (body.role-inspector / .role-maintenance) ----
+   Modelled on the body.public-view block above. Hiding here is UX only — the real boundary is
+   enforced in the database (RLS policies + the pa_guard_repair_fields trigger, db/schema.sql
+   section 9), so a user who bypasses the UI still cannot write these fields.
+
+   The boundary is "reporting vs. repair planning & handover": an inspector reports the finding and
+   the SAP notification raised against it; maintenance owns when it is fixed, what it costs, and
+   declaring it done. */
+.maintenance-only { display: none; }
+body.role-maintenance .maintenance-only { display: revert; }
+body.role-inspector .maintenance-only,
+body.role-inspector #btnDelete,
+body.role-inspector #btnLineList,
+body.role-inspector #btnAddRepaired,
+body.role-inspector #btnAddRepaired2 {
+  display: none !important;
+}
+
+.role-badge {
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--button-ghost-hover, #f1f5f9);
+  border: 1px solid var(--card-border);
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+body.role-maintenance .role-badge {
+  color: var(--button-primary);
+  border-color: var(--button-primary);
+  background: rgba(21, 107, 149, 0.08);
+}
+
+/* ---- Login panel: Sign in vs Create account (body.auth-register) ---- */
+.register-only { display: none; }
+body.auth-register .register-only { display: revert; }
+body.auth-register .signin-only { display: none; }
+.login-ok {
+  font-size: var(--fs-sm);
+  color: #15803d;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+.login-switch {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  text-align: center;
 }

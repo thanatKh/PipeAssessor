@@ -18,7 +18,7 @@ import { paFmtDate, paFmtDateTime, paFmtBaht, paFmtBahtShort } from './engine/fo
 import { downscaleImage, OR_LOGO_DATAURL } from './engine/branding';
 import { paCreateAssessView, PA_SCOPE_TEXT, paCrossSectionPng } from './workbench/assess-view';
 import {
-  filters, session, findings, lineList, current, currentPhotos, currentHistory, currentAssessments, editingId, pendingPhotos, pickMap, pickMarker, dashMap, dashLayer, photoCounts, photoThumbs, dashMarkers, dashAddMarker, pendingNewCoords, selectedIds, lastRenderedRows, importValidRows, lineListValidRows, photoPasteTarget, assessResult, severityTouched, lastLoadedAssessInputs, awFormView, assessToggleTouched, awQuickView, detailMap, detailMarker, dlgTarget, setSession, setFindings, setLineList, setCurrent, setCurrentPhotos, setCurrentHistory, setCurrentAssessments, setEditingId, setPendingPhotos, setPickMap, setPickMarker, setDashMap, setDashLayer, setPhotoCounts, setPhotoThumbs, setDashMarkers, setDashAddMarker, setPendingNewCoords, setSelectedIds, setLastRenderedRows, setImportValidRows, setLineListValidRows, setPhotoPasteTarget, setAssessResult, setSeverityTouched, setLastLoadedAssessInputs, setAwFormView, setAssessToggleTouched, setAwQuickView, setDetailMap, setDetailMarker, setDlgTarget, setMapColorBy,
+  filters, session, findings, lineList, current, currentPhotos, currentHistory, currentAssessments, editingId, pendingPhotos, pickMap, pickMarker, dashMap, dashLayer, photoCounts, photoThumbs, dashMarkers, dashAddMarker, pendingNewCoords, selectedIds, lastRenderedRows, importValidRows, lineListValidRows, photoPasteTarget, assessResult, severityTouched, lastLoadedAssessInputs, awFormView, assessToggleTouched, awQuickView, detailMap, detailMarker, dlgTarget, setSession, setFindings, setLineList, setCurrent, setCurrentPhotos, setCurrentHistory, setCurrentAssessments, setEditingId, setPendingPhotos, setPickMap, setPickMarker, setDashMap, setDashLayer, setPhotoCounts, setPhotoThumbs, setDashMarkers, setDashAddMarker, setPendingNewCoords, setSelectedIds, setLastRenderedRows, setImportValidRows, setLineListValidRows, setPhotoPasteTarget, setAssessResult, setSeverityTouched, setLastLoadedAssessInputs, setAwFormView, setAssessToggleTouched, setAwQuickView, setDetailMap, setDetailMarker, setDlgTarget, setMapColorBy, userRole, setUserRole, isMaintenance,
 } from './core/state';
 
 // Leaflet resolves its default marker icons relative to its own script URL, which breaks under
@@ -26,7 +26,7 @@ import {
 L.Icon.Default.mergeOptions({ iconRetinaUrl: markerIcon2x, iconUrl: markerIconUrl, shadowUrl: markerShadowUrl });
 
 import {
-  FINDING_TYPES,
+  FINDING_TYPES, ALLOWED_SIGNUP_DOMAINS, PUBLIC_BASE_URL,
 } from './core/constants';
 
 import {
@@ -35,7 +35,31 @@ import {
 
 function updateAuthUI() {
   document.body.classList.toggle('authed', !!session);
+  // Role chrome: CSS hides maintenance-only controls under body.role-inspector (see app.css).
+  // Only stamped while signed in, so the login/public views are unaffected.
+  document.body.classList.toggle('role-inspector', !!session && !isMaintenance());
+  document.body.classList.toggle('role-maintenance', !!session && isMaintenance());
   $('hdrUser').textContent = session ? (session.user.email || '') : '';
+  const roleEl = $('hdrRole');
+  if (roleEl) {
+    roleEl.textContent = session ? (isMaintenance() ? 'Maintenance' : 'Inspector') : '';
+    roleEl.hidden = !session;
+  }
+}
+
+/* Read the signed-in user's role from public.profiles. Called before route() on every sign-in so
+   the first paint already has the right chrome (same reasoning as the synchronous public-view body
+   stamp in initApp). Falls back to the least-privileged role on any error — the DB is the real
+   enforcement, so a failed read degrades to "show less", never "show more". */
+async function loadProfile() {
+  if (!session) { setUserRole('inspector'); return; }
+  try {
+    const { data, error } = await sb.from('profiles').select('role').eq('id', session.user.id).single();
+    if (error) throw error;
+    setUserRole(data && data.role === 'maintenance' ? 'maintenance' : 'inspector');
+  } catch (_) {
+    setUserRole('inspector');
+  }
 }
 
 async function signIn() {
@@ -58,6 +82,111 @@ async function signIn() {
     return;
   }
   $('loginPass').value = '';
+}
+
+/* Toggle the login panel between Sign in and Create account. Pure view state — no auth calls. */
+function setAuthMode(mode) {
+  const creating = mode === 'register';
+  document.body.classList.toggle('auth-register', creating);
+  $('loginErr').style.display = 'none';
+  $('regDone').hidden = true;
+  $('loginTitle').textContent = creating ? 'Create account' : 'Sign in';
+  $('loginSub').textContent = creating
+    ? `Use your company email (${ALLOWED_SIGNUP_DOMAINS.map(d => '@' + d).join(' or ')}). New accounts start with the Inspector role.`
+    : 'Sign in with your company email, or create an account below.';
+}
+
+async function signUp() {
+  const errBox = $('loginErr');
+  errBox.style.display = 'none';
+  $('regDone').hidden = true;
+  const email = val('loginEmail').trim();
+  const pass = val('loginPass');
+  const confirm = val('regPass2');
+  const fail = (msg) => { errBox.textContent = msg; errBox.style.display = 'block'; };
+
+  if (!email || !pass) return fail('Enter both email and password.');
+  if (pass.length < 8) return fail('Password must be at least 8 characters.');
+  if (pass !== confirm) return fail('The two passwords do not match.');
+  // Friendly pre-check only — pa_enforce_signup_domain on auth.users is the real gate.
+  const domain = (email.split('@')[1] || '').toLowerCase();
+  if (!ALLOWED_SIGNUP_DOMAINS.includes(domain)) {
+    return fail(`Registration is limited to ${ALLOWED_SIGNUP_DOMAINS.map(d => '@' + d).join(' and ')} email addresses.`);
+  }
+
+  setBusy($('btnRegister'), true, 'Creating…');
+  const { data, error } = await sb.auth.signUp({ email, password: pass });
+  setBusy($('btnRegister'), false);
+  if (error) {
+    // The domain trigger raises a DB error that surfaces here as a generic signup failure.
+    return fail(/domain|restricted|check_violation/i.test(error.message)
+      ? `Registration is limited to ${ALLOWED_SIGNUP_DOMAINS.map(d => '@' + d).join(' and ')} email addresses.`
+      : error.message);
+  }
+  $('loginPass').value = '';
+  $('regPass2').value = '';
+  // With "Confirm email" on (required — see db/schema.sql section 9), signUp returns a user with
+  // no session; the account only becomes usable after the emailed link is clicked.
+  if (data && data.session) { return; } // confirmation disabled: onAuthStateChange routes us in
+  $('regDone').hidden = false;
+}
+
+async function forgotPassword() {
+  const errBox = $('forgotErr');
+  errBox.style.display = 'none';
+  $('forgotDone').hidden = true;
+  const email = val('forgotEmail').trim();
+  if (!email) {
+    errBox.textContent = 'Enter your account email.';
+    errBox.style.display = 'block';
+    return;
+  }
+  setBusy($('btnSendReset'), true, 'Sending…');
+  // redirectTo must be on Supabase's URL Configuration allow-list (Site URL / Redirect URLs) or
+  // the link silently fails to return the user to the app.
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: PUBLIC_BASE_URL + '/' });
+  setBusy($('btnSendReset'), false);
+  // Deliberately do NOT branch on error to reveal whether the email exists — Supabase itself
+  // returns success either way for this call, but keep the UI's own messaging enumeration-safe
+  // too in case that ever changes upstream.
+  if (error) {
+    errBox.textContent = error.message;
+    errBox.style.display = 'block';
+    return;
+  }
+  $('forgotFields').hidden = true;
+  $('btnSendReset').hidden = true;
+  $('forgotDone').hidden = false;
+}
+
+async function setNewPassword() {
+  const errBox = $('newPassErr');
+  errBox.style.display = 'none';
+  const p1 = val('newPass1');
+  const p2 = val('newPass2');
+  if (!p1 || p1.length < 8) {
+    errBox.textContent = 'Password must be at least 8 characters.';
+    errBox.style.display = 'block';
+    return;
+  }
+  if (p1 !== p2) {
+    errBox.textContent = 'The two passwords do not match.';
+    errBox.style.display = 'block';
+    return;
+  }
+  setBusy($('btnSetNewPassword'), true, 'Saving…');
+  const { error } = await sb.auth.updateUser({ password: p1 });
+  setBusy($('btnSetNewPassword'), false);
+  if (error) {
+    errBox.textContent = error.message;
+    errBox.style.display = 'block';
+    return;
+  }
+  $('newPass1').value = '';
+  $('newPass2').value = '';
+  notify('Password updated. You are signed in.');
+  location.hash = '#/list';
+  route();
 }
 
 /* ---------------- routing ---------------- */
@@ -145,7 +274,7 @@ import {
 /* ---------------- CSV export (filtered register, Excel-friendly UTF-8 BOM) ---------------- */
 
 import {
-  CSV_COLS, exportCsv, IMPORT_COLS, importHeaderMap, resolveFindingType, toImportDate, toImportNum, validateImportRow, renderImportPreview, parseImportFile, doImport, downloadImportTemplate, openImportDialog, LINE_LIST_IMPORT_COLS, lineListHeaderMap, resolveNps, resolveSchedule, resolveMaterialCode, validateLineListRow, renderLineListImportPreview, parseLineListImportFile, doLineListImport, downloadLineListTemplate, openLineListImportDialog, loadLineList, renderLineListManageTable, deleteLineListRow, openLineListManageDialog, initLineListTabs,
+  CSV_COLS, exportCsv, IMPORT_COLS, importHeaderMap, resolveFindingType, toImportDate, toImportNum, validateImportRow, renderImportPreview, parseImportFile, doImport, downloadImportTemplate, openImportDialog, LINE_LIST_IMPORT_COLS, lineListHeaderMap, resolveNps, resolveSchedule, resolveMaterialCode, validateLineListRow, renderLineListImportPreview, parseLineListImportFile, doLineListImport, downloadLineListTemplate, openLineListImportDialog, loadLineList, renderLineListManageTable, deleteLineListRow, openLineListManageDialog, initLineListTabs, openUsersDialog,
 } from './features/import-export';
 
 import {
@@ -213,16 +342,53 @@ function initApp() {
 
   // auth
   $('btnSignIn').addEventListener('click', signIn);
-  $('loginPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') signIn(); });
-  $('btnSignOut').addEventListener('click', async () => { await sb.auth.signOut(); location.hash = ''; });
+  $('btnRegister').addEventListener('click', signUp);
+  $('btnShowRegister').addEventListener('click', () => setAuthMode('register'));
+  $('btnShowSignIn').addEventListener('click', () => setAuthMode('signin'));
+  $('loginPass').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.body.classList.contains('auth-register') ? signUp() : signIn();
+  });
+  $('regPass2').addEventListener('keydown', (e) => { if (e.key === 'Enter') signUp(); });
+
+  $('btnShowForgot').addEventListener('click', () => {
+    $('forgotErr').style.display = 'none';
+    $('forgotDone').hidden = true;
+    $('forgotFields').hidden = false;
+    $('btnSendReset').hidden = false;
+    $('forgotEmail').value = val('loginEmail'); // carry over whatever they'd typed on the sign-in form
+    show('viewForgot');
+  });
+  $('btnForgotBackToSignIn').addEventListener('click', () => { setAuthMode('signin'); show('viewLogin'); });
+  $('btnSendReset').addEventListener('click', forgotPassword);
+  $('forgotEmail').addEventListener('keydown', (e) => { if (e.key === 'Enter') forgotPassword(); });
+
+  $('btnSetNewPassword').addEventListener('click', setNewPassword);
+  $('newPass2').addEventListener('keydown', (e) => { if (e.key === 'Enter') setNewPassword(); });
+
+  $('btnSignOut').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    setUserRole('inspector');
+    setAuthMode('signin'); // never land back on the register form after signing out
+    location.hash = '';
+  });
 
   // Only re-route when signed-in state actually flips — a TOKEN_REFRESHED event mid-form
   // must not re-render and wipe the user's unsaved input.
-  sb.auth.onAuthStateChange((event, s) => {
+  sb.auth.onAuthStateChange(async (event, s) => {
     const wasAuthed = !!session;
     setSession(s);
+    const flipped = event === 'INITIAL_SESSION' || wasAuthed !== !!s;
+    // Resolve the role BEFORE routing so the first paint already has the right chrome — a later
+    // fetch would briefly render maintenance-only controls to an inspector. Only on a real flip:
+    // re-fetching on every TOKEN_REFRESHED would be a pointless request every hour.
+    if (flipped) await loadProfile();
     updateAuthUI();
-    if (event === 'INITIAL_SESSION' || wasAuthed !== !!s) route();
+    // PASSWORD_RECOVERY fires when the user lands via the emailed reset link — Supabase has
+    // already signed them in with a recovery session at this point, so the normal `flipped ->
+    // route()` path below would send them straight to the dashboard instead of letting them set a
+    // new password. Show the dedicated view instead and skip the regular route() this one time.
+    if (event === 'PASSWORD_RECOVERY') { show('viewNewPassword'); return; }
+    if (flipped) route();
   });
 
   // routing
@@ -278,6 +444,9 @@ function initApp() {
   $('importTemplateLink').addEventListener('click', (e) => { e.preventDefault(); downloadImportTemplate(); });
   $('importFile').addEventListener('change', (e) => { if (e.target.files[0]) parseImportFile(e.target.files[0]); });
   $('importConfirm').addEventListener('click', doImport);
+
+  $('btnUsers').addEventListener('click', openUsersDialog);
+  $('usersClose').addEventListener('click', () => closeDialog($('usersDlg')));
 
   $('btnLineList').addEventListener('click', openLineListManageDialog);
   initLineListTabs();
@@ -486,4 +655,4 @@ function initApp() {
   $('lightbox').addEventListener('click', () => closeDialog($('lightbox')));
 }
 
-export { initApp };
+export { initApp };

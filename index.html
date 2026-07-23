@@ -26,9 +26,11 @@
       <!-- Read-only badge shown only on public share links (body.public-view) -->
       <span class="public-only public-badge">Read-only shared view — no sign-in required</span>
       <span class="hdr-user authed-only" id="hdrUser"></span>
+      <span class="role-badge authed-only" id="hdrRole" hidden></span>
       <div class="hdr-btn-group">
         <a class="btn hdr-btn authed-only" data-variant="outline" href="#/risk">Line Risk</a>
         <a class="btn hdr-btn not-public" data-variant="outline" href="#/calc">Quick Calc</a>
+        <button class="btn hdr-btn authed-only maintenance-only" data-variant="outline" id="btnUsers" type="button">Users</button>
         <button class="btn hdr-btn authed-only" data-variant="outline" id="btnSignOut" type="button">Sign out</button>
       </div>
     </div>
@@ -43,10 +45,13 @@
       <div class="panel">
         <div class="panel-b">
           <div>
-            <h2 class="login-title">Sign in</h2>
-            <p class="login-sub">Accounts are created by the maintenance engineer. Contact them if you need access.</p>
+            <h2 class="login-title" id="loginTitle">Sign in</h2>
+            <p class="login-sub" id="loginSub">Sign in with your company email, or create an account below.</p>
           </div>
           <div id="loginErr" class="login-err"></div>
+          <div id="regDone" class="login-ok" hidden>
+            Account created. Check your inbox for a confirmation link, then sign in.
+          </div>
           <div>
             <label class="f-label" for="loginEmail">Email</label>
             <input id="loginEmail" class="input" type="email" autocomplete="username" placeholder="name@example.com">
@@ -55,7 +60,69 @@
             <label class="f-label" for="loginPass">Password</label>
             <input id="loginPass" class="input" type="password" autocomplete="current-password">
           </div>
-          <button class="btn" id="btnSignIn" type="button">Sign in</button>
+          <div class="register-only">
+            <label class="f-label" for="regPass2">Confirm password</label>
+            <input id="regPass2" class="input" type="password" autocomplete="new-password">
+          </div>
+          <button class="btn signin-only" id="btnSignIn" type="button">Sign in</button>
+          <button class="btn register-only" id="btnRegister" type="button">Create account</button>
+          <p class="login-switch signin-only">
+            <button type="button" class="link-btn" id="btnShowForgot">Forgot password?</button>
+          </p>
+          <p class="login-switch">
+            <span class="signin-only">No account yet? <button type="button" class="link-btn" id="btnShowRegister">Create one</button></span>
+            <span class="register-only">Already have an account? <button type="button" class="link-btn" id="btnShowSignIn">Sign in</button></span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============= FORGOT PASSWORD ============= -->
+  <section id="viewForgot" class="view">
+    <div class="login-wrap">
+      <div class="panel">
+        <div class="panel-b">
+          <div>
+            <h2 class="login-title">Reset password</h2>
+            <p class="login-sub">Enter your account email and we'll send you a link to set a new password.</p>
+          </div>
+          <div id="forgotErr" class="login-err"></div>
+          <div id="forgotDone" class="login-ok" hidden>
+            If an account exists for that email, a reset link is on its way. Check your inbox.
+          </div>
+          <div id="forgotFields">
+            <label class="f-label" for="forgotEmail">Email</label>
+            <input id="forgotEmail" class="input" type="email" autocomplete="username" placeholder="name@example.com">
+          </div>
+          <button class="btn" id="btnSendReset" type="button">Send reset link</button>
+          <p class="login-switch">
+            <button type="button" class="link-btn" id="btnForgotBackToSignIn">&larr; Back to sign in</button>
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============= SET NEW PASSWORD (landed here via the emailed reset link) ============= -->
+  <section id="viewNewPassword" class="view">
+    <div class="login-wrap">
+      <div class="panel">
+        <div class="panel-b">
+          <div>
+            <h2 class="login-title">Set a new password</h2>
+            <p class="login-sub">Choose a new password for your Pipe Assessor account.</p>
+          </div>
+          <div id="newPassErr" class="login-err"></div>
+          <div>
+            <label class="f-label" for="newPass1">New password</label>
+            <input id="newPass1" class="input" type="password" autocomplete="new-password">
+          </div>
+          <div>
+            <label class="f-label" for="newPass2">Confirm new password</label>
+            <input id="newPass2" class="input" type="password" autocomplete="new-password">
+          </div>
+          <button class="btn" id="btnSetNewPassword" type="button">Set new password</button>
         </div>
       </div>
     </div>
@@ -406,8 +473,14 @@
     <div class="panel" id="panelPlanning">
       <div class="panel-h"><h2>Planning &amp; SAP</h2></div>
       <div class="panel-b">
+        <!-- Mixed-role panel: SAP numbers are inspector-editable (they raise the notification),
+             while the repair schedule and budget are maintenance-only. The two maintenance-only
+             wrappers are hidden by CSS for inspectors, but their inputs stay in the DOM — so
+             collectForm() must OMIT target_date/estimated_cost for inspectors rather than send
+             their empty values, or an inspector save would wipe a maintenance-set date/budget.
+             See features/form.ts collectForm() and db/schema.sql section 9. -->
         <div class="fgrid">
-          <div>
+          <div class="maintenance-only">
             <label class="f-label" for="fTargetDate">Target Repair Date</label>
             <input id="fTargetDate" class="input" type="date">
           </div>
@@ -419,7 +492,7 @@
             <label class="f-label" for="fSapOrder">SAP Order No.</label>
             <input id="fSapOrder" class="input" type="text" placeholder="e.g., 110002019">
           </div>
-          <div>
+          <div class="maintenance-only">
             <label class="f-label" for="fEstCost">Estimated Repair Cost (฿)</label>
             <input id="fEstCost" class="input" type="number" step="1000" min="0" placeholder="e.g., 150000">
           </div>
@@ -564,7 +637,7 @@
         <div class="risk-toolbar-title">Line Risk Ranking</div>
       </div>
       <div class="panel-h-btns">
-        <input id="riskSearch" class="input input-sm" type="search" placeholder="Search line tag or location…" style="width: 210px; height: 32px; font-size: 11.5px;">
+        <input id="riskSearch" class="input input-sm" type="search" placeholder="Search line tag or location…">
         <select id="riskTerminalFilter" class="select">
           <option value="">All terminals</option>
           <option>KBY</option><option>SRC</option><option>BRP</option>
@@ -993,6 +1066,33 @@
   </div>
 </dialog>
 
+<!-- User management (maintenance only) — assign the Inspector / Maintenance role.
+     Reads/writes public.profiles, which is RLS-gated so only maintenance can update a role. -->
+<dialog class="app-dlg" id="usersDlg" style="width:min(720px, calc(100vw - 32px));">
+  <div class="dlg-h">
+    Users &amp; roles
+    <span class="hint" id="usersCount" style="margin:0;">0 users</span>
+  </div>
+  <div class="dlg-b">
+    <p class="hint" style="margin:0 0 8px;">
+      <strong>Inspector</strong> reports findings, assessments, photos and SAP numbers.
+      <strong>Maintenance</strong> additionally owns the repair schedule, cost and handover
+      (Repair Planned / Repaired / Closed), after-repair photos, deletion and the line list.
+      New accounts start as Inspector.
+    </p>
+    <div id="errUsers" class="login-err" style="display:none;"></div>
+    <div class="table-wrap">
+      <table class="list">
+        <thead><tr><th>Email</th><th style="width:190px;">Role</th></tr></thead>
+        <tbody id="usersTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="dlg-f">
+    <button class="btn" id="usersClose" type="button">Close</button>
+  </div>
+</dialog>
+
 <!-- Export dialog: pick format + whether to include budget -->
 <dialog class="app-dlg" id="exportDlg">
   <div class="dlg-h">Export findings</div>
@@ -1038,7 +1138,8 @@
 <div id="toaster" class="toaster" data-align="center"></div>
 
 <div class="footer">
-  Central and Eastern Engineering and Maintenance Division — PTT Oil and Retail Business Public Company Limited
+  Central and Eastern Engineering and Maintenance Division<br>
+  PTT Oil and Retail Business Public Company Limited
 </div>
 
   <script type="module" src="/src/main.ts"></script>
