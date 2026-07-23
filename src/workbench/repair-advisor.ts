@@ -186,9 +186,14 @@ const WALL_LOSS_PENDING_ENTRY: FindingAdvisorEntry = {
    the *permanent* repair method selection (Composite/Sleeve/Clamp/Replacement) — it is never a
    prerequisite for the immediate safety response. resolveAdvisor swaps this in as the leading
    summary (instead of the base entry's own summary, e.g. the wall-loss "need UT first" pending
-   line) whenever isLeaking is true, so the banner never reads as "wait for UT before acting". */
+   line) whenever isLeaking is true, so the banner never reads as "wait for UT before acting".
+   The UT-sequencing clause used to be spelled out here too ("ไม่ต้องรอผลวัด UT ก่อน...") but that
+   made the summary read as an informal aside rather than a direct instruction — the point is
+   still preserved (this summary leads with safety/containment, not UT), and the item below
+   ("ขั้นตอนถัดไป" in the base wall-loss entry, appended after these items) already covers when
+   and why UT/B31.3 comes next, so nothing is lost by keeping the summary to one clear directive. */
 const LEAKING_OVERLAY: FindingAdvisorEntry = {
-  summary: 'พบการรั่วไหล — ดำเนินการด้านความปลอดภัย/กักเก็บทันที ไม่ต้องรอผลวัด UT ก่อน (UT ใช้เพื่อเลือกวิธีซ่อมถาวรในขั้นตอนถัดไป)',
+  summary: 'พบการรั่วไหล — ดำเนินการด้านความปลอดภัยและกักเก็บสารรั่วไหลทันที',
   standardsNote: 'คำแนะนำทั่วไปตาม API 570 และขั้นตอนฉุกเฉินของหน่วยงาน — โปรดตรวจสอบกับเอกสารขั้นตอนตอบสนองเหตุฉุกเฉินของหน่วยงานของท่าน',
   needsReview: true,
   items: [

@@ -373,8 +373,9 @@ export function showAddFindingPopup(latlng) {
 // metres, so it scales correctly with zoom, unlike a pixel-radius circleMarker) around every
 // plotted pin, colored to match that pin's current color-by fill. Purely a proximity/clustering
 // visual aid for the big screen — not a computed consequence distance — so it's deliberately
-// fixed-radius and only ever shown when mapShowRiskRadius is on (presentation mode's toggle; see
-// toggleRiskRadius below). Drawn into its own 'riskPane' (z-indexed below the pins' default
+// fixed-radius and only ever shown when mapShowRiskRadius is on (the map toolbar's Risk Zones
+// switch — see toggleRiskRadius below; available on the normal dashboard, not presentation-only).
+// Drawn into its own 'riskPane' (z-indexed below the pins' default
 // overlayPane in ensureDashMap) so the pin markers always stay visually on top of the circles no
 // matter which function (this one, or a full renderMap) last touched either layer. The pulse
 // animation is pure CSS (`.risk-radius-circle` in app.css) driven off Leaflet's `className` option.
@@ -391,8 +392,9 @@ function renderRiskRadius(pts) {
   });
 }
 
-// Toggles the presentation-mode risk-radius overlay and redraws it against whatever's currently
-// plotted — cheap, since it only touches dashRiskLayer, not the pins/legend/sidebar.
+// Toggles the risk-radius overlay (available on the dashboard map generally, not just presentation
+// mode) and redraws it against whatever's currently plotted — cheap, since it only touches
+// dashRiskLayer, not the pins/legend/sidebar.
 export function toggleRiskRadius(forceState) {
   const next = typeof forceState === 'boolean' ? forceState : !mapShowRiskRadius;
   setMapShowRiskRadius(next);
@@ -690,7 +692,9 @@ export function toggleMapPresentation(forceState?: boolean) {
   } else {
     document.body.style.overflow = '';
     togglePresSidebar(false);
-    if (mapShowRiskRadius) toggleRiskRadius(false); // presentation-mode-only overlay, off outside it
+    // Risk Zones is a regular map layer toggle now (like Satellite) — available on the normal
+    // dashboard too, so it deliberately stays as the user left it across a presentation-mode
+    // enter/exit rather than being forced off.
     // Play the reverse animation, then swap the fixed-overlay class off once it finishes so the
     // panel doesn't just disappear on the same frame Exit is clicked. animationend can fail to
     // fire (browser quirks, animations disabled, reduced-motion) — a timeout fallback guarantees

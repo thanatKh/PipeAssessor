@@ -40,6 +40,30 @@
   --text-muted: #475569;
   --text-light: #64748b;
 
+  /* Font-size scale — every font-size in theme.css/app.css resolves to one of these; never a
+     bare px value. Roles (not raw numbers) drove the scale: usages were grouped by what job the
+     text does (badge/eyebrow, caption, body, prominent/title text, numeric metrics), then
+     near-duplicate sizes doing the same job (e.g. 11px vs 11.5px muted captions, 12px vs 12.5px
+     body text, 16/18/19px "large heading" variants) were merged into one step. --fs-sm (11px) is
+     the CLAUDE.md-documented readability floor for anything actively read; --fs-2xs (9px) sits
+     below it and is scoped ONLY to short uppercase badge/eyebrow chips or single glyphs (kbd
+     hints, compact status pills, close-icon glyphs) — never body prose. --fs-2xl/--fs-3xl/
+     --fs-4xl/--fs-hero are a deliberate numeric-KPI/heading hierarchy (secondary ring metric,
+     enlarged section heading, KPI card headline number, Risk Ranking's biggest hero number) —
+     kept apart on purpose, not merged, since several sit side by side in the same card/row. */
+  --fs-2xs: 9px;    /* shortest uppercase badge/eyebrow chip or single glyph (below the 11px floor — badge-only) */
+  --fs-xs: 10px;    /* uppercase eyebrow / section-label / small badge text */
+  --fs-sm: 11px;    /* base caption/hint/muted-label text — the readability floor for body-ish text */
+  --fs-base: 12px;  /* standard UI body text — form labels, buttons, table/list body */
+  --fs-md: 13px;    /* prominent small text — dialog headers, tag/title text, table.list rows */
+  --fs-lg: 14px;    /* sticky-toolbar identity titles (detail/risk page headings) */
+  --fs-xl: 15px;    /* secondary numeric metric beside a bigger one (health-banner ERF, KPI ring fraction) */
+  --fs-2xl: 16px;   /* compact page/section title (login title, mobile header h1, health-banner word) */
+  --fs-3xl: 17px;   /* KPI ring-center percentage */
+  --fs-4xl: 18px;   /* enlarged heading (presentation-mode panel title, header h1 desktop, dialog close glyph) */
+  --fs-5xl: 20px;   /* KPI card headline number */
+  --fs-hero: 26px;  /* largest numeric hero (Risk Ranking KPI band) */
+
   --card-bg: #ffffff;
   --card-border: #e2e8f0;
 
@@ -206,12 +230,12 @@ body > header .wrap {
 
   .hdr-btn {
     padding: 7px 10px;
-    font-size: 11.5px;
+    font-size: var(--fs-sm); /* was 11.5px */
   }
 }
 
 .header-info h1 {
-  font-size: 19px;
+  font-size: var(--fs-4xl); /* was 19px */
   font-weight: 800;
   margin: 0;
   letter-spacing: -0.3px;
@@ -220,7 +244,7 @@ body > header .wrap {
 }
 
 .header-info .hdr-sub {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
   margin-top: 1px;
 }
@@ -243,7 +267,7 @@ body > header .wrap {
 .hdr-btn {
   flex: none;
   padding: 8px 16px;
-  font-size: 12px;
+  font-size: var(--fs-base);
   font-weight: 600;
   white-space: nowrap;
   border-radius: 6px;
@@ -286,7 +310,7 @@ body > header .wrap {
 
   .hdr-btn {
     padding: 7px 8px;
-    font-size: 11px;
+    font-size: var(--fs-sm);
   }
 }
 
@@ -352,11 +376,11 @@ body > header .wrap {
   color: #fff;
   margin-bottom: 14px;
 }
-.hb-word { font-size: 16px; font-weight: 800; letter-spacing: 0.2px; line-height: 1.15; }
-.hb-line { font-size: 12.5px; opacity: 0.93; margin-top: 3px; }
+.hb-word { font-size: var(--fs-2xl); font-weight: 800; letter-spacing: 0.2px; line-height: 1.15; }
+.hb-line { font-size: var(--fs-base); /* was 12.5px */ opacity: 0.93; margin-top: 3px; }
 .hb-metrics { text-align: right; flex: 0 0 auto; white-space: nowrap; }
-.hb-erf { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.hb-sub { font-size: 11px; opacity: 0.9; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.hb-erf { font-size: var(--fs-xl); font-weight: 800; font-variant-numeric: tabular-nums; }
+.hb-sub { font-size: var(--fs-sm); opacity: 0.9; margin-top: 2px; font-variant-numeric: tabular-nums; }
 .hb-ok      { --hb-fill: #047857; --hb-spine: #065f46; }
 .hb-monitor { --hb-fill: #b45309; --hb-spine: #92400e; }
 .hb-repair  { --hb-fill: #b91c1c; --hb-spine: #7f1d1d; }
@@ -382,7 +406,7 @@ details.panel[open] > .panel-collapse.panel-h {
    (a collapsible section's title has no child <h2> to target separately). */
 .panel-h h2, .panel-collapse {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--fs-base);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
@@ -394,7 +418,7 @@ details.panel[open] > .panel-collapse.panel-h {
    the ambient body font-size (13.5px, no color override) instead of reading as secondary text;
    matches .hint's existing small/muted visual weight, used the same way elsewhere in the app. */
 .h-note {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-weight: 400;
   text-transform: none;
   letter-spacing: normal;
@@ -502,7 +526,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 }
 
 .status-label {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
@@ -514,7 +538,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 .status-value {
   display: inline-flex;
   align-items: center;
-  font-size: 11.5px;
+  font-size: var(--fs-sm); /* was 11.5px */
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
@@ -550,7 +574,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 }
 
 .status-desc {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   margin-top: 5px;
   line-height: 1.4;
@@ -559,7 +583,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 
 /* Scope & Limitations disclaimer */
 .scope-notice {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   line-height: 1.5;
   color: var(--text-muted);
   background: var(--warn-bg);
@@ -594,14 +618,14 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 }
 
 .compliance-name {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text-muted);
 }
 
 .compliance-badge {
   font-family: 'Google Sans', sans-serif;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-weight: 700;
   padding: 2px 10px;
   border-radius: 4px;
@@ -622,7 +646,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 
 .compliance-ffs-note {
   padding: 8px 10px;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   line-height: 1.5;
   color: var(--warn-text);
   background: var(--warn-bg);
@@ -650,7 +674,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   flex-wrap: wrap;
   gap: 10px;
   justify-content: center;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   margin-top: 8px;
 }
@@ -685,7 +709,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 .pressure-gauge-labels {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-weight: 700;
   color: var(--text-muted);
   margin-bottom: 6px;
@@ -753,7 +777,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-weight: 600;
 }
 
@@ -776,7 +800,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 
 /* Results value grid */
 .res-section-title {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -821,7 +845,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 }
 
 .res-name {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: var(--text-muted);
 }
@@ -829,7 +853,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 .res-val {
   font-family: 'Google Sans', sans-serif;
   font-variant-numeric: tabular-nums;
-  font-size: 13px;
+  font-size: var(--fs-md);
   font-weight: 700;
   color: var(--text-color);
   text-align: right;
@@ -837,7 +861,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 }
 
 .report-caveat {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   color: var(--text-light);
   line-height: 1.4;
   font-style: italic;
@@ -899,7 +923,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 }
 
 .advisor-banner-tag {
-  font-size: 10.5px;
+  font-size: var(--fs-xs); /* was 10.5px */
   font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -912,7 +936,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 .advisor-container.success .advisor-banner-tag { color: var(--ok-text); }
 
 .advisor-summary-text {
-  font-size: 12.5px;
+  font-size: var(--fs-base); /* was 12.5px */
   font-weight: 600;
   color: var(--text-color, #1e293b);
   line-height: 1.4;
@@ -949,7 +973,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 
 .advisor-item-title {
   width: 200px;
-  font-size: 12px;
+  font-size: var(--fs-base);
   font-weight: 700;
   color: var(--text-color, #1e293b);
   line-height: 1.4;
@@ -957,7 +981,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 }
 
 .advisor-item-body {
-  font-size: 12px;
+  font-size: var(--fs-base);
   color: var(--text-muted, #475569);
   line-height: 1.4;
   padding-top: 1px;
@@ -965,7 +989,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 }
 
 .advisor-body-text {
-  font-size: 12px;
+  font-size: var(--fs-base);
   line-height: 1.4;
 }
 
@@ -980,13 +1004,13 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 }
 
 .advisor-sub-item {
-  font-size: 12px;
+  font-size: var(--fs-base);
   line-height: 1.4;
   color: var(--text-muted, #475569);
 }
 
 .advisor-standards-note {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   color: var(--text-muted, #64748b);
   padding: 6px 10px;
   background: var(--svg-bg, #f8fafc);
@@ -997,12 +1021,12 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 
 /* References & Equations */
 .eq-section {
-  font-size: 12px;
+  font-size: var(--fs-base);
   color: var(--text-color);
 }
 
 .eq-title {
-  font-size: 12px;
+  font-size: var(--fs-base);
   font-weight: 700;
   color: var(--button-primary);
   margin-bottom: 8px;
@@ -1014,7 +1038,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   border-radius: 6px;
   padding: 10px;
   font-family: 'Google Sans', sans-serif;
-  font-size: 12px;
+  font-size: var(--fs-base);
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -1030,7 +1054,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   text-align: center;
   padding: 0 4px;
   vertical-align: middle;
-  font-size: 11px;
+  font-size: var(--fs-sm);
 }
 
 .numerator {
@@ -1048,7 +1072,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   list-style-type: none;
   padding-left: 0;
   margin-top: 8px;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   line-height: 1.5;
 }
 
@@ -1078,7 +1102,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 
 .eq-sub-title {
   display: block;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-weight: 700;
   color: var(--button-primary);
   margin-bottom: 8px;
@@ -1088,7 +1112,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 
 .eq-sub-step {
   font-family: 'Google Sans', sans-serif;
-  font-size: 12px;
+  font-size: var(--fs-base);
   color: var(--text-color);
   line-height: 1.6;
   word-break: break-all;
@@ -1096,14 +1120,14 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 
 .eq-sub-step strong {
   color: var(--button-primary);
-  font-size: 13px;
+  font-size: var(--fs-md);
 }
 
 .eq-status-badge {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: bold;
   text-transform: uppercase;
   letter-spacing: 0.5px;

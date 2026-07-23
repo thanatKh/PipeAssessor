@@ -5,7 +5,7 @@
     .header-actions { gap: 10px; }
 
     .hdr-user {
-      font-size: 11.5px;
+      font-size: var(--fs-sm); /* was 11.5px */
       color: var(--text-muted);
       max-width: 180px;
       overflow: hidden;
@@ -14,11 +14,11 @@
     }
 
     @media (max-width: 640px) {
-      .header-info h1 { font-size: 16px; }
+      .header-info h1 { font-size: var(--fs-2xl); }
       .hdr-logo { height: 26px; }
       .hdr-logo-chip { padding: 6px 10px; }
       .hdr-user { display: none; }
-      .hdr-btn { padding: 7px 10px; font-size: 11.5px; }
+      .hdr-btn { padding: 7px 10px; font-size: var(--fs-sm); /* was 11.5px */ }
     }
 
     body:not(.authed) .authed-only { display: none !important; }
@@ -38,12 +38,12 @@
 
     .login-wrap .panel-b { display: flex; flex-direction: column; gap: 12px; }
 
-    .login-title { font-size: 16px; font-weight: 800; margin: 0; }
-    .login-sub { font-size: 11.5px; color: var(--text-muted); margin: 2px 0 0; }
+    .login-title { font-size: var(--fs-2xl); font-weight: 800; margin: 0; }
+    .login-sub { font-size: var(--fs-sm); /* was 11.5px */ color: var(--text-muted); margin: 2px 0 0; }
 
     .login-err {
       display: none;
-      font-size: 11.5px;
+      font-size: var(--fs-sm); /* was 11.5px */
       color: var(--danger-text);
       background: var(--danger-bg);
       border: 1px solid var(--danger-border);
@@ -54,7 +54,7 @@
     /* ============ Labels / fields ============ */
     label.f-label {
       display: block;
-      font-size: 11px;
+      font-size: var(--fs-sm);
       font-weight: 600;
       color: var(--text-muted);
       margin-bottom: 4px;
@@ -96,16 +96,16 @@
        (location-first identity, see CLAUDE.md); the bare 'Google Sans', sans-serif override used
        elsewhere in this file for numeric-only fields (age, currency, ERF results — never Thai) is
        wrong here since it has no Thai fallback in its own chain and skips the theme.css default. */
-    .combo-tag { font-family: 'Google Sans', 'Noto Sans Thai', sans-serif; font-size: 12.5px; color: var(--text-color); }
-    .combo-loc { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
-    .combo-empty { padding: 6px 8px; font-size: 11px; color: var(--text-light); }
-    .combo-more { padding: 6px 8px; font-size: 10.5px; color: var(--text-light); border-top: 1px solid var(--card-border); margin-top: 4px; text-align: center; }
+    .combo-tag { font-family: 'Google Sans', 'Noto Sans Thai', sans-serif; font-size: var(--fs-base); /* was 12.5px */ color: var(--text-color); }
+    .combo-loc { font-size: var(--fs-sm); color: var(--text-muted); margin-top: 1px; }
+    .combo-empty { padding: 6px 8px; font-size: var(--fs-sm); color: var(--text-light); }
+    .combo-more { padding: 6px 8px; font-size: var(--fs-xs); /* was 10.5px */ color: var(--text-light); border-top: 1px solid var(--card-border); margin-top: 4px; text-align: center; }
 
-    .hint { font-size: 11px; color: var(--text-light); margin-top: 6px; }
+    .hint { font-size: var(--fs-sm); color: var(--text-light); margin-top: 6px; }
 
     kbd {
       font-family: 'Google Sans', sans-serif;
-      font-size: 10px;
+      font-size: var(--fs-xs);
       padding: 1px 5px;
       border: 1px solid var(--card-border);
       border-bottom-width: 2px;
@@ -116,7 +116,7 @@
 
     .validation-alert {
       display: none;
-      font-size: 11px;
+      font-size: var(--fs-sm);
       color: var(--danger-text);
       margin-top: 6px;
     }
@@ -191,12 +191,12 @@
     .kpi-budget-card.active { border-color: var(--button-primary); box-shadow: 0 0 0 1px var(--button-primary); }
     .kpi-budget-card:focus-visible { outline: 2px solid var(--button-primary); outline-offset: 2px; }
     .kb-head { display: flex; flex-direction: column; gap: 2px; }
-    .kb-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); }
-    .kb-total { font-family: 'Google Sans', sans-serif; font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 700; color: var(--text-color); }
-    .kb-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .kb-label { font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); }
+    .kb-total { font-family: 'Google Sans', sans-serif; font-variant-numeric: tabular-nums; font-size: var(--fs-5xl); font-weight: 700; color: var(--text-color); }
+    .kb-sub { font-size: var(--fs-sm); color: var(--text-muted); margin-top: 2px; }
     .kb-sev { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 8px; }
     .kb-sev-btn {
-      font-size: 11px;
+      font-size: var(--fs-sm);
       color: var(--text-muted);
       display: inline-flex;
       align-items: center;
@@ -220,14 +220,17 @@
     /* Button grouping & Filter UI enhancements */
     .hdr-btn-group-subtle { display: inline-flex; gap: 4px; background: rgba(0,0,0,0.03); padding: 2px; border-radius: 6px; border: 1px solid var(--card-border); }
     .select.has-filter, .input.has-filter { border-color: var(--button-primary) !important; background-color: rgba(21, 107, 149, 0.03) !important; font-weight: 600; }
-    .filter-active-badge { display: inline-flex; align-items: center; justify-content: center; background: var(--button-primary); color: #ffffff; font-size: 10px; font-weight: 700; width: 16px; height: 16px; border-radius: 50%; margin-left: 4px; }
+    .filter-active-badge { display: inline-flex; align-items: center; justify-content: center; background: var(--button-primary); color: #ffffff; font-size: var(--fs-xs); font-weight: 700; width: 16px; height: 16px; border-radius: 50%; margin-left: 4px; }
 
-    /* Table row hover affordance */
+    /* Table row hover affordance. The left accent border is reserved (transparent) on every row
+       so hovering only swaps its color, not its width — an actual width change here shifts every
+       cell in the row left/right by the border's own width as the mouse crosses it. */
     .register-table tr[data-id] { position: relative; cursor: pointer; transition: background 0.15s ease; }
+    .register-table tr[data-id] td:first-child { border-left: 3px solid transparent; transition: border-color 0.15s ease; }
     .register-table tr[data-id]:hover { background: rgba(21, 107, 149, 0.04) !important; }
-    .register-table tr[data-id]:hover td:first-child { border-left: 3px solid var(--button-primary); }
+    .register-table tr[data-id]:hover td:first-child { border-left-color: var(--button-primary); }
     .due-row-flex { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-    .row-arrow { opacity: 0; transform: translateX(-4px); transition: opacity 0.15s ease, transform 0.15s ease; color: var(--button-primary); font-weight: 700; font-size: 13px; }
+    .row-arrow { opacity: 0; transform: translateX(-4px); transition: opacity 0.15s ease, transform 0.15s ease; color: var(--button-primary); font-weight: 700; font-size: var(--fs-md); }
     .register-table tr[data-id]:hover .row-arrow { opacity: 1; transform: translateX(0); }
 
     /* Stacked full-width above the budget card (see .kpi-top-pair) — horizontal layout (ring
@@ -311,7 +314,7 @@
     .kpi-ring-pct {
       font-family: 'Google Sans', sans-serif;
       font-variant-numeric: tabular-nums;
-      font-size: 17px;
+      font-size: var(--fs-3xl);
       font-weight: 700;
       line-height: 1.1;
     }
@@ -321,7 +324,7 @@
     .kpi-ring-info { display: flex; flex-direction: column; gap: 2px; }
 
     .kpi-ring-label {
-      font-size: 10px;
+      font-size: var(--fs-xs);
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.4px;
@@ -331,7 +334,7 @@
     .kpi-ring-fraction {
       font-family: 'Google Sans', sans-serif;
       font-variant-numeric: tabular-nums;
-      font-size: 15px;
+      font-size: var(--fs-xl);
       font-weight: 700;
       color: var(--text-color);
     }
@@ -371,14 +374,14 @@
       display: block;
       font-family: 'Google Sans', sans-serif;
       font-variant-numeric: tabular-nums;
-      font-size: 20px;
+      font-size: var(--fs-5xl);
       font-weight: 700;
       line-height: 1.1;
     }
 
     .kpi .k-label {
       display: block;
-      font-size: 10px;
+      font-size: var(--fs-xs);
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -404,7 +407,7 @@
        gets too narrow to read on a phone. */
     @media (max-width: 460px) {
       .kpi-row-bottom { grid-template-columns: repeat(2, 1fr); }
-      .kpi .k-label { font-size: 9px; }
+      .kpi .k-label { font-size: var(--fs-2xs); }
     }
 
     /* ============ Dashboard map ============ */
@@ -435,12 +438,12 @@
     .map-toolbar .select {
       width: auto;
       height: 26px;
-      font-size: 11px;
+      font-size: var(--fs-sm);
       padding: 2px 22px 2px 8px;
     }
     .map-toolbar .btn.btn-sm {
       height: 26px;
-      font-size: 11px;
+      font-size: var(--fs-sm);
       padding: 0 8px;
       display: inline-flex;
       align-items: center;
@@ -458,7 +461,7 @@
       gap: 6px;
       height: 26px;
       padding: 0 8px;
-      font-size: 11px;
+      font-size: var(--fs-sm);
       font-weight: 600;
       color: var(--text-color, #0f172a);
       background: var(--card-bg, #ffffff);
@@ -534,7 +537,7 @@
       display: inline-flex;
       align-items: center;
       font-family: monospace;
-      font-size: 9px;
+      font-size: var(--fs-2xs);
       font-weight: 700;
       color: rgba(255, 255, 255, 0.92);
       background: rgba(255, 255, 255, 0.18);
@@ -558,7 +561,7 @@
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      font-size: 10px;
+      font-size: var(--fs-xs);
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.4px;
@@ -690,7 +693,7 @@
     .pres-sidebar-title {
       font-family: 'Google Sans', 'Noto Sans Thai', sans-serif;
       font-weight: 700;
-      font-size: 12px;
+      font-size: var(--fs-base);
       color: var(--text-color, #0f172a);
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -699,7 +702,7 @@
     .pres-sidebar-close {
       background: transparent;
       border: none;
-      font-size: 18px;
+      font-size: var(--fs-4xl);
       line-height: 1;
       color: var(--text-muted, #64748b);
       cursor: pointer;
@@ -778,7 +781,7 @@
     .pres-card-tag {
       font-family: 'Google Sans', 'Noto Sans Thai', sans-serif;
       font-weight: 700;
-      font-size: 12px;
+      font-size: var(--fs-base);
       color: var(--text-color, #0f172a);
       white-space: nowrap;
       overflow: hidden;
@@ -786,7 +789,7 @@
     }
 
     .pres-card-sub {
-      font-size: 11px;
+      font-size: var(--fs-sm);
       color: var(--text-muted, #64748b);
       white-space: nowrap;
       overflow: hidden;
@@ -796,7 +799,7 @@
     .pres-sidebar-empty {
       padding: 24px 12px;
       text-align: center;
-      font-size: 12px;
+      font-size: var(--fs-base);
       color: var(--text-muted, #64748b);
     }
 
@@ -807,7 +810,7 @@
     }
 
     .dash-map-panel.map-presentation .panel-h h2 {
-      font-size: 18px;
+      font-size: var(--fs-4xl);
       display: flex;
       align-items: center;
       gap: 10px;
@@ -832,7 +835,7 @@
       gap: 8px 18px;
     }
     .dash-map-panel.map-presentation .map-legend .lg-item {
-      font-size: 11px;
+      font-size: var(--fs-sm);
     }
     .dash-map-panel.map-presentation .map-legend .lg-dot {
       width: 12px;
@@ -850,7 +853,7 @@
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      font-size: 10px;
+      font-size: var(--fs-xs);
       font-weight: 600;
       padding: 2px 8px;
       border-radius: 20px;
@@ -864,7 +867,7 @@
     .map-pres-esc-hint { margin-left: 4px; }
 
     .pres-summary-bar {
-      font-size: 11px;
+      font-size: var(--fs-sm);
       color: var(--button-primary, #156B95);
       background: rgba(21, 107, 149, 0.08);
       border: 1px solid rgba(21, 107, 149, 0.2);
@@ -878,7 +881,7 @@
       border: none;
       border-radius: 4px;
       padding: 3px 8px;
-      font-size: 11px;
+      font-size: var(--fs-sm);
       font-weight: 700;
       box-shadow: 0 4px 10px rgba(0,0,0,0.25);
     }
@@ -902,7 +905,7 @@
     }
     .form-section-nav .nav-tab {
       font-family: 'Google Sans', sans-serif;
-      font-size: 11px;
+      font-size: var(--fs-sm);
       font-weight: 600;
       color: var(--text-muted, #64748b);
       background: var(--card-bg, #ffffff);
@@ -939,7 +942,7 @@
       border: 1px solid #fecaca;
       border-radius: 6px;
       padding: 8px 12px;
-      font-size: 11px;
+      font-size: var(--fs-sm);
       font-weight: 700;
       margin-bottom: 12px;
       animation: pulseAlert 2s infinite;
@@ -984,7 +987,7 @@
       top: 6px !important;
       right: 6px !important;
       color: var(--text-muted, #64748b) !important;
-      font-size: 16px !important;
+      font-size: var(--fs-2xl) !important;
       z-index: 10;
     }
 
@@ -992,7 +995,7 @@
       display: flex;
       flex-direction: column;
       font-family: var(--font-body, 'Inter', 'Google Sans', 'Noto Sans Thai', sans-serif);
-      font-size: 12px;
+      font-size: var(--fs-base);
     }
 
     .mp-card-banner {
@@ -1026,7 +1029,7 @@
     .mp-badge-overdue {
       background: #ef4444;
       color: #ffffff;
-      font-size: 9px;
+      font-size: var(--fs-2xs);
       font-weight: 700;
       letter-spacing: 0.5px;
       padding: 2px 6px;
@@ -1051,7 +1054,7 @@
     .mp-card-tag {
       font-family: 'Google Sans', 'Noto Sans Thai', sans-serif;
       font-weight: 700;
-      font-size: 13px;
+      font-size: var(--fs-md);
       color: var(--text-color);
       white-space: nowrap;
       overflow: hidden;
@@ -1062,7 +1065,7 @@
       display: flex;
       align-items: center;
       gap: 4px;
-      font-size: 11px;
+      font-size: var(--fs-sm);
       color: var(--text-muted, #64748b);
       margin-top: 1px;
     }
@@ -1083,7 +1086,7 @@
     }
 
     .mp-card-loc {
-      font-size: 11px;
+      font-size: var(--fs-sm);
       color: var(--text-muted, #64748b);
       white-space: nowrap;
       overflow: hidden;
@@ -1099,7 +1102,7 @@
       padding: 6px 10px;
       background: var(--button-primary, #156B95);
       color: #ffffff !important;
-      font-size: 11px;
+      font-size: var(--fs-sm);
       font-weight: 600;
       border-radius: 6px;
       text-decoration: none !important;
@@ -1164,7 +1167,7 @@
       background: transparent;
       color: var(--text-muted);
       font: inherit;
-      font-size: 12px;
+      font-size: var(--fs-base);
       font-weight: 600;
       padding: 5px 14px;
       border-radius: 6px;
@@ -1192,7 +1195,7 @@
       border-radius: 999px;
       background: var(--danger-color);
       color: #fff;
-      font-size: 10px;
+      font-size: var(--fs-xs);
       font-weight: 700;
       line-height: 15px;
       text-align: center;
@@ -1207,7 +1210,7 @@
       align-items: center;
     }
 
-    .filters .select, .filters .input { height: 34px; font-size: 12px; }
+    .filters .select, .filters .input { height: 34px; font-size: var(--fs-base); }
     .filters .select { width: auto; min-width: 120px; }
     .filters .input { flex: 1 1 160px; min-width: 140px; }
 
@@ -1218,7 +1221,7 @@
        used with no rule defined for it at all, same missing-CSS bug as .h-note above. */
     .tbl-foot {
       padding: 10px 14px;
-      font-size: 11px;
+      font-size: var(--fs-sm);
       color: var(--text-light);
       border-top: 1px solid var(--card-border);
     }
@@ -1226,12 +1229,12 @@
     table.list {
       width: 100%;
       border-collapse: collapse;
-      font-size: 13.5px;
+      font-size: var(--fs-md); /* was 13.5px */
     }
 
     table.list th {
       text-align: left;
-      font-size: 11px;
+      font-size: var(--fs-sm);
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -1261,7 +1264,7 @@
        location_desc, user text that can be Thai. */
     .c-tag .t-tag {
       font-family: 'Google Sans', 'Noto Sans Thai', sans-serif;
-      font-size: 13.5px;
+      font-size: var(--fs-md); /* was 13.5px */
       font-weight: 600;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -1269,7 +1272,7 @@
       min-width: 0;
     }
     .c-tag .t-type {
-      font-size: 11.5px;
+      font-size: var(--fs-sm); /* was 11.5px */
       color: var(--text-muted);
       margin-top: 1px;
       overflow: hidden;
@@ -1280,7 +1283,7 @@
       display: inline-flex;
       align-items: center;
       gap: 3px;
-      font-size: 11px;
+      font-size: var(--fs-sm);
       color: var(--text-light);
       flex: none;
     }
@@ -1310,7 +1313,7 @@
       background: var(--bg-color, #f8fafc);
       border: 1px dashed var(--card-border, #cbd5e1);
       color: var(--text-muted, #94a3b8);
-      font-size: 10px;
+      font-size: var(--fs-xs);
       font-weight: 600;
       letter-spacing: 0.02em;
       box-sizing: border-box;
@@ -1344,7 +1347,7 @@
     /* Location/Anomaly description subtext under the finding type — muted, single-line
        ellipsis each so a long free-text field never blows out the row height. */
     .t-desc {
-      font-size: 11.5px;
+      font-size: var(--fs-sm); /* was 11.5px */
       color: var(--text-light);
       margin-top: 1px;
       overflow: hidden;
@@ -1356,7 +1359,7 @@
     /* Age badge — days since inspection; escalates to warn/danger as an open finding ages */
     .age {
       font-family: 'Google Sans', sans-serif;
-      font-size: 13px;
+      font-size: var(--fs-md);
       color: var(--text-muted);
     }
     .age.age-warn { color: var(--warn-color); font-weight: 600; }
@@ -1400,8 +1403,8 @@
          declared LAST in the stylesheet wins, not whichever is "more specific to mobile" — the
          base rule sits after this block) and so this doesn't also shrink status pills elsewhere
          (detail page, assessment card) that happen to render under 640px. */
-      table.register-table .pill { font-size: 9px; padding: 2px 5px; letter-spacing: 0; }
-      table.register-table .ov-badge { font-size: 9.5px; }
+      table.register-table .pill { font-size: var(--fs-2xs); padding: 2px 5px; letter-spacing: 0; }
+      table.register-table .ov-badge { font-size: var(--fs-2xs); /* was 9.5px */ }
     }
 
     /* Risk Ranking table's own narrow-viewport handling — Mechanism and Findings are the least
@@ -1411,7 +1414,7 @@
     @media (max-width: 640px) {
       table.risk-table th:nth-child(4), table.risk-table td:nth-child(4),
       table.risk-table th:nth-child(5), table.risk-table td:nth-child(5) { display: none; }
-      table.risk-table th, table.risk-table td { padding: 8px 6px; font-size: 12px; }
+      table.risk-table th, table.risk-table td { padding: 8px 6px; font-size: var(--fs-base); }
     }
 
     /* ============ Row selection (Summary PDF) ============ */
@@ -1427,7 +1430,7 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      font-size: 12px;
+      font-size: var(--fs-base);
       font-weight: 600;
       color: var(--button-primary);
       background: var(--plan-bg);
@@ -1458,7 +1461,7 @@
       text-align: center;
       color: var(--text-light);
       padding: 28px 10px;
-      font-size: 12px;
+      font-size: var(--fs-base);
       cursor: default;
     }
     tr.empty-row:hover { background: transparent !important; }
@@ -1472,7 +1475,7 @@
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      font-size: 11.5px;
+      font-size: var(--fs-sm); /* was 11.5px */
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.4px;
@@ -1492,7 +1495,7 @@
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      font-size: 10px;
+      font-size: var(--fs-xs);
       font-weight: 700;
       letter-spacing: 0.4px;
       color: var(--danger-color);
@@ -1558,7 +1561,7 @@
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      font-size: 12px;
+      font-size: var(--fs-base);
       font-weight: 600;
       color: var(--button-primary);
       text-decoration: none;
@@ -1601,7 +1604,7 @@
       display: inline-flex;
       align-items: center;
       gap: 7px;
-      font-size: 12px;
+      font-size: var(--fs-base);
       font-weight: 600;
       color: var(--text-muted);
       cursor: pointer;
@@ -1625,7 +1628,7 @@
     .a-advanced { margin-top: 6px; }
     .a-advanced summary {
       cursor: pointer;
-      font-size: 12px;
+      font-size: var(--fs-base);
       font-weight: 600;
       color: var(--button-primary);
       padding: 4px 0;
@@ -1674,7 +1677,7 @@
       border-radius: 8px;
     }
     .preset-label {
-      font-size: 11px;
+      font-size: var(--fs-sm);
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -1686,7 +1689,7 @@
       border: 1px solid var(--card-border);
       border-radius: 6px;
       padding: 4px 10px;
-      font-size: 11.5px;
+      font-size: var(--fs-sm); /* was 11.5px */
       font-weight: 600;
       color: var(--text-color);
       cursor: pointer;
@@ -1708,7 +1711,7 @@
       border: 1px solid var(--card-border);
       border-radius: 8px;
       margin-bottom: 14px;
-      font-size: 12px;
+      font-size: var(--fs-base);
     }
     .q-spec-item {
       display: inline-flex;
@@ -1725,7 +1728,7 @@
       font-family: 'Google Sans', 'Noto Sans Thai', sans-serif;
       font-weight: 700;
       font-variant-numeric: tabular-nums;
-      font-size: 12.5px;
+      font-size: var(--fs-base); /* was 12.5px */
       background: var(--button-ghost-hover);
       padding: 2px 7px;
       border-radius: 4px;
@@ -1815,7 +1818,7 @@
       border: none;
       background: rgba(15, 23, 42, 0.65);
       color: #fff;
-      font-size: 13px;
+      font-size: var(--fs-md);
       line-height: 1;
       cursor: pointer;
       display: flex;
@@ -1828,7 +1831,7 @@
       position: absolute;
       left: 4px;
       bottom: 4px;
-      font-size: 9px;
+      font-size: var(--fs-2xs);
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.4px;
@@ -1847,7 +1850,7 @@
       display: flex;
       align-items: flex-start;
       gap: 6px;
-      font-size: 11.5px;
+      font-size: var(--fs-sm); /* was 11.5px */
       color: var(--text-light);
     }
     .photo-empty svg { flex: none; margin-top: 1px; opacity: 0.6; }
@@ -1862,7 +1865,7 @@
 
     .photo-group-h h3 {
       margin: 0;
-      font-size: 11px;
+      font-size: var(--fs-sm);
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -1897,14 +1900,14 @@
        in Thai — the bare 'Google Sans', sans-serif override had no Thai fallback of its own). */
     .detail-head h2 {
       margin: 0;
-      font-size: 14px;
+      font-size: var(--fs-lg);
       font-weight: 800;
       font-family: 'Google Sans', 'Noto Sans Thai', sans-serif;
       white-space: nowrap;
     }
 
     .detail-head .dh-meta {
-      font-size: 11.5px;
+      font-size: var(--fs-sm); /* was 11.5px */
       color: var(--text-muted);
       white-space: nowrap;
       overflow: hidden;
@@ -1925,7 +1928,7 @@
     /* Not scoped to .dgrid .d-item — also used standalone as a section label above free text
        (e.g. the Description heading in renderDetail) where there's no d-item ancestor. */
     .d-label {
-      font-size: 10px;
+      font-size: var(--fs-xs);
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -1934,24 +1937,24 @@
     }
 
     .dgrid .d-item .d-val {
-      font-size: 13px;
+      font-size: var(--fs-md);
       margin-top: 2px;
       overflow-wrap: anywhere;
     }
 
     .d-desc {
-      font-size: 13px;
+      font-size: var(--fs-md);
       line-height: 1.55;
       white-space: pre-wrap;
       margin: 0;
     }
 
     .status-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-    .status-actions .btn { font-size: 12px; }
+    .status-actions .btn { font-size: var(--fs-base); }
 
     /* ============ Assessment list ============ */
     .assess-history-label {
-      font-size: 10px;
+      font-size: var(--fs-xs);
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -1974,18 +1977,18 @@
       align-items: center;
       padding: 9px 0;
       border-bottom: 1px solid var(--card-border);
-      font-size: 12.5px;
+      font-size: var(--fs-base); /* was 12.5px */
     }
 
     .assess-item:first-child { padding-top: 0; }
     .assess-item:last-child { border-bottom: none; padding-bottom: 0; }
 
     .assess-item .kv { white-space: nowrap; }
-    .assess-item .kv b { font-weight: 600; color: var(--text-muted); font-size: 11px; }
+    .assess-item .kv b { font-weight: 600; color: var(--text-muted); font-size: var(--fs-sm); }
 
     .assess-meta {
       width: 100%;
-      font-size: 11.5px;
+      font-size: var(--fs-sm); /* was 11.5px */
       color: var(--text-light);
     }
 
@@ -2013,9 +2016,9 @@
       border: 2px solid var(--card-bg);
     }
 
-    .tl-title { font-size: 12.5px; font-weight: 600; }
-    .tl-meta { font-size: 11.5px; color: var(--text-light); margin-top: 1px; }
-    .tl-note { font-size: 12px; color: var(--text-muted); margin-top: 3px; white-space: pre-wrap; }
+    .tl-title { font-size: var(--fs-base); /* was 12.5px */ font-weight: 600; }
+    .tl-meta { font-size: var(--fs-sm); /* was 11.5px */ color: var(--text-light); margin-top: 1px; }
+    .tl-note { font-size: var(--fs-base); color: var(--text-muted); margin-top: 3px; white-space: pre-wrap; }
 
     /* ============ Dialog ============ */
     dialog.app-dlg {
@@ -2082,22 +2085,22 @@
     }
 
     #importDlg { width: min(640px, calc(100vw - 32px)); }
-    .import-summary { font-size: 12.5px; margin: 4px 0 8px; }
+    .import-summary { font-size: var(--fs-base); /* was 12.5px */ margin: 4px 0 8px; }
     .import-summary .ok { color: var(--ok-color); font-weight: 600; }
     .import-summary .bad { color: var(--danger-color); font-weight: 600; }
     .import-tbl-scroll { max-height: 260px; overflow: auto; border: 1px solid var(--card-border); border-radius: 6px; }
-    table.import-tbl { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+    table.import-tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); /* was 11.5px */ }
     table.import-tbl th, table.import-tbl td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--card-border); white-space: nowrap; }
-    table.import-tbl th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); position: sticky; top: 0; background: var(--card-bg); }
+    table.import-tbl th { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); position: sticky; top: 0; background: var(--card-bg); }
     table.import-tbl tr.bad td { background: var(--danger-bg); }
     table.import-tbl .rowstat-ok { color: var(--ok-color); font-weight: 700; }
     table.import-tbl .rowstat-bad { color: var(--danger-color); font-weight: 700; }
-    .import-reason { color: var(--danger-text); font-size: 11.5px; }
+    .import-reason { color: var(--danger-text); font-size: var(--fs-sm); /* was 11.5px */ }
 
     .dlg-h {
       padding: 12px 16px;
       border-bottom: 1px solid var(--card-border);
-      font-size: 13px;
+      font-size: var(--fs-md);
       font-weight: 700;
     }
 
@@ -2108,7 +2111,7 @@
     .export-radio { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; }
     .export-radio:hover { border-color: var(--button-primary); }
     .export-radio input { margin-top: 2px; width: 15px; height: 15px; accent-color: var(--button-primary); cursor: pointer; flex: none; }
-    .export-radio > span { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+    .export-radio > span { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-md); }
 
     .dlg-f {
       padding: 12px 16px;
@@ -2153,7 +2156,7 @@
 
     .footer {
       text-align: center;
-      font-size: 11.5px;
+      font-size: var(--fs-sm); /* was 11.5px */
       color: var(--text-light);
       padding: 18px 20px 26px;
     }
@@ -2166,14 +2169,14 @@
     /* Page title moved into the sticky .toolbar (see .risk-toolbar-title) so it and the back-link
        stay visible while scrolling, same as the detail page's .detail-head — .risk-head is just
        the (non-sticky) intro sentence beneath it now. */
-    .risk-sub { color: var(--text-muted); font-size: 12.5px; margin: 0 0 14px; }
+    .risk-sub { color: var(--text-muted); font-size: var(--fs-base); /* was 12.5px */ margin: 0 0 14px; }
 
     /* Matches .detail-head's compact-title-beside-back-link treatment (font-size/weight/
        border-left separator) so the sticky toolbar reads the same way across Detail/Form/Risk.
        No Thai fallback needed here — unlike .detail-head h2 (a finding's pipe_tag/location_desc,
        user-entered), this title is the static string "Line Risk Ranking", never Thai text. */
     .risk-toolbar-title {
-      font-size: 14px;
+      font-size: var(--fs-lg);
       font-weight: 800;
       font-family: 'Google Sans', sans-serif;
       padding-left: 14px;
@@ -2192,9 +2195,9 @@
     .risk-kpi.rk-med::before   { background: var(--warn-color); }
     .risk-kpi.rk-low::before   { background: var(--ok-color); }
     .risk-kpi.rk-na::before    { background: var(--text-light); }
-    .risk-kpi .rk-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
-    .risk-kpi .rk-num { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; margin-top: 4px; }
-    .risk-kpi .rk-sub { font-size: 11px; color: var(--text-light); margin-top: 2px; }
+    .risk-kpi .rk-label { font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+    .risk-kpi .rk-num { font-size: var(--fs-hero); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; margin-top: 4px; }
+    .risk-kpi .rk-sub { font-size: var(--fs-sm); color: var(--text-light); margin-top: 2px; }
     .risk-kpi.rk-high .rk-num { color: var(--danger-color); }
     .risk-kpi.rk-med .rk-num  { color: var(--warn-color); }
     .risk-kpi.rk-low .rk-num  { color: var(--ok-color); }
@@ -2205,7 +2208,7 @@
     /* stacked horizontal bars — risk band by terminal */
     .stack-row { display: grid; grid-template-columns: 48px 1fr 30px; align-items: center; gap: 10px; margin-bottom: 10px; }
     .stack-row:last-child { margin-bottom: 0; }
-    .stack-label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    .stack-label { font-size: var(--fs-base); font-weight: 600; color: var(--text-muted); }
     .stack-bar { display: flex; height: 20px; border-radius: 5px; overflow: hidden; background: var(--button-ghost-hover); }
     .stack-seg { height: 100%; }
     .stack-seg + .stack-seg { box-shadow: -2px 0 0 var(--card-bg); }
@@ -2213,32 +2216,32 @@
     .seg-med  { background: var(--warn-color); }
     .seg-low  { background: var(--ok-color); }
     .seg-na   { background: var(--text-light); }
-    .stack-total { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-muted); text-align: right; }
+    .stack-total { font-size: var(--fs-base); font-variant-numeric: tabular-nums; color: var(--text-muted); text-align: right; }
 
     .risk-chart-row .legend { display: flex; gap: 14px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--card-border); flex-wrap: wrap; }
-    .risk-chart-row .legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-muted); }
+    .risk-chart-row .legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); /* was 11.5px */ color: var(--text-muted); }
     .risk-chart-row .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
 
     /* damage-mechanism bars — reuses TYPE_COLORS (core/constants.ts), the same palette the map
        legend's Type mode already uses, so a mechanism's color means the same thing everywhere. */
     .mech-row { display: grid; grid-template-columns: 110px 1fr 26px; align-items: center; gap: 10px; margin-bottom: 8px; }
     .mech-row:last-child { margin-bottom: 0; }
-    .mech-label { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mech-label { font-size: var(--fs-sm); /* was 11.5px */ color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .mech-track { height: 14px; background: var(--button-ghost-hover); border-radius: 4px; overflow: hidden; }
     .mech-fill { height: 100%; border-radius: 4px; }
-    .mech-num { font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+    .mech-num { font-size: var(--fs-sm); /* was 11.5px */ font-variant-numeric: tabular-nums; color: var(--text-muted); }
 
     /* mechanism chips on a collapsed multi-finding line row — a line's mechanism is a SET (one
        per finding, see risk.ts's file header), never flattened to a single value. */
     .mech-chips { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-    .mech-chip { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 10.5px; font-weight: 600; white-space: nowrap; }
-    .mech-more { font-size: 10.5px; color: var(--text-light); font-weight: 600; }
-    table.risk-table .mech-cell-child { font-size: 12px; color: var(--text-muted); padding-left: 0; }
+    .mech-chip { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: var(--fs-xs); /* was 10.5px */ font-weight: 600; white-space: nowrap; }
+    .mech-more { font-size: var(--fs-xs); /* was 10.5px */ color: var(--text-light); font-weight: 600; }
+    table.risk-table .mech-cell-child { font-size: var(--fs-base); color: var(--text-muted); padding-left: 0; }
 
     /* risk band pill — same shape as .pill (core status pills) but its own severity-scale palette */
     .risk-pill {
       display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px;
-      font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+      font-size: var(--fs-xs); /* was 10.5px */ font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
     }
     .risk-pill .dot { width: 7px; height: 7px; border-radius: 50%; }
     .risk-pill.risk-high { background: color-mix(in oklab, var(--danger-color) 12%, transparent); color: var(--danger-color); }
@@ -2263,14 +2266,14 @@
        via visibility:hidden when there's nothing to expand) precisely so this indent lines the
        subtitle up under the tag text the same way on every row, single- or multi-location alike. */
     table.risk-table .tag-cell { font-weight: 600; }
-    table.risk-table .tag-sub { font-size: 11px; color: var(--text-light); font-weight: 400; margin-top: 1px; padding-left: 19px; }
+    table.risk-table .tag-sub { font-size: var(--fs-sm); color: var(--text-light); font-weight: 400; margin-top: 1px; padding-left: 19px; }
     table.risk-table .loc-count { color: var(--text-muted); }
     table.risk-table .worst-tag { color: var(--text-light); }
     table.risk-table .leak-flag { color: var(--danger-color); font-weight: 700; }
 
     .expand-caret {
       display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px;
-      margin-right: 5px; color: var(--text-light); font-size: 9px; transition: transform .15s ease;
+      margin-right: 5px; color: var(--text-light); font-size: var(--fs-2xs); transition: transform .15s ease;
     }
     tr.line-row.open .expand-caret { transform: rotate(90deg); color: var(--text-muted); }
     tr.line-row[data-line-key] { cursor: pointer; }
@@ -2283,8 +2286,8 @@
     .child-marker.m-med  { background: var(--warn-color); }
     .child-marker.m-low  { background: var(--ok-color); }
     .child-marker.m-na   { background: var(--text-light); }
-    .child-loc-text { font-size: 12px; }
-    .child-status { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+    .child-loc-text { font-size: var(--fs-base); }
+    .child-status { font-size: var(--fs-xs); /* was 10.5px */ font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
     .cs-high { color: var(--danger-color); }
     .cs-med  { color: var(--warn-color); }
     .cs-low  { color: var(--ok-color); }
@@ -2314,7 +2317,7 @@
 .public-only { display: none; }
 body.public-view .public-only { display: inline-flex; }
 .public-badge {
-  font-size: 11.5px;
+  font-size: var(--fs-sm); /* was 11.5px */
   font-weight: 600;
   color: #475569;
   background: #e2e8f0;
@@ -2339,8 +2342,12 @@ body.public-view #detailPanelStatus .panel-h h2::after {
   content: " (read-only)";
   font-weight: 500;
   color: #64748b;
+  /* Deliberately relative, not a --fs-* token: this is an inline suffix appended to the h2's own
+     text (via ::after), meant to always read as "a bit smaller than whatever this heading is,"
+     not pinned to an absolute size that could drift out of proportion if .panel-h h2's own
+     font-size (var(--fs-base)) ever changes. */
   font-size: 0.8em;
 }
 @media (max-width: 640px) {
-  .public-badge { font-size: 10.5px; padding: 3px 8px; }
+  .public-badge { font-size: var(--fs-xs); /* was 10.5px */ padding: 3px 8px; }
 }
