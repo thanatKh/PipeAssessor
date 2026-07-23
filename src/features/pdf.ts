@@ -867,18 +867,29 @@ export async function buildFindingPdf() {
     const totalEqH = eqRows.reduce((sum, rw) => sum + fractionRowHeight(rw), 0);
     ensure(26 + Math.min(totalEqH, 120)); // keep the title with at least the first equations
     section('Governing Equations (Substituted)');
-    y += 2;
+    y += 2.5;
+    /* Two-level layout so the *formula* (symbolic rule) and the *worked substitution* (numbers) read
+       as distinct roles instead of two near-identical `var = expr` lines: the navy-bold formula
+       heading (with the standard reference right-aligned) on top, then the substituted monospace
+       calculation on its own line, lightly indented beneath it. Navy-bold sans = the formula/label,
+       dark monospace = the computed numbers — the indent + typeface contrast carry the hierarchy
+       (an earlier version added a numbered step chip and a tinted computation band with a navy left
+       accent; the chip, band, and accent were all removed at the user's request for a plainer look). */
     eqRows.forEach(rw => {
-      ensure(fractionRowHeight(rw));
-      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LABEL); doc.setTextColor('#475569');
-      doc.text(rw.label, M, y + 2);
+      const isFrac = rw.segs.some(s => typeof s !== 'string');
+      const workedH = isFrac ? 11 : 6;     // vertical space the substituted line occupies
+      ensure(7 + workedH + 4);
+      // formula (symbolic rule) — navy-bold heading + right-aligned standard reference
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_NAVY);
+      doc.text(rw.label, M, y + 2.7);
       if (rw.ref) {
-        doc.setFont('GoogleSans', 'normal'); doc.setTextColor('#94a3b8');
-        doc.text(rw.ref, PW - M, y + 2, { align: 'right' });
+        doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_MUTED);
+        doc.text(rw.ref, PW - M, y + 2.7, { align: 'right' });
       }
-      y += 6;
-      const consumed = drawFractionRow(doc, rw.segs, M, y, { fontSize: FS_VALUE, font: 'courier' });
-      y += consumed + 4;
+      y += 6.5;
+      // substituted computation — plain monospace, lightly indented under the formula heading
+      drawFractionRow(doc, rw.segs, M + 4, y + (isFrac ? 0.5 : 0.2), { fontSize: FS_VALUE, font: 'courier' });
+      y += workedH + 3;
     });
     y += 3;
 
@@ -1190,20 +1201,26 @@ export async function buildQuickCalcPdf(inputs, res) {
   const totalEqH = eqRows.reduce((sum, rw) => sum + fractionRowHeight(rw), 0);
   ensure(26 + Math.min(totalEqH, 120));
   section('Governing Equations (Substituted)');
-  y += 2;
+  y += 2.5;
+  /* Two-level layout mirroring buildFindingPdf's equation section (same report family): navy-bold
+     formula heading (with the standard reference right-aligned) on top, then the substituted
+     monospace calculation lightly indented beneath it — no chip, band, or accent (all removed at
+     the user's request). Scales are function-local, so the ref uses this function's FS_DISCLAIMER. */
   eqRows.forEach(rw => {
-    ensure(fractionRowHeight(rw));
-    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LABEL); doc.setTextColor('#475569');
-    doc.text(rw.label, M, y + 2);
+    const isFrac = rw.segs.some(s => typeof s !== 'string');
+    const workedH = isFrac ? 11 : 6;
+    ensure(7 + workedH + 4);
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_NAVY);
+    doc.text(rw.label, M, y + 2.7);
     if (rw.ref) {
-      doc.setFont('GoogleSans', 'normal'); doc.setTextColor('#94a3b8');
-      doc.text(rw.ref, PW - M, y + 2, { align: 'right' });
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_DISCLAIMER); doc.setTextColor(PDF_MUTED);
+      doc.text(rw.ref, PW - M, y + 2.7, { align: 'right' });
     }
-    y += 6;
-    const consumed = drawFractionRow(doc, rw.segs, M, y, { fontSize: FS_VALUE, font: 'courier' });
-    y += consumed + 4;
+    y += 6.5;
+    drawFractionRow(doc, rw.segs, M + 4, y + (isFrac ? 0.5 : 0.2), { fontSize: FS_VALUE, font: 'courier' });
+    y += workedH + 3;
   });
-  y += 3;
+  y += 1;
 
   // --- scope & limitations ---
   doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL);
