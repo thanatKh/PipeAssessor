@@ -273,7 +273,7 @@ async function route() {
 
 
 import {
-  loadFindings, ageDays, STATUS_RANK, sortFindings, loadDetail, loadPublicFinding, photoUrl, applyFilters, KPI_RING_CIRCUMFERENCE, renderKpis, renderBudgetKpi, ensureDashMap, popupHtml, showAddFindingPopup, renderMap, highlightPin, flashRow, CAMERA_SVG, ageHtml, renderTable, updateSelectionUI, buildTagOptions, renderList, toggleMapPresentation, resetMapView, togglePresSidebar, toggleRiskRadius, revealListSkeleton,
+  loadFindings, ageDays, STATUS_RANK, sortFindings, loadDetail, loadPublicFinding, photoUrl, applyFilters, KPI_RING_CIRCUMFERENCE, renderKpis, renderBudgetKpi, ensureDashMap, popupHtml, showAddFindingPopup, renderMap, highlightPin, flashRow, CAMERA_SVG, ageHtml, renderTable, updateSelectionUI, buildTagOptions, renderList, toggleMapPresentation, resetMapView, togglePresSidebar, toggleRiskRadius, revealListSkeleton, swapText,
 } from './features/dashboard';
 
 /* ---------------- CSV export (filtered register, Excel-friendly UTF-8 BOM) ---------------- */
@@ -473,16 +473,18 @@ function initApp() {
   });
   // Register photo thumbnails: remembered on/off (localStorage), applied on load before the
   // first render so the register never flashes photos-on then off.
-  const applyPhotoToggle = (hidden) => {
+  const applyPhotoToggle = (hidden, animate) => {
     document.body.classList.toggle('hide-row-photos', hidden);
-    $('btnTogglePhotos').textContent = hidden ? 'Show photos' : 'Hide photos';
+    const label = $('btnTogglePhotos').querySelector('.t-text-swap');
+    const next = hidden ? 'Show photos' : 'Hide photos';
+    if (animate) swapText(label, next); else label.textContent = next;
     $('btnTogglePhotos').setAttribute('aria-pressed', String(!hidden));
   };
-  applyPhotoToggle(localStorage.getItem('hideRowPhotos') === '1');
+  applyPhotoToggle(localStorage.getItem('hideRowPhotos') === '1', false); // no swap on initial restore
   $('btnTogglePhotos').addEventListener('click', () => {
     const hidden = !document.body.classList.contains('hide-row-photos');
     localStorage.setItem('hideRowPhotos', hidden ? '1' : '0');
-    applyPhotoToggle(hidden);
+    applyPhotoToggle(hidden, true);
   });
   $('btnExport').addEventListener('click', openExportDialog);
   $('exportCancel').addEventListener('click', () => closeDialog($('exportDlg')));

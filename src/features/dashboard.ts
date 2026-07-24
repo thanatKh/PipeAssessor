@@ -57,6 +57,18 @@ export function renderMapLegend(rows) {
     .join('') + overdueEntry;
 }
 
+// skeleton loader and reveal (transitions.dev): #listSkelWrap mounts already showing the pulsing
+// skeleton (baked into index.html) so it's visible before any JS runs. Call this once, after the
+// first successful loadFindings()+renderList() on the #/list route, to cross-fade to the real
+// table. It's a one-shot per page session — later loadFindings() calls (returning to the list,
+// post-save/import refreshes) just re-render in place with no repeat skeleton flash.
+let listSkeletonPending = true;
+export function revealListSkeleton() {
+  if (!listSkeletonPending) return;
+  listSkeletonPending = false;
+  $('listSkelWrap')?.classList.add('is-revealed');
+}
+
 export async function loadFindings() {
   selectedIds.clear(); // fresh data -> drop any selection from a previous load (ids may be stale)
   const [fq, pq] = await Promise.all([
@@ -164,6 +176,29 @@ export function applyFilters(rows) {
 // in absolute SVG units, not percentages, so this constant drives the fill math below.
 export const KPI_RING_CIRCUMFERENCE = 2 * Math.PI * 42;
 
+// number pop-in (transitions.dev): rebuilds #kpiRingPct as per-character spans and replays the
+// entrance animation, pairing with the ring arc's own stroke-dashoffset ease so neither the arc
+// nor the % text snaps instantly. No-ops when the value hasn't changed so redundant renderKpis()
+// calls (e.g. back-to-back filter changes) don't replay the animation on an unchanged number.
+function setRingPct(str) {
+  const el = $('kpiRingPct');
+  if (el.dataset.val === str) return;
+  el.dataset.val = str;
+  el.classList.remove('is-animating');
+  el.replaceChildren();
+  const chars = str.split('');
+  chars.forEach((ch, i) => {
+    const span = document.createElement('span');
+    span.className = 't-digit';
+    span.textContent = ch;
+    if (i === chars.length - 2) span.dataset.stagger = '1';
+    else if (i === chars.length - 1) span.dataset.stagger = '2';
+    el.appendChild(span);
+  });
+  void el.offsetHeight; // force reflow so the animation restarts
+  el.classList.add('is-animating');
+}
+
 export function renderKpis() {
   const count = (st) => findings.filter(f => f.status === st).length;
   const overdue = findings.filter(isOverdue).length;
@@ -198,7 +233,7 @@ export function renderKpis() {
   const offset = KPI_RING_CIRCUMFERENCE * (1 - (total > 0 ? complete / total : 0));
   $('kpiRingFill').style.strokeDasharray = `${KPI_RING_CIRCUMFERENCE}`;
   $('kpiRingFill').style.strokeDashoffset = `${offset}`;
-  $('kpiRingPct').textContent = `${pct}%`;
+  setRingPct(`${pct}%`);
   $('kpiRingFraction').textContent = `${complete} of ${total}`;
   $('kpiRingCard').classList.toggle('active', filters.status === '__complete');
 
@@ -244,9 +279,10 @@ export function updateFilterUI() {
   $('filSearch')?.classList.toggle('has-filter', isQ);
 
   const activeCount = [isTerm, isStat, isType, isSev, isQ].filter(Boolean).length;
+  const badgeWrap = $('filActiveBadgeWrap');
   const badge = $('filActiveBadge');
-  if (badge) {
-    badge.hidden = activeCount === 0;
+  if (badgeWrap && badge) {
+    badgeWrap.dataset.open = String(activeCount > 0);
     badge.textContent = `${activeCount}`;
   }
 }
@@ -379,7 +415,7 @@ export function toggleRiskRadius(forceState) {
   const next = typeof forceState === 'boolean' ? forceState : !mapShowRiskRadius;
   setMapShowRiskRadius(next);
   const btn = $('btnRiskRadius');
-  if (btn) { btn.classList.toggle('is-on', next); btn.setAttribute('aria-checked', String(next)); }
+  if (btn) { btn.classList.add('is-init'); btn.classList.toggle('is-on', next); btn.setAttribute('aria-checked', String(next)); }
   renderRiskRadius(lastRenderedRows.filter(f => f.lat != null && f.lng != null));
 }
 
@@ -538,6 +574,21 @@ export function renderTable(rows) {
   updateSelectionUI();
 }
 
+// text states swap (transitions.dev): old text exits up+blurred, new text enters from below.
+// No-ops when the text hasn't changed so a re-render with the same value doesn't replay it.
+export function swapText(el, next) {
+  if (!el || el.textContent === next) return;
+  el.classList.add('is-exit');
+  const dur = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--text-swap-dur')) || 150;
+  setTimeout(() => {
+    el.textContent = next;
+    el.classList.remove('is-exit');
+    el.classList.add('is-enter-start');
+    void el.offsetHeight; // force reflow so the entrance transitions
+    el.classList.remove('is-enter-start');
+  }, dur);
+}
+
 // Syncs the header "select all" checkbox (checked/indeterminate) and the selection bar
 // (count + Summary PDF button label) to the current selectedIds / rendered-rows state.
 export function updateSelectionUI() {
@@ -555,14 +606,14 @@ export function updateSelectionUI() {
     else tr.removeAttribute('data-state');
   });
   const bar = $('selBar');
-  const btn = $('btnExport');
+  const btn = $('btnExport').querySelector('.t-text-swap');
   if (selectedIds.size > 0) {
     bar.hidden = false;
     $('selCount').textContent = `${selectedIds.size} selected`;
-    btn.textContent = `Export (${selectedIds.size})`;
+    swapText(btn, `Export (${selectedIds.size})`);
   } else {
     bar.hidden = true;
-    btn.textContent = 'Export';
+    swapText(btn, 'Export');
   }
 }
 
@@ -624,13 +675,14 @@ export function toggleMapPresentation(forceState?: boolean) {
   const wasPres = panel.classList.contains('map-presentation');
   if (isPres === wasPres) return;
 
-  const EXPAND_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>`;
-  const COLLAPSE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="10" y1="14" x2="3" y2="21"></line></svg>`;
-
+  // icon swap (transitions.dev): both the expand and collapse glyphs live in the DOM
+  // permanently (see index.html's .t-icon-swap markup) — cross-fade via data-state instead of
+  // replacing innerHTML, which used to snap between icons with no transition at all.
+  const iconSwap = btn.querySelector('.t-icon-swap');
+  if (iconSwap) iconSwap.setAttribute('data-state', isPres ? 'b' : 'a');
   // Icon-only — title carries the visible tooltip/shortcut hint; aria-label carries the same text
   // as the accessible name, since title alone isn't reliably exposed to screen readers on a button
   // with no visible text content.
-  btn.innerHTML = isPres ? COLLAPSE_ICON : EXPAND_ICON;
   const presLabel = isPres ? 'Exit presentation mode (ESC)' : 'Toggle full-screen presentation mode (press F)';
   btn.title = presLabel;
   btn.setAttribute('aria-label', presLabel);
@@ -690,7 +742,13 @@ export function toggleMapPresentation(forceState?: boolean) {
       done = true;
       panel.classList.remove('map-presentation', 'map-presentation-out');
       panel.removeEventListener('animationend', finish);
-      if (dashMap) dashMap.invalidateSize();
+      if (dashMap) {
+        dashMap.invalidateSize();
+        // Mirror of the entry fix: presentation mode fits/zooms in for the full-screen container,
+        // so once it shrinks back to the normal dashboard size that same zoom now shows too little
+        // area — refit to the plotted points at the smaller container's dimensions too.
+        resetMapView();
+      }
     };
     panel.addEventListener('animationend', finish, { once: true });
     setTimeout(finish, 200);
@@ -699,7 +757,14 @@ export function toggleMapPresentation(forceState?: boolean) {
   if (dashMap) {
     dashMap.invalidateSize();
     setTimeout(() => dashMap.invalidateSize(), 50);
-    setTimeout(() => dashMap.invalidateSize(), 250);
+    setTimeout(() => {
+      dashMap.invalidateSize();
+      // The container just grew to full-screen but the map kept its previous (smaller-view)
+      // zoom/center — at that same zoom level the much bigger viewport now shows far more
+      // surrounding area, which reads as "zoomed out" relative to the plotted points. Refit
+      // once the expand animation has settled, same fit-bounds logic as the Reset View button.
+      if (isPres) resetMapView();
+    }, 250);
   }
 }
 
@@ -753,12 +818,32 @@ export function togglePresSidebar(forceState?: boolean) {
   if (!sidebar) return;
 
   const show = typeof forceState === 'boolean' ? forceState : sidebar.hidden;
-  sidebar.hidden = !show;
   btn?.classList.toggle('active', show);
 
-  if (dashMap) {
+  const invalidate = () => {
+    if (!dashMap) return;
     dashMap.invalidateSize();
     setTimeout(() => dashMap.invalidateSize(), 50);
     setTimeout(() => dashMap.invalidateSize(), 250);
+  };
+
+  if (show) {
+    sidebar.classList.remove('pres-sidebar-out');
+    sidebar.hidden = false;
+    invalidate(); // the map reflows to the sidebar's width immediately; only the sidebar's own
+                   // content animates in via slideInRight, so this stays synchronous with open
+  } else {
+    if (sidebar.hidden) return; // already closed — .pres-sidebar-out CSS existed but nothing
+                                 // ever applied it, so close used to just snap via [hidden] with
+                                 // no animation at all, unlike open's slideInRight
+    sidebar.classList.add('pres-sidebar-out');
+    // read from the CSS custom property (rather than hardcoding) so this stays in sync with
+    // .pres-sidebar-out's own animation-duration if --duration-medium is ever retuned
+    const closeMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--duration-medium')) || 350;
+    setTimeout(() => {
+      sidebar.hidden = true;
+      sidebar.classList.remove('pres-sidebar-out');
+      invalidate(); // wait for the close animation so the map only widens once the sidebar is gone
+    }, closeMs);
   }
 }

@@ -591,7 +591,16 @@ export function initTagCombo() {
   let items = [];   // current filtered [{tag, location, terminal}]
   let active = -1;  // highlighted index
 
-  const close = () => { menu.hidden = true; input.setAttribute('aria-expanded', 'false'); active = -1; };
+  const isOpen = () => menu.classList.contains('is-open');
+  const close = () => {
+    if (!isOpen()) return;
+    const closeMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dropdown-close-dur')) || 150;
+    menu.classList.remove('is-open');
+    menu.classList.add('is-closing');
+    setTimeout(() => menu.classList.remove('is-closing'), closeMs);
+    input.setAttribute('aria-expanded', 'false');
+    active = -1;
+  };
 
   // position:fixed menu — escape .panel's overflow:hidden (see the .combo-menu CSS comment).
   // Re-measured on every open since the field can be anywhere in a scrolled form.
@@ -612,7 +621,8 @@ export function initTagCombo() {
         (matchCount > TAG_COMBO_MAX ? `<li class="combo-more">Showing ${TAG_COMBO_MAX} of ${matchCount} — keep typing to narrow</li>` : '');
     }
     position();
-    menu.hidden = false;
+    menu.classList.remove('is-closing');
+    menu.classList.add('is-open');
     input.setAttribute('aria-expanded', 'true');
   };
 
@@ -638,11 +648,11 @@ export function initTagCombo() {
   input.addEventListener('focus', openFiltered);
   input.addEventListener('input', openFiltered);
   // changing Terminal re-scopes the tag list — re-filter if the menu happens to be open
-  $('fTerminal').addEventListener('change', () => { if (!menu.hidden) openFiltered(); });
-  window.addEventListener('resize', () => { if (!menu.hidden) position(); });
-  window.addEventListener('scroll', () => { if (!menu.hidden) position(); }, true);
+  $('fTerminal').addEventListener('change', () => { if (isOpen()) openFiltered(); });
+  window.addEventListener('resize', () => { if (isOpen()) position(); });
+  window.addEventListener('scroll', () => { if (isOpen()) position(); }, true);
   input.addEventListener('keydown', (e) => {
-    if (menu.hidden) return;
+    if (!isOpen()) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); active = Math.min(active + 1, items.length - 1); render(); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, 0); render(); }
     else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); choose(active); }
@@ -974,13 +984,19 @@ export function collectForm() {
 
   let bad = false;
   const need = (id, errId, cond) => {
+    const el = $(id);
     if (cond) {
-      $(id).setAttribute('aria-invalid', 'true');
+      el.setAttribute('aria-invalid', 'true');
       $(errId).style.display = 'block';
+      // replay the shake even if it's already invalid (e.g. a repeat Save click)
+      el.classList.remove('is-shaking');
+      void el.offsetWidth; // force reflow so the animation restarts
+      el.classList.add('is-shaking');
       bad = true;
     } else {
-      $(id).removeAttribute('aria-invalid');
+      el.removeAttribute('aria-invalid');
       $(errId).style.display = 'none';
+      el.classList.remove('is-shaking');
     }
   };
   need('fTerminal', 'errTerminal', !val('fTerminal'));

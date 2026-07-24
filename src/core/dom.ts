@@ -134,12 +134,16 @@ export function setPageLoading(loading) {
 
 export function setBusy(btn, busy, busyText) {
   if (!btn) return;
+  // if the button wraps its label in a .t-text-swap span (see #btnExport), write through that
+  // span instead of the button itself — btn.textContent = ... would destroy the wrapper element
+  // on the first busy toggle and silently kill its transition for the rest of the session.
+  const labelEl = btn.querySelector('.t-text-swap') || btn;
   if (busy) {
-    btn.dataset.label = btn.textContent;
-    btn.textContent = busyText || 'Working…';
+    btn.dataset.label = labelEl.textContent;
+    labelEl.textContent = busyText || 'Working…';
     btn.disabled = true;
   } else {
-    if (btn.dataset.label) btn.textContent = btn.dataset.label;
+    if (btn.dataset.label) labelEl.textContent = btn.dataset.label;
     btn.disabled = false;
   }
 }

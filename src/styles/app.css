@@ -43,6 +43,10 @@
 
     .login-err {
       display: none;
+      /* reuses .validation-alert's t-error-reveal fade-in (see below) — same display:none/block
+         toggle pattern, so the same "restart on display:none -> block" trick applies with no JS
+         changes needed. */
+      animation: t-error-reveal var(--revert-dur) ease-out;
       font-size: var(--fs-sm); /* was 11.5px */
       color: var(--danger-text);
       background: var(--danger-bg);
@@ -179,7 +183,7 @@
     }
     @media (prefers-reduced-motion: reduce) {
       .input.is-shaking, .select.is-shaking { animation: none !important; }
-      .validation-alert { animation: none !important; }
+      .validation-alert, .login-err { animation: none !important; }
     }
 
     /* ============ Dashboard top: map left, KPI column right ============
@@ -278,10 +282,97 @@
     .kb-sev-btn.kb-lo i { background: var(--ok-color); }
     .kb-sev-btn b { font-family: 'Google Sans', sans-serif; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text-color); }
 
+    /* text states swap (transitions.dev) — #btnExport's label ("Export" <-> "Export (N)"),
+       see dashboard.ts's updateSelectionUI(). */
+    :root {
+      --text-swap-dur: 150ms;
+      --text-swap-translate-y: 4px;
+      --text-swap-blur: 2px;
+      --text-swap-ease: ease-in-out;
+    }
+    .t-text-swap {
+      display: inline-block;
+      transform: translateY(0);
+      filter: blur(0);
+      opacity: 1;
+      transition: transform var(--text-swap-dur) var(--text-swap-ease),
+                  filter var(--text-swap-dur) var(--text-swap-ease),
+                  opacity var(--text-swap-dur) var(--text-swap-ease);
+      will-change: transform, filter, opacity;
+    }
+    .t-text-swap.is-exit {
+      transform: translateY(calc(var(--text-swap-translate-y) * -1));
+      filter: blur(var(--text-swap-blur));
+      opacity: 0;
+    }
+    .t-text-swap.is-enter-start {
+      transform: translateY(var(--text-swap-translate-y));
+      filter: blur(var(--text-swap-blur));
+      opacity: 0;
+      transition: none;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .t-text-swap { transition: none !important; }
+    }
+
     /* Button grouping & Filter UI enhancements */
     .hdr-btn-group-subtle { display: inline-flex; gap: 4px; background: rgba(0,0,0,0.03); padding: 2px; border-radius: 6px; border: 1px solid var(--card-border); }
     .select.has-filter, .input.has-filter { border-color: var(--button-primary) !important; background-color: rgba(21, 107, 149, 0.03) !important; font-weight: 600; }
-    .filter-active-badge { display: inline-flex; align-items: center; justify-content: center; background: var(--button-primary); color: #ffffff; font-size: var(--fs-xs); font-weight: 700; width: 16px; height: 16px; border-radius: 50%; margin-left: 4px; }
+
+    /* notification badge (transitions.dev) — #filActiveBadgeWrap slides+pops onto #btnResetFilters
+       corner, see updateFilterUI(). #btnResetFilters needs position:relative to anchor it. */
+    :root {
+      --badge-slide-dur: 260ms;
+      --badge-pop-dur: 500ms;
+      --badge-pop-close-dur: 180ms;
+      --badge-fade-dur: 400ms;
+      --badge-fade-close-dur: 180ms;
+      --badge-blur: 2px;
+      --badge-offset-x: -8.2px;
+      --badge-offset-y: 12.4px;
+      --badge-slide-ease: cubic-bezier(0.22, 1, 0.36, 1);
+      --badge-pop-ease: cubic-bezier(0.34, 1.36, 0.64, 1);
+      --badge-close-ease: cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    #btnResetFilters { position: relative; }
+    .t-badge {
+      position: absolute;
+      top: -6px;
+      right: -8px;
+      pointer-events: none;
+      will-change: transform;
+    }
+    .t-badge[data-open="true"] {
+      animation: t-badge-slide-in var(--badge-slide-dur) var(--badge-slide-ease);
+    }
+    @keyframes t-badge-slide-in {
+      from { transform: translate(var(--badge-offset-x), var(--badge-offset-y)); }
+      to   { transform: translate(0, 0); }
+    }
+    .filter-active-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--button-primary); color: #ffffff; font-size: var(--fs-xs); font-weight: 700;
+      width: 16px; height: 16px; border-radius: 50%;
+      transform-origin: center;
+      transform: scale(1);
+      opacity: 1;
+      filter: blur(0);
+      transition: transform var(--badge-pop-dur) var(--badge-pop-ease),
+                  opacity var(--badge-fade-dur) var(--badge-pop-ease),
+                  filter var(--badge-pop-dur) var(--badge-pop-ease);
+      will-change: transform, opacity, filter;
+    }
+    .t-badge[data-open="false"] .filter-active-badge {
+      transform: scale(0);
+      opacity: 0;
+      filter: blur(var(--badge-blur));
+      transition: transform var(--badge-pop-close-dur) var(--badge-close-ease),
+                  opacity var(--badge-fade-close-dur) var(--badge-close-ease),
+                  filter var(--badge-pop-close-dur) var(--badge-close-ease);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .t-badge, .filter-active-badge { animation: none !important; transition: none !important; }
+    }
 
     /* Table row hover affordance. The left accent border is reserved (transparent) on every row
        so hovering only swaps its color, not its width — an actual width change here shifts every
@@ -378,6 +469,40 @@
       font-size: var(--fs-3xl);
       font-weight: 700;
       line-height: 1.1;
+      /* number pop-in (transitions.dev) — .kpi-ring-pct doubles as the .t-digit-group container,
+         see renderKpis()'s setRingPct() helper. Pairs with the ring arc's own stroke-dashoffset
+         transition (kpi-ring-fill above) so the % text no longer teleports while the arc eases. */
+      display: inline-flex;
+      align-items: baseline;
+    }
+    :root {
+      --digit-dur: 500ms;
+      --digit-distance: 8px;
+      --digit-stagger: var(--duration-micro); /* usage: "large stagger" */
+      --digit-blur: var(--blur-small); /* usage: "number pop-in" */
+      --digit-ease: cubic-bezier(0.34, 1.45, 0.64, 1);
+      --digit-dir-x: 0;
+      --digit-dir-y: 1;
+    }
+    .kpi-ring-pct .t-digit {
+      display: inline-block;
+      will-change: transform, opacity, filter;
+    }
+    .kpi-ring-pct.is-animating .t-digit {
+      animation: t-digit-pop-in var(--digit-dur) var(--digit-ease) both;
+    }
+    .kpi-ring-pct.is-animating .t-digit[data-stagger="1"] { animation-delay: var(--digit-stagger); }
+    .kpi-ring-pct.is-animating .t-digit[data-stagger="2"] { animation-delay: calc(var(--digit-stagger) * 2); }
+    @keyframes t-digit-pop-in {
+      0%   {
+        transform: translate(calc(var(--digit-distance) * var(--digit-dir-x)), calc(var(--digit-distance) * var(--digit-dir-y)));
+        opacity: 0;
+        filter: blur(var(--digit-blur));
+      }
+      100% { transform: translate(0, 0); opacity: 1; filter: blur(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .kpi-ring-pct .t-digit { animation: none !important; }
     }
 
     /* Text block to the right of the ring (see .kpi-ring-card row layout) — same eyebrow-label +
@@ -537,6 +662,38 @@
     }
     .map-layer-toggle:hover { border-color: var(--button-primary, #156B95); }
     .map-layer-toggle svg { flex: none; width: 12px; height: 12px; opacity: 0.7; }
+
+    /* icon swap (transitions.dev) — #btnMapExpand's expand/collapse glyphs, see
+       toggleMapPresentation(). Both icons stay in the DOM stacked in the same grid cell. */
+    :root {
+      --icon-swap-dur: 250ms;
+      --icon-swap-blur: 2px;
+      --icon-swap-start-scale: 0.25;
+      --icon-swap-ease: ease-in-out;
+    }
+    .t-icon-swap { position: relative; display: inline-grid; }
+    .t-icon-swap .t-icon {
+      grid-area: 1 / 1;
+      transition: opacity var(--icon-swap-dur) var(--icon-swap-ease),
+                  filter var(--icon-swap-dur) var(--icon-swap-ease),
+                  transform var(--icon-swap-dur) var(--icon-swap-ease);
+      will-change: opacity, filter, transform;
+    }
+    .t-icon-swap[data-state="a"] .t-icon[data-icon="a"],
+    .t-icon-swap[data-state="b"] .t-icon[data-icon="b"] {
+      opacity: 1;
+      filter: blur(0);
+      transform: scale(1);
+    }
+    .t-icon-swap[data-state="a"] .t-icon[data-icon="b"],
+    .t-icon-swap[data-state="b"] .t-icon[data-icon="a"] {
+      opacity: 0;
+      filter: blur(var(--icon-swap-blur));
+      transform: scale(var(--icon-swap-start-scale));
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .t-icon-swap .t-icon { transition: none !important; }
+    }
 
     /* toggle (transitions.dev) — double-bounce thumb travel, replacing the old flat 0.15s
        linear slide. .is-init is added on first click (see toggleRiskRadius) so the bounce-back
@@ -700,14 +857,14 @@
       display: flex !important;
       flex-direction: column !important;
       box-shadow: none !important;
-      animation: mapPresentationIn 250ms cubic-bezier(0.22, 1, 0.36, 1);
+      animation: mapPresentationIn var(--duration-fast) var(--ease-smooth-out);
     }
 
     /* Reverse-play the entrance animation on close; toggleMapPresentation adds this class instead
        of removing map-presentation immediately, so the overlay fades/scales out instead of
        vanishing on the same frame the class list changes. */
     .dash-map-panel.map-presentation-out {
-      animation: mapPresentationIn 180ms cubic-bezier(0.4, 0, 1, 1) reverse !important;
+      animation: mapPresentationIn var(--duration-quick) var(--ease-smooth-out) reverse !important;
     }
 
     @keyframes mapPresentationIn {
@@ -746,10 +903,12 @@
       flex-direction: column;
       overflow: hidden;
       box-shadow: 0 4px 20px rgba(15, 23, 42, 0.08);
-      animation: slideInRight 200ms cubic-bezier(0.22, 1, 0.36, 1);
+      animation: slideInRight var(--duration-slow) var(--ease-smooth-out);
     }
     .pres-sidebar.pres-sidebar-out {
-      animation: slideInRight 150ms cubic-bezier(0.4, 0, 1, 1) reverse !important;
+      /* duration must stay in sync with togglePresSidebar()'s close setTimeout in dashboard.ts,
+         which reads this same --duration-medium token rather than hardcoding it */
+      animation: slideInRight var(--duration-medium) var(--ease-smooth-out) reverse !important;
     }
 
     @keyframes slideInRight {
@@ -1255,6 +1414,70 @@
     .filters .select, .filters .input { height: 34px; font-size: var(--fs-base); }
     .filters .select { width: auto; min-width: 120px; }
     .filters .input { flex: 1 1 160px; min-width: 140px; }
+
+    /* skeleton loader and reveal (transitions.dev) — #listSkelWrap, first register load only,
+       see dashboard.ts's showListSkeleton()/revealListSkeleton(). Adapted from the stock snippet:
+       the real content (variable-height, data-dependent row count) can't stay position:absolute
+       permanently like the skeleton — .is-revealed flips .t-skel-content back to static so its
+       real height governs the panel again, instead of the panel collapsing to the loading-phase
+       min-height forever. The skeleton stays absolute throughout since it's decorative/fixed-size. */
+    :root {
+      --pulse-dur: 1000ms;
+      --pulse-count: 1;
+      --pulse-min: 0.5;
+      --reveal-dur: var(--duration-slow); /* usage: "skeleton content reveal" */
+      --reveal-blur: var(--blur-small); /* usage: "skeleton reveal" */
+      --reveal-ease: ease-in-out;
+    }
+    .t-skel { position: relative; min-height: 320px; }
+    .t-skel.is-revealed { min-height: 0; }
+    .t-skel-skeleton {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      opacity: 1;
+      filter: blur(0);
+      transition: opacity var(--reveal-dur) var(--reveal-ease), filter var(--reveal-dur) var(--reveal-ease);
+    }
+    .t-skel-content {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      opacity: 0;
+      filter: blur(var(--reveal-blur));
+      transition: opacity var(--reveal-dur) var(--reveal-ease), filter var(--reveal-dur) var(--reveal-ease);
+    }
+    .t-skel.is-revealed .t-skel-skeleton {
+      opacity: 0;
+      filter: blur(var(--reveal-blur));
+      pointer-events: none;
+    }
+    .t-skel.is-revealed .t-skel-content {
+      position: static; /* rejoin normal flow so the real table's own height governs the panel */
+      opacity: 1;
+      filter: blur(0);
+    }
+    .t-skel-skeleton.is-pulsing > .skel-row {
+      animation: t-skel-pulse var(--pulse-dur) ease-in-out var(--pulse-count);
+    }
+    @keyframes t-skel-pulse {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: var(--pulse-min); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .t-skel-skeleton, .t-skel-content { transition: none !important; }
+      .t-skel-skeleton.is-pulsing > .skel-row { animation: none !important; }
+    }
+    /* skeleton row: plain gray bars roughly proportioned to the real register row's
+       checkbox/status-pill/tag/terminal/age/due columns, not a pixel-exact clone. */
+    .skel-row { display: flex; align-items: center; gap: 14px; height: 52px; padding: 0 14px; border-bottom: 1px solid var(--card-border); }
+    .skel-chip, .skel-bar { display: block; border-radius: 5px; background: var(--closed-border, #e2e8f0); flex: none; }
+    .skel-chip { width: 16px; height: 16px; border-radius: 4px; }
+    .skel-bar.skel-status { width: 64px; height: 18px; border-radius: 20px; }
+    .skel-bar.skel-tag { width: 160px; height: 14px; flex: 1 1 160px; max-width: 260px; }
+    .skel-bar.skel-term { width: 44px; height: 14px; }
+    .skel-bar.skel-age { width: 36px; height: 14px; }
+    .skel-bar.skel-due { width: 70px; height: 14px; margin-left: auto; }
 
     /* ============ Findings table ============ */
     .tbl-scroll { overflow-x: auto; }

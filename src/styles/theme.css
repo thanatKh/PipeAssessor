@@ -64,6 +64,21 @@
   --fs-5xl: 20px;   /* KPI card headline number */
   --fs-hero: 26px;  /* largest numeric hero (Risk Ranking KPI band) */
 
+  /* Shared motion-token scale (transitions.dev) — only the handful of roles referenced by
+     already-existing app.css/theme.css animations (presentation-mode expand/collapse, sidebar
+     slide, accordion chevron, number pop-in, skeleton reveal), matched by usage per
+     transitions.dev's own table, not by raw number. Each per-transition block (--dropdown-*,
+     --modal-*, --toggle-*, etc.) still keeps its own separate tunables on purpose — those
+     aren't meant to collapse into this smaller set, only values whose usage genuinely matches
+     one of these named roles. */
+  --duration-micro: 80ms;   /* tooltip/path delay, shake segment, large stagger */
+  --duration-quick: 150ms;  /* modal/dropdown/panel close */
+  --duration-fast: 250ms;   /* dropdown/modal open, page slide, resize/position change */
+  --duration-medium: 350ms; /* panel close */
+  --duration-slow: 400ms;   /* panel open */
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1); /* open/close, resize, position change */
+  --blur-small: 2px; /* panel reveal, icon swap, text swap, skeleton reveal, number pop-in */
+
   --card-bg: #ffffff;
   --card-border: #e2e8f0;
 
@@ -553,7 +568,7 @@ details.panel.is-closing[open] > .panel-b-track > .panel-b-inner {
   border-right: 2px solid var(--text-muted);
   border-bottom: 2px solid var(--text-muted);
   transform: rotate(45deg);
-  transition: transform 0.2s;
+  transition: transform var(--acc-expand) var(--acc-ease); /* matches the panel's own accordion timing */
   flex-shrink: 0;
   margin-top: -3px;
 }

@@ -5,7 +5,13 @@
       "source": "Jakubantalik/transitions.dev",
       "sourceType": "github",
       "skillPath": "skills/transitions-dev/SKILL.md",
-      "computedHash": "c4b2cf217a55ccba7c1646ca42b4db19eef82f1b01c3f27253c6e68f1c653445"
+      "computedHash": "4aa6969ce904d2629864ba2e799d2f12cb9f034d11598449f9ee1377387d150a"
+    },
+    "transitions-polish": {
+      "source": "Jakubantalik/transitions.dev",
+      "sourceType": "github",
+      "skillPath": "skills/transitions-polish/SKILL.md",
+      "computedHash": "f1dd8e76b5fb275447b5dcd2e24dcd8f9bcda7b93361163754ccdff957e30509"
     }
   }
 }
