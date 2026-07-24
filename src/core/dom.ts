@@ -108,6 +108,16 @@ export function notify(msg, isError) {
   $('toaster').toast({ category: isError ? 'error' : 'success', description: msg });
 }
 
+// Global top-of-header loading bar (see .page-loading-bar in theme.css). Reference-counted so
+// overlapping loads (e.g. route()'s loadFindings() + loadLineList() both in flight) don't have
+// one finishing early hide the bar while the other is still pending — only the last matching
+// setPageLoading(false) actually clears body.is-loading.
+let pageLoadingCount = 0;
+export function setPageLoading(loading) {
+  pageLoadingCount = Math.max(0, pageLoadingCount + (loading ? 1 : -1));
+  document.body.classList.toggle('is-loading', pageLoadingCount > 0);
+}
+
 export function setBusy(btn, busy, busyText) {
   if (!btn) return;
   if (busy) {

@@ -30,7 +30,7 @@ import {
 } from './core/constants';
 
 import {
-  $, val, positionSegPill, closeDialog, esc, notify, setBusy,
+  $, val, positionSegPill, closeDialog, esc, notify, setBusy, setPageLoading,
 } from './core/dom';
 
 function updateAuthUI() {
@@ -214,56 +214,66 @@ async function route() {
   document.body.classList.remove('public-view'); // any non-share route is the normal authed app
   if (!session) { show('viewLogin'); return; }
 
-  if (h.startsWith('#/f/')) {
-    const ok = await loadDetail(h.slice(4));
-    if (ok) { renderDetail(); show('viewDetail'); }
-    else location.hash = '#/list';
-    return;
-  }
-  if (h === '#/new') {
-    openForm(null);
-    show('viewForm');
-    return;
-  }
-  if (h === '#/calc') {
-    // standalone what-if workbench — nothing loads, nothing saves
-    show('viewCalc');
-    return;
-  }
-  if (h === '#/risk') {
-    // needs current findings + every finding's latest assessment — load fresh each visit so the
-    // ranking never shows stale data from before the last dashboard load
-    await loadFindings();
-    await loadRiskData();
-    show('viewRisk');
-    renderRiskPage();
-    return;
-  }
-  if (h.startsWith('#/edit/')) {
-    const id = h.slice(7);
-    let f = findings.find(x => x.id === id) || (current && current.id === id ? current : null);
-    if (!f) {
-      const { data, error } = await sb.from('findings').select('*').eq('id', id).single();
-      if (error) { notify('Finding not found.', true); location.hash = '#/list'; return; }
-      f = data;
+  // Every branch below awaits at least one Supabase round-trip before the view actually renders
+  // (most visibly right after sign-in, when this is the very first fetch of the session on
+  // possibly a slow connection). Surface the top loading bar for the whole span so a few seconds
+  // of "screen looks unchanged" reads as loading, not hung — see setPageLoading()/.page-loading-bar.
+  setPageLoading(true);
+  try {
+    if (h.startsWith('#/f/')) {
+      const ok = await loadDetail(h.slice(4));
+      if (ok) { renderDetail(); show('viewDetail'); }
+      else location.hash = '#/list';
+      return;
     }
-    openForm(f);
-    show('viewForm');
-    return;
+    if (h === '#/new') {
+      openForm(null);
+      show('viewForm');
+      return;
+    }
+    if (h === '#/calc') {
+      // standalone what-if workbench — nothing loads, nothing saves
+      show('viewCalc');
+      return;
+    }
+    if (h === '#/risk') {
+      // needs current findings + every finding's latest assessment — load fresh each visit so the
+      // ranking never shows stale data from before the last dashboard load
+      await loadFindings();
+      await loadRiskData();
+      show('viewRisk');
+      renderRiskPage();
+      return;
+    }
+    if (h.startsWith('#/edit/')) {
+      const id = h.slice(7);
+      let f = findings.find(x => x.id === id) || (current && current.id === id ? current : null);
+      if (!f) {
+        const { data, error } = await sb.from('findings').select('*').eq('id', id).single();
+        if (error) { notify('Finding not found.', true); location.hash = '#/list'; return; }
+        f = data;
+      }
+      openForm(f);
+      show('viewForm');
+      return;
+    }
+    // default: list — show the view BEFORE rendering so the Leaflet container has
+    // real dimensions (a map initialized inside display:none sizes to 0×0)
+    await loadFindings();
+    if (!lineList.length) await loadLineList(); // cheap no-op once cached
+    show('viewList');
+    renderList();
+    revealListSkeleton();
+  } finally {
+    setPageLoading(false);
   }
-  // default: list — show the view BEFORE rendering so the Leaflet container has
-  // real dimensions (a map initialized inside display:none sizes to 0×0)
-  await loadFindings();
-  if (!lineList.length) await loadLineList(); // cheap no-op once cached
-  show('viewList');
-  renderList();
 }
 
 /* ---------------- data ---------------- */
 
 
 import {
-  loadFindings, ageDays, STATUS_RANK, sortFindings, loadDetail, loadPublicFinding, photoUrl, applyFilters, KPI_RING_CIRCUMFERENCE, renderKpis, renderBudgetKpi, ensureDashMap, popupHtml, showAddFindingPopup, renderMap, highlightPin, flashRow, CAMERA_SVG, ageHtml, renderTable, updateSelectionUI, buildTagOptions, renderList, toggleMapPresentation, resetMapView, togglePresSidebar, toggleRiskRadius,
+  loadFindings, ageDays, STATUS_RANK, sortFindings, loadDetail, loadPublicFinding, photoUrl, applyFilters, KPI_RING_CIRCUMFERENCE, renderKpis, renderBudgetKpi, ensureDashMap, popupHtml, showAddFindingPopup, renderMap, highlightPin, flashRow, CAMERA_SVG, ageHtml, renderTable, updateSelectionUI, buildTagOptions, renderList, toggleMapPresentation, resetMapView, togglePresSidebar, toggleRiskRadius, revealListSkeleton,
 } from './features/dashboard';
 
 /* ---------------- CSV export (filtered register, Excel-friendly UTF-8 BOM) ---------------- */
@@ -410,15 +420,22 @@ function initApp() {
       const flipped = event === 'INITIAL_SESSION' || wasAuthed !== !!s;
       // Resolve the role BEFORE routing so the first paint already has the right chrome — a later
       // fetch would briefly render maintenance-only controls to an inspector. Only on a real flip:
-      // re-fetching on every TOKEN_REFRESHED would be a pointless request every hour.
-      if (flipped) await loadProfile();
-      updateAuthUI();
-      // PASSWORD_RECOVERY fires when the user lands via the emailed reset link — Supabase has
-      // already signed them in with a recovery session at this point, so the normal `flipped ->
-      // route()` path below would send them straight to the dashboard instead of letting them set a
-      // new password. Show the dedicated view instead and skip the regular route() this one time.
-      if (event === 'PASSWORD_RECOVERY') { show('viewNewPassword'); return; }
-      if (flipped) route();
+      // re-fetching on every TOKEN_REFRESHED would be a pointless request every hour. This fetch
+      // (plus route()'s own below) is the visible "after sign-in, nothing happens for a moment"
+      // gap on a slow connection — keep the loading bar up across both.
+      if (flipped) setPageLoading(true);
+      try {
+        if (flipped) await loadProfile();
+        updateAuthUI();
+        // PASSWORD_RECOVERY fires when the user lands via the emailed reset link — Supabase has
+        // already signed them in with a recovery session at this point, so the normal `flipped ->
+        // route()` path below would send them straight to the dashboard instead of letting them set
+        // a new password. Show the dedicated view instead and skip the regular route() this one time.
+        if (event === 'PASSWORD_RECOVERY') { show('viewNewPassword'); return; }
+        if (flipped) route(); // route() manages its own setPageLoading span; not awaited here (unchanged from before)
+      } finally {
+        if (flipped) setPageLoading(false);
+      }
     }, 0);
   });
 
