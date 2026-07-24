@@ -2416,24 +2416,6 @@ body.role-inspector #btnAddRepaired2 {
   display: none !important;
 }
 
-.role-badge {
-  font-size: var(--fs-2xs);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  background: var(--button-ghost-hover, #f1f5f9);
-  border: 1px solid var(--card-border);
-  padding: 2px 7px;
-  border-radius: 999px;
-  white-space: nowrap;
-}
-body.role-maintenance .role-badge {
-  color: var(--button-primary);
-  border-color: var(--button-primary);
-  background: rgba(21, 107, 149, 0.08);
-}
-
 /* ---- Login panel: Sign in vs Create account (body.auth-register) ---- */
 .register-only { display: none; }
 body.auth-register .register-only { display: revert; }

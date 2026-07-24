@@ -208,12 +208,13 @@ body > header .wrap {
 /* <480px: the title text drops (the logo alone carries brand identity at this width; the full
    name is still in the browser tab) and buttons condense to fit. Brand + actions still try to
    share one row (flex-wrap here, not nowrap) — a fixed `nowrap` was tried once but broke down
-   as soon as the role badge (#hdrRole) and the Users button existed: with 5-6 items (logo, role
-   badge, Line Risk, Quick Calc, Users, Sign out) there is no amount of shrinking that fits them
-   on one un-wrapping row on a real phone, and forcing it just pushed the header — and with it
-   the whole page, since nothing else clips it — wider than the physical screen. Wrapping lets
-   .header-actions (role badge + button group) drop to its own row only when it doesn't fit,
-   instead of overflowing. */
+   once the roles feature added the Users button: with 4-5 items (logo, Line Risk, Quick Calc,
+   Users, Sign out) there is no amount of shrinking that fits them on one un-wrapping row on a
+   real phone, and forcing it just pushed the header — and with it the whole page, since nothing
+   else clips it — wider than the physical screen. Wrapping lets .header-actions (the button
+   group) drop to its own row only when it doesn't fit, instead of overflowing. Any future header
+   item (badges, counters, etc.) should assume this row can grow again — wrap, don't force
+   nowrap. */
 @media (max-width: 480px) {
   body > header .wrap {
     flex-wrap: wrap;

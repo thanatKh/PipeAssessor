@@ -40,11 +40,6 @@ function updateAuthUI() {
   document.body.classList.toggle('role-inspector', !!session && !isMaintenance());
   document.body.classList.toggle('role-maintenance', !!session && isMaintenance());
   $('hdrUser').textContent = session ? (session.user.email || '') : '';
-  const roleEl = $('hdrRole');
-  if (roleEl) {
-    roleEl.textContent = session ? (isMaintenance() ? 'Maintenance' : 'Inspector') : '';
-    roleEl.hidden = !session;
-  }
 }
 
 /* Read the signed-in user's role from public.profiles. Called before route() on every sign-in so
