@@ -15,15 +15,18 @@
 
 <h2>Features</h2>
 <ul>
-    <li><strong>Findings dashboard:</strong> a satellite map (colorable by status, finding type, or severity, with a live count per legend entry) + KPI summary (completion ring, outstanding repair budget, status counts) alongside a filterable, searchable register of every finding.</li>
+    <li><strong>Findings dashboard:</strong> a satellite map (colorable by status, finding type, or severity, with a live count per legend entry, plus a presentation mode for meetings) + KPI summary (completion ring, outstanding repair budget, status counts) alongside a filterable, searchable register of every finding.</li>
     <li><strong>Full lifecycle tracking:</strong> each finding moves through Open, Monitoring, Repair Planned, Repaired, and Closed, with a full status-change history and overdue tracking against target/re-inspection dates.</li>
     <li><strong>ASME B31.3 assessment workbench:</strong> dual input modes (wall-loss depth or measured minimum thickness, auto-derived from each other), required-thickness and MAWP calculations, a cross-section visualization, and a live OK / MONITOR / REPAIR status.</li>
+    <li><strong>Line Risk Ranking:</strong> a qualitative worst-case risk rollup per pipe line (not just per finding), grouped by damage mechanism and terminal, for prioritizing which lines need attention first.</li>
     <li><strong>Repair Advisor:</strong> a standalone recommendation panel covering every finding type (not just wall loss) — precise ASME PCC-2 categories when a numeric assessment is available, tailored guidance otherwise, with a safety-first overlay when a finding is marked actively leaking.</li>
     <li><strong>Remaining-life estimate:</strong> given a corrosion rate, estimates time remaining until the pipe reaches its minimum required thickness.</li>
-    <li><strong>Photo records:</strong> as-found and after-repair photos per finding, with camera capture support on mobile.</li>
-    <li><strong>PDF reports:</strong> a per-finding engineering report (assessment inputs, results, governing equations, repair advisor, site map, photos, history) and a management-summary PDF across the filtered register.</li>
+    <li><strong>Photo records:</strong> as-found and after-repair photos per finding, stored on Cloudflare R2, with camera capture support on mobile.</li>
+    <li><strong>PDF reports:</strong> a per-finding engineering report (assessment inputs, results, governing equations, repair advisor, site map, photos, history, and a scannable QR code linking to a public read-only view) and a management-summary PDF or presentation-slide deck across the filtered register.</li>
     <li><strong>Excel/CSV import and export:</strong> bulk-import findings and the master pipe-tag line list from a spreadsheet; export the register to CSV or PDF.</li>
     <li><strong>Quick calculator:</strong> a standalone what-if workbench (reachable from the header) for a one-off calculation that doesn't save anything.</li>
+    <li><strong>Roles and self-registration:</strong> email/password sign-in restricted to company domains, with Inspector (reporting) and Maintenance (repair planning, cost, and closeout) roles enforced at the database level.</li>
+    <li><strong>Public share links:</strong> each finding PDF includes a QR code to a read-only, no-sign-in-required web view of that one finding.</li>
 </ul>
 
 <hr>
@@ -44,6 +47,13 @@
     The heavy libraries (jsPDF, SheetJS) are loaded on demand, so they only download when a report or
     spreadsheet is actually generated. Full functionality requires signing in and a network connection
     (Supabase). See <code>CLAUDE.md</code> for the module layout, architecture notes, and conventions.
+</p>
+<p>
+    A working backend needs a Supabase project with <code>db/schema.sql</code> applied (paste it into
+    the Supabase SQL editor) and its URL/publishable key set in <code>src/core/supabase.ts</code>.
+    Photo uploads additionally need the Cloudflare Worker in <code>worker/</code> deployed
+    (<code>cd worker &amp;&amp; npx wrangler deploy</code>) against an R2 bucket — see
+    <code>CLAUDE.md</code> for the one-time setup steps.
 </p>
 
 <hr>
@@ -92,9 +102,10 @@
 
 <h2>Tech stack</h2>
 <p>
-    Vite + TypeScript (Vanilla, no framework) for the app shell; Supabase (Postgres + Storage + Auth)
-    for the backend; Leaflet for the satellite map; jsPDF + jspdf-autotable for PDF generation; SheetJS
-    for Excel/CSV import and export; Basecoat for the design-system component styles.
+    Vite + TypeScript (Vanilla, no framework) for the app shell; Supabase (Postgres + Auth) for the
+    backend and a small Cloudflare Worker + R2 bucket for photo storage; Leaflet for the satellite
+    map; jsPDF + jspdf-autotable for PDF generation; SheetJS for Excel/CSV import and export;
+    Basecoat for the design-system component styles.
 </p>
 
 <hr>
