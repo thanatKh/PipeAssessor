@@ -1303,10 +1303,11 @@
     }
 
     /* Register thumbnail: the earliest "as found" photo, sized to actually be readable at a
-       glance (not just a presence indicator). Hidden below 640px regardless of the toggle — the
-       mobile table is already tight on width (see the fixed-layout rules above) and the
-       camera-count chip on the tag itself still signals whether photos exist. The "Hide
-       photos" toggle (#btnTogglePhotos) sets body.hide-row-photos, remembered in localStorage. */
+       glance (not just a presence indicator). Shrinks (doesn't disappear) below 640px — see the
+       breakpoint rule further down — since the mobile table is already tight on width (see the
+       fixed-layout rules above). The "Hide photos" toggle (#btnTogglePhotos) sets
+       body.hide-row-photos, remembered in localStorage, and still fully collapses it on mobile
+       too (that rule wins on specificity regardless of breakpoint). */
     .c-tag-flex { display: flex; align-items: center; gap: 12px; }
     .c-tag-text { min-width: 0; }
     .row-thumb {
@@ -1355,7 +1356,15 @@
     body.hide-row-photos .t-type { margin-top: 0; }
     body.hide-row-photos .t-desc { margin-top: 0; }
     @media (max-width: 640px) {
-      .row-thumb { display: none; }
+      .c-tag-flex { gap: 8px; }
+      .row-thumb {
+        width: 40px;
+        height: 40px;
+        border-radius: 6px;
+      }
+      .row-thumb-empty { gap: 0; }
+      .row-thumb-empty span { display: none; }
+      .row-thumb-empty svg { width: 15px; height: 15px; }
     }
 
     /* Location/Anomaly description subtext under the finding type — muted, single-line
@@ -1404,12 +1413,19 @@
     @media (max-width: 640px) {
       table.register-table { table-layout: fixed; }
       table.register-table th:nth-child(1), table.register-table td:nth-child(1) { width: 26px; }
-      table.register-table th:nth-child(2), table.register-table td:nth-child(2) { width: 94px; }
+      /* Status and Due were 94px/80px (sized for a single-line, never-wrapping pill/date) before
+         the register thumbnail came back on mobile (see .row-thumb's breakpoint rule) — bringing
+         a real photo into an already-fixed-layout row meant something else had to give, or the
+         Pipe Tag column (the actual identifier — the whole point of this list) got crushed to a
+         handful of characters, which is what shipped in the first pass of this fix and was worse
+         than showing no photo at all. Both columns now allow their content to wrap to 2 lines
+         instead of stretching wide to stay on one, freeing width back to the tag column. */
+      table.register-table th:nth-child(2), table.register-table td:nth-child(2) { width: 56px; }
       /* Terminal is redundant with the KBY/SRC/BRP segmented filter right above the table, and
          the tag itself usually encodes it — drop the column here so Pipe Tag gets breathing room. */
       table.register-table th:nth-child(4), table.register-table td:nth-child(4) { display: none; }
-      table.register-table th:nth-child(5), table.register-table td:nth-child(5) { width: 34px; }
-      table.register-table th:nth-child(6), table.register-table td:nth-child(6) { width: 80px; }
+      table.register-table th:nth-child(5), table.register-table td:nth-child(5) { width: 30px; }
+      table.register-table th:nth-child(6), table.register-table td:nth-child(6) { width: 46px; }
       table.register-table th, table.register-table td { padding: 8px 4px; }
       table.register-table th:first-child, table.register-table td:first-child { padding-left: 0; }
       /* Scoped to table.register-table (not a bare .pill) both to beat the base .pill rule's
@@ -1417,8 +1433,20 @@
          declared LAST in the stylesheet wins, not whichever is "more specific to mobile" — the
          base rule sits after this block) and so this doesn't also shrink status pills elsewhere
          (detail page, assessment card) that happen to render under 640px. */
-      table.register-table .pill { font-size: var(--fs-2xs); padding: 2px 5px; letter-spacing: 0; }
-      table.register-table .ov-badge { font-size: var(--fs-2xs); /* was 9.5px */ }
+      table.register-table .pill {
+        font-size: var(--fs-2xs);
+        padding: 2px 5px;
+        letter-spacing: 0;
+        white-space: normal;
+        text-align: center;
+        line-height: 1.2;
+      }
+      table.register-table .ov-badge { font-size: var(--fs-2xs); /* was 9.5px */ white-space: normal; text-align: right; }
+      /* The due-date text carries its own inline font-size (set once, shared with desktop), which
+         needs !important to lose to a breakpoint override; the arrow is a hover-reveal affordance
+         that touch devices never trigger, so it's dead weight reserving space in a tight column. */
+      table.register-table td .mono { font-size: var(--fs-2xs) !important; white-space: normal; }
+      table.register-table .row-arrow { display: none; }
     }
 
     /* Risk Ranking table's own narrow-viewport handling — Mechanism and Findings are the least
