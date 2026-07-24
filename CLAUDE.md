@@ -56,7 +56,8 @@ No lint script configured.
 - **Hosting**: Render, serving `dist/` as a static site (no `render.yaml` — configured via the Render dashboard). Deploys automatically on push to `main`.
 - **Real deployment target is `https://`, not `file://`.** The user's day-to-day usage is the live Render URL from a laptop and a phone.
 - The Leaflet/GPS "not a secure context" caveat does **not** apply on the deployed `https://` site — `navigator.geolocation` works normally there.
-- **Real mobile usage**: the phone is an actual device — camera capture (`capture="environment"`) opens the real camera app, GPS is real device location, and touch/viewport behavior should be verified against real mobile Safari/Chrome quirks, not only Playwright's viewport emulation.
+- **Real mobile usage**: the phone is an actual device — the photo file inputs (`accept="image/*"`, deliberately no `capture` attribute — see below) open the OS's native picker, GPS is real device location, and touch/viewport behavior should be verified against real mobile Safari/Chrome quirks, not only Playwright's viewport emulation.
+- **Photo inputs deliberately have no `capture` attribute.** `capture="environment"` behaves differently by platform: on Android/desktop it's just a soft default bias — the full picker (camera + library + files) still appears. On **iOS Safari**, its mere presence makes the input skip the action sheet entirely and launch straight into the camera app, with no "Photo Library" option offered at all — a real user-reported bug (couldn't select an existing photo on iPhone, camera-only). Removing `capture` restores the normal choice on iOS while losing nothing elsewhere: camera stays available as a picker option everywhere, it's just no longer forced.
 
 ## Findings Tracker / Dashboard (`index.html` + Supabase)
 

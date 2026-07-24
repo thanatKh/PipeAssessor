@@ -1118,13 +1118,19 @@
 <!-- Photo lightbox -->
 <dialog id="lightbox"><img id="lightboxImg" alt="Photo"/></dialog>
 
-<!-- Hidden file inputs (camera opens on mobile) -->
-<input type="file" id="fileFound" accept="image/*" capture="environment" multiple hidden>
-<input type="file" id="fileRepaired" accept="image/*" capture="environment" multiple hidden>
-<input type="file" id="filePending" accept="image/*" capture="environment" multiple hidden>
-<input type="file" id="fileFound2" accept="image/*" capture="environment" multiple hidden>
-<input type="file" id="fileDlgRepaired" accept="image/*" capture="environment" multiple hidden>
-<input type="file" id="fileRepaired2" accept="image/*" capture="environment" multiple hidden>
+<!-- Hidden file inputs. No `capture` attribute: on iOS Safari specifically, `capture`'s presence
+     makes the input skip straight to the camera app with no "Photo Library" option offered at
+     all (unlike Android/desktop, where it's just a soft default bias and the full picker still
+     appears) — a real user-reported bug, since it made choosing an existing photo impossible on
+     iPhone. Without `capture`, iOS shows its normal action sheet (Take Photo / Photo Library /
+     Choose Files), Android still offers Camera among its picker options, and desktop still opens
+     a plain file browser — camera capture stays available everywhere, just no longer forced. -->
+<input type="file" id="fileFound" accept="image/*" multiple hidden>
+<input type="file" id="fileRepaired" accept="image/*" multiple hidden>
+<input type="file" id="filePending" accept="image/*" multiple hidden>
+<input type="file" id="fileFound2" accept="image/*" multiple hidden>
+<input type="file" id="fileDlgRepaired" accept="image/*" multiple hidden>
+<input type="file" id="fileRepaired2" accept="image/*" multiple hidden>
 
 <div id="toaster" class="toaster" data-align="center"></div>
 
