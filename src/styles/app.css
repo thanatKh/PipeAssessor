@@ -951,10 +951,6 @@
       line-height: 1.4;
     }
 
-    /* ESC hint reuses .pres-key-hint (same badge as R/L) — just needs its own left margin since it
-       sits directly after a text label rather than inside a flex button with a gap. */
-    .map-pres-esc-hint { margin-left: 4px; }
-
     .pres-summary-bar {
       font-size: var(--fs-sm);
       color: var(--button-primary, #156B95);
