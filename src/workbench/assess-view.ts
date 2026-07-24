@@ -174,7 +174,7 @@ const PA_AW_SECTIONS = {
           <span>Limit: 1.0</span>
         </div>
         <div class="pressure-gauge-bar-wrapper">
-          <div class="pressure-gauge-track">
+          <div class="pressure-gauge-track" data-k="gaugeTrack">
             <div class="pressure-zone safe" data-k="zoneSafe"></div>
             <div class="pressure-zone warning" data-k="zoneWarning"></div>
             <div style="position: absolute; left: 66.7%; top: 0; bottom: 0; width: 2px; background: rgba(0,0,0,0.5); z-index: 5;" title="Critical Limit (1.0)"></div>
@@ -684,6 +684,12 @@ export function paCreateAssessView(root, opts) {
           if (el) el.textContent = '—';
         });
         q('erlCaveat').style.display = 'none';
+        // Neutral "no data yet" state: the track's own base color is the danger-red overpressure
+        // zone (see .pressure-gauge-track in theme.css — it's the backdrop the safe/warning zones
+        // overlay), so with both zones at 0% width the whole bar would otherwise read as solid red
+        // before the user has entered anything. is-neutral swaps it to a plain gray until a real
+        // result exists.
+        q('gaugeTrack').classList.add('is-neutral');
         q('zoneSafe').style.width = '0%';
         q('zoneWarning').style.width = '0%';
         q('pressurePointer').style.left = '0%';
@@ -733,6 +739,7 @@ export function paCreateAssessView(root, opts) {
       // ERF gauge — headline is the no-CA figure (today's actual capacity from the
       // measured thickness); "with CA" stays a secondary reference in the grid only.
       q('gaugeErfVal').textContent = paFmt(erf_no, 2);
+      q('gaugeTrack').classList.remove('is-neutral');
       const ERF_GAUGE_MAX = 1.5;
       const isOffScale = isFinite(erf_no) && erf_no > ERF_GAUGE_MAX;
       const pointerPct = Math.min(100, Math.max(0, (erf_no / ERF_GAUGE_MAX) * 100));

@@ -627,9 +627,13 @@ export function toggleMapPresentation(forceState?: boolean) {
   const EXPAND_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>`;
   const COLLAPSE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="10" y1="14" x2="3" y2="21"></line></svg>`;
 
-  // Icon-only — the title attribute carries the label/shortcut hint instead of visible text.
+  // Icon-only — title carries the visible tooltip/shortcut hint; aria-label carries the same text
+  // as the accessible name, since title alone isn't reliably exposed to screen readers on a button
+  // with no visible text content.
   btn.innerHTML = isPres ? COLLAPSE_ICON : EXPAND_ICON;
-  btn.title = isPres ? 'Exit presentation mode (ESC)' : 'Toggle full-screen presentation mode (press F)';
+  const presLabel = isPres ? 'Exit presentation mode (ESC)' : 'Toggle full-screen presentation mode (press F)';
+  btn.title = presLabel;
+  btn.setAttribute('aria-label', presLabel);
 
   const presControls = document.querySelectorAll('.pres-only');
   presControls.forEach(el => { el.hidden = !isPres; });

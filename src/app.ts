@@ -559,38 +559,6 @@ function initApp() {
     }
   });
 
-  // Section navigation tabs smooth scrolling & scroll spy
-  document.querySelectorAll('.form-section-nav .nav-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      const targetId = tab.dataset.target;
-      const targetEl = $(targetId);
-      if (!targetEl) return;
-      tab.parentElement?.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-  });
-
-  const sectionObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const id = entry.target.id;
-        const view = entry.target.closest('.view');
-        const nav = view?.querySelector('.form-section-nav');
-        if (nav && id) {
-          const tab = nav.querySelector(`.nav-tab[data-target="${CSS.escape(id)}"]`);
-          if (tab) {
-            nav.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
-            tab.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
-          }
-        }
-      }
-    });
-  }, { rootMargin: '-120px 0px -65% 0px', threshold: 0.1 });
-
-  document.querySelectorAll('.panel[id]').forEach(p => sectionObserver.observe(p));
-
   // Actively Leaking warning toggle
   $('fIsLeaking')?.addEventListener('change', () => {
     syncLeakAndAssessRules();

@@ -974,63 +974,6 @@
       border-top-color: rgba(15, 23, 42, 0.9);
     }
 
-    /* Sticky Section Anchor Navigation */
-    .form-section-nav {
-      position: sticky;
-      top: calc(var(--app-header-h, 64px) + 50px);
-      z-index: 19;
-      display: flex;
-      gap: 6px;
-      padding: 8px 12px;
-      background: var(--bg-color, #f8fafc);
-      border-bottom: 1px solid var(--card-border, #e2e8f0);
-      margin: -4px -12px 16px -12px;
-      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
-      overflow-x: auto;
-    }
-    /* Edge fade hint that the pill strip scrolls horizontally — without it, a tab strip cut off
-       flush against a phone's screen edge reads as clipped/broken rather than swipeable. Always
-       present rather than conditionally shown on overflow; harmless (invisible against empty
-       space) when the strip already fits. */
-    .form-section-nav::after {
-      content: '';
-      position: absolute;
-      top: 0;
-      right: 0;
-      bottom: 0;
-      width: 28px;
-      background: linear-gradient(to right, transparent, var(--bg-color, #f8fafc));
-      pointer-events: none;
-    }
-    .form-section-nav .nav-tab {
-      font-family: 'Google Sans', sans-serif;
-      font-size: var(--fs-sm);
-      font-weight: 600;
-      color: var(--text-muted, #64748b);
-      background: var(--card-bg, #ffffff);
-      border: 1px solid var(--card-border, #e2e8f0);
-      padding: 4px 12px;
-      border-radius: 20px;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: all 0.15s ease;
-      flex-shrink: 0;
-    }
-    .form-section-nav .nav-tab:hover {
-      color: var(--button-primary, #156B95);
-      border-color: var(--button-primary, #156B95);
-    }
-    .form-section-nav .nav-tab.active {
-      color: #ffffff;
-      background: var(--button-primary, #156B95);
-      border-color: var(--button-primary, #156B95);
-    }
-
-    /* Scroll margin offset for panel titles when clicking section tabs */
-    .panel {
-      scroll-margin-top: calc(var(--app-header-h, 64px) + 140px);
-    }
-
     /* Leaking alert banner & panel pulse */
     .leaking-warning-banner {
       display: flex;
@@ -1662,7 +1605,7 @@
       z-index: 200;
     }
 
-    /* Sticky Page Header (wraps .toolbar and .form-section-nav into one pinned bar) */
+    /* Sticky Page Header (pins .toolbar under the app header) */
     .sticky-page-header {
       position: sticky;
       top: calc(var(--app-header-h, 64px) - 1px);
@@ -1679,14 +1622,6 @@
       border-bottom: none !important;
       margin: 0 0 4px !important;
       padding: 4px 0 !important;
-    }
-
-    .sticky-page-header .form-section-nav {
-      position: static !important;
-      margin: 0 !important;
-      padding: 4px 0 4px !important;
-      box-shadow: none !important;
-      border-bottom: none !important;
     }
 
     #viewRisk .toolbar {

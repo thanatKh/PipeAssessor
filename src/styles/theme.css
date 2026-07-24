@@ -784,6 +784,13 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   display: flex;
 }
 
+/* No valid ERF yet (empty form, or invalid input) — override the red overpressure base so the
+   gauge reads as neutral/not-yet-calculated instead of maximum alarm before the user has entered
+   anything. See assess-view.ts's render(): applied whenever res is null/has errors. */
+.pressure-gauge-track.is-neutral {
+  background: var(--card-border);
+}
+
 .pressure-zone {
   height: 100%;
   transition: width 0.3s ease;

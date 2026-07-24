@@ -34,16 +34,30 @@ export function positionSegPill(segRow, animate) {
   }
 }
 
+// showModal() makes background content inert but does NOT stop the page itself from scrolling —
+// the dialog's own ::backdrop is viewport-fixed, so scrolling the page out from under it reveals
+// plain, undimmed content past the backdrop's edge (looks like a rendering glitch, not a real
+// interaction risk since the background is inert, but disorienting). Lock body scroll for as long
+// as any dialog is open; reference-counted so one dialog's close animation finishing doesn't
+// unlock scroll while another dialog opened in the meantime is still up.
+let openDialogCount = 0;
+function setBodyScrollLocked(locked) {
+  openDialogCount = Math.max(0, openDialogCount + (locked ? 1 : -1));
+  document.body.style.overflow = openDialogCount > 0 ? 'hidden' : '';
+}
+
 export function openDialog(el) {
   el.showModal();
   el.classList.remove('is-closing');
   void el.offsetWidth; // reflow so the open transition always replays from --modal-scale
   el.classList.add('is-open');
+  setBodyScrollLocked(true);
 }
 export function closeDialog(el) {
   const closeMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--modal-close-dur')) || 150;
   el.classList.remove('is-open');
   el.classList.add('is-closing');
+  setBodyScrollLocked(false);
   setTimeout(() => { el.classList.remove('is-closing'); el.close(); }, closeMs);
 }
 
