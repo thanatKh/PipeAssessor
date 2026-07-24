@@ -319,6 +319,25 @@ function initApp() {
   });
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncHeaderHeight);
 
+  // Number inputs (readings, pressures, coordinates, cost, …) default to changing value on
+  // mouse-wheel scroll and Up/Down arrow keys while focused — a real hazard on a form full of
+  // engineering figures, since scrolling the page past a focused number field silently nudges
+  // its value with no visual cue. Both are killed globally (delegated, so it covers every
+  // number input on every page without touching each one individually): blurring on wheel stops
+  // the browser's own scroll-to-adjust behavior for that field while letting the page keep
+  // scrolling normally, and Up/Down are preventDefault'd so tabbing/arrowing through a form
+  // can't accidentally increment a value either.
+  document.addEventListener('wheel', (e) => {
+    const t = e.target;
+    if (t instanceof HTMLInputElement && t.type === 'number' && document.activeElement === t) t.blur();
+  }, { passive: true });
+  document.addEventListener('keydown', (e) => {
+    const t = e.target;
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && t instanceof HTMLInputElement && t.type === 'number') {
+      e.preventDefault();
+    }
+  });
+
   if (false) { // Supabase client is bundled (./core/supabase); CDN-load guard can never trigger
     show('viewLogin');
     const errBox = $('loginErr');
