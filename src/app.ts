@@ -374,21 +374,38 @@ function initApp() {
 
   // Only re-route when signed-in state actually flips — a TOKEN_REFRESHED event mid-form
   // must not re-render and wipe the user's unsaved input.
-  sb.auth.onAuthStateChange(async (event, s) => {
-    const wasAuthed = !!session;
-    setSession(s);
-    const flipped = event === 'INITIAL_SESSION' || wasAuthed !== !!s;
-    // Resolve the role BEFORE routing so the first paint already has the right chrome — a later
-    // fetch would briefly render maintenance-only controls to an inspector. Only on a real flip:
-    // re-fetching on every TOKEN_REFRESHED would be a pointless request every hour.
-    if (flipped) await loadProfile();
-    updateAuthUI();
-    // PASSWORD_RECOVERY fires when the user lands via the emailed reset link — Supabase has
-    // already signed them in with a recovery session at this point, so the normal `flipped ->
-    // route()` path below would send them straight to the dashboard instead of letting them set a
-    // new password. Show the dedicated view instead and skip the regular route() this one time.
-    if (event === 'PASSWORD_RECOVERY') { show('viewNewPassword'); return; }
-    if (flipped) route();
+  //
+  // The actual work is deferred with setTimeout(...,0) rather than run directly in this
+  // callback — a real bug shipped without it: supabase-js/gotrue-js holds an internal lock
+  // while dispatching onAuthStateChange, and any Supabase call awaited synchronously inside
+  // the callback (loadProfile()'s `sb.from('profiles')...`, or route()'s finding/line-list
+  // queries) needs that same lock to attach the current session's Authorization header —
+  // deadlock. It never resolved or rejected, so nothing ever threw, and no `.view` ever got
+  // `.active`: page stuck blank forever (header/footer still show since those aren't
+  // view-gated). Reproduced ONLY on a page load that restores an already-persisted session
+  // (SIGNED_IN/INITIAL_SESSION fired during the client's own startup, while the lock is still
+  // held) — a fresh interactive sign-in fires the event well after startup, lock already free,
+  // which is why this was never caught: every prior E2E pass signed in fresh each time and
+  // never reloaded an already-authenticated tab. `setTimeout(...,0)` defers to a new task,
+  // after the dispatch (and its lock) has finished — the standard fix for this known
+  // supabase-js gotcha.
+  sb.auth.onAuthStateChange((event, s) => {
+    setTimeout(async () => {
+      const wasAuthed = !!session;
+      setSession(s);
+      const flipped = event === 'INITIAL_SESSION' || wasAuthed !== !!s;
+      // Resolve the role BEFORE routing so the first paint already has the right chrome — a later
+      // fetch would briefly render maintenance-only controls to an inspector. Only on a real flip:
+      // re-fetching on every TOKEN_REFRESHED would be a pointless request every hour.
+      if (flipped) await loadProfile();
+      updateAuthUI();
+      // PASSWORD_RECOVERY fires when the user lands via the emailed reset link — Supabase has
+      // already signed them in with a recovery session at this point, so the normal `flipped ->
+      // route()` path below would send them straight to the dashboard instead of letting them set a
+      // new password. Show the dedicated view instead and skip the regular route() this one time.
+      if (event === 'PASSWORD_RECOVERY') { show('viewNewPassword'); return; }
+      if (flipped) route();
+    }, 0);
   });
 
   // routing
