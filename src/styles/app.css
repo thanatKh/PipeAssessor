@@ -422,7 +422,11 @@
       #dashMap { min-height: 340px; }
     }
 
-    .panel-h-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    /* align-items: center (not the flex default of stretch) — .hdr-btn-group-subtle's own
+       padding+border makes its outer box taller than a plain .btn sibling (e.g. #btnNew), so
+       stretch leaves both top-aligned with mismatched bottoms, reading as visually "off";
+       centering distributes that height difference evenly above/below instead. */
+    .panel-h-btns { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 
     /* Map panel header toolbar: color-by select + presentation-mode controls. Own small-control
        sizing (26px height / 11px text) rather than the default .select/.btn-sm size, since this
