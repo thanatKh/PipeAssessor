@@ -8,7 +8,7 @@
    ============================================================================ */
 import L from 'leaflet';
 import { $, esc, notify, fmtDate, isOverdue, dueDateOf, pillHtml } from '../core/dom';
-import { FINDING_TYPE_SHORT, STATUS_COLORS, TYPE_COLORS, SEVERITY_COLORS, DEFAULT_MAP_VIEW, SAT_TILES, STREET_TILES, R2_PUBLIC_BASE } from '../core/constants';
+import { FINDING_TYPE_SHORT, STATUS_COLORS, TYPE_COLORS, SEVERITY_COLORS, DEFAULT_MAP_VIEW, SAT_TILES, R2_PUBLIC_BASE } from '../core/constants';
 import { paFmtBahtShort } from '../engine/format';
 import { sb } from '../core/supabase';
 import {
@@ -17,7 +17,7 @@ import {
   currentAssessments, setCurrentAssessments, photoCounts, setPhotoCounts, photoThumbs, setPhotoThumbs,
   dashMap, setDashMap, dashLayer, setDashLayer, dashMarkers, setDashMarkers,
   dashAddMarker, setDashAddMarker, pendingNewCoords, setPendingNewCoords, lastRenderedRows, setLastRenderedRows,
-  mapColorBy, mapBaseLayer, setMapBaseLayer, dashSatLayer, setDashSatLayer, dashStreetLayer, setDashStreetLayer,
+  mapColorBy,
   mapShowRiskRadius, setMapShowRiskRadius, dashRiskLayer, setDashRiskLayer,
 } from '../core/state';
 
@@ -266,11 +266,7 @@ export function ensureDashMap() {
   }
   if (dashMap) { setTimeout(() => dashMap.invalidateSize(), 80); return; }
   setDashMap(L.map(el, { center: DEFAULT_MAP_VIEW.center, zoom: DEFAULT_MAP_VIEW.zoom, scrollWheelZoom: false }));
-  // Both base layers are created up front and swapped via toggleMapBaseLayer (add/remove) rather
-  // than re-created per toggle, so switching is instant and each tile source keeps its own cache.
-  setDashSatLayer(L.tileLayer(SAT_TILES.url, { maxZoom: SAT_TILES.maxZoom, attribution: SAT_TILES.attribution }));
-  setDashStreetLayer(L.tileLayer(STREET_TILES.url, { maxZoom: STREET_TILES.maxZoom, attribution: STREET_TILES.attribution }));
-  (mapBaseLayer === 'street' ? dashStreetLayer : dashSatLayer).addTo(dashMap);
+  L.tileLayer(SAT_TILES.url, { maxZoom: SAT_TILES.maxZoom, attribution: SAT_TILES.attribution }).addTo(dashMap);
   // Risk-radius circles get their OWN pane, z-indexed below Leaflet's default overlayPane (400,
   // where circleMarker pins live). This guarantees pins always paint on top of the circles
   // regardless of DOM insertion order — relying on layer-group creation order isn't enough, since
@@ -288,22 +284,6 @@ export function ensureDashMap() {
   dashMap.on('dblclick', (e) => showAddFindingPopup(e.latlng));
   dashMap.on('popupclose', () => { if (dashAddMarker) { dashLayer.removeLayer(dashAddMarker); setDashAddMarker(null); } });
   setTimeout(() => dashMap.invalidateSize(), 150);
-}
-
-export function toggleMapBaseLayer(mode) {
-  const next = mode === 'street' || mode === 'satellite' ? mode : (mapBaseLayer === 'satellite' ? 'street' : 'satellite');
-  if (next === mapBaseLayer) return;
-  setMapBaseLayer(next);
-  if (dashMap && dashSatLayer && dashStreetLayer) {
-    dashMap.removeLayer(next === 'street' ? dashSatLayer : dashStreetLayer);
-    (next === 'street' ? dashStreetLayer : dashSatLayer).addTo(dashMap);
-  }
-  const btn = $('btnMapBaseLayer');
-  if (btn) {
-    btn.classList.toggle('is-street', next === 'street');
-    btn.setAttribute('aria-checked', String(next === 'street'));
-    btn.querySelector('span').textContent = next === 'street' ? 'Street' : 'Satellite';
-  }
 }
 
 export function popupHtml(f) {

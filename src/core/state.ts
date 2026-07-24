@@ -53,19 +53,6 @@ export function setDashMap(v: any) { dashMap = v; }
 export let dashLayer: any = null;
 export function setDashLayer(v: any) { dashLayer = v; }
 
-// The dashboard map's two base tile layers, created once in ensureDashMap and swapped in/out via
-// toggleMapBaseLayer rather than re-created per toggle.
-export let dashSatLayer: any = null;
-export function setDashSatLayer(v: any) { dashSatLayer = v; }
-
-export let dashStreetLayer: any = null;
-export function setDashStreetLayer(v: any) { dashStreetLayer = v; }
-
-// Which base layer is active. Remembered across renders (not re-derived from Leaflet state) so
-// toggling doesn't need to introspect which tileLayer is currently on the map.
-export let mapBaseLayer: 'satellite' | 'street' = 'satellite';
-export function setMapBaseLayer(v: 'satellite' | 'street') { mapBaseLayer = v; }
-
 export let photoCounts: any = {};
 export function setPhotoCounts(v: any) { photoCounts = v; }
 

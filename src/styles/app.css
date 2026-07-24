@@ -516,10 +516,10 @@
     }
     .map-toolbar .btn.btn-sm svg { flex: none; width: 12px; height: 12px; }
 
-    /* Satellite/Street base-layer switch: a labeled pill button with a real toggle-switch track,
-       matching the other 26px-tall map-toolbar controls in height. The track itself is a visual
-       switch (role="switch" on the button carries the actual a11y state); label text swaps
-       Satellite/Street in JS on click. */
+    /* Map toolbar switch-style toggle (Risk Zones): a labeled pill button with a real
+       toggle-switch track, matching the other 26px-tall map-toolbar controls in height. The
+       track itself is a visual switch (role="switch" on the button carries the actual a11y
+       state). */
     .map-layer-toggle {
       display: inline-flex;
       align-items: center;
@@ -539,8 +539,8 @@
     .map-layer-toggle svg { flex: none; width: 12px; height: 12px; opacity: 0.7; }
 
     /* toggle (transitions.dev) — double-bounce thumb travel, replacing the old flat 0.15s
-       linear slide. .is-init is added on first click (see toggleMapBaseLayer/toggleRiskRadius)
-       so the bounce-back keyframes never play on initial page load, only on real interaction. */
+       linear slide. .is-init is added on first click (see toggleRiskRadius) so the bounce-back
+       keyframes never play on initial page load, only on real interaction. */
     :root {
       --toggle-dur: 350ms;
       --toggle-travel: 12px; /* matches this switch's actual track/thumb geometry, not the 14.66px default */
@@ -570,19 +570,16 @@
       translate: 0 0;
       will-change: translate;
     }
-    .map-layer-toggle.is-street .map-layer-toggle-track,
     .map-layer-toggle.is-on .map-layer-toggle-track {
       background: var(--button-primary, #156B95);
     }
-    .map-layer-toggle.is-street .map-layer-toggle-thumb,
     .map-layer-toggle.is-on .map-layer-toggle-thumb {
       translate: var(--toggle-travel) 0;
     }
-    .map-layer-toggle.is-init.is-street .map-layer-toggle-thumb,
     .map-layer-toggle.is-init.is-on .map-layer-toggle-thumb {
       animation: t-toggle-on var(--toggle-dur) var(--toggle-ease) both;
     }
-    .map-layer-toggle.is-init:not(.is-street):not(.is-on) .map-layer-toggle-thumb {
+    .map-layer-toggle.is-init:not(.is-on) .map-layer-toggle-thumb {
       animation: t-toggle-off var(--toggle-dur) var(--toggle-ease) both;
     }
     @keyframes t-toggle-on {

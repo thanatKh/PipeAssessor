@@ -263,7 +263,7 @@ async function route() {
 
 
 import {
-  loadFindings, ageDays, STATUS_RANK, sortFindings, loadDetail, loadPublicFinding, photoUrl, applyFilters, KPI_RING_CIRCUMFERENCE, renderKpis, renderBudgetKpi, ensureDashMap, popupHtml, showAddFindingPopup, renderMap, highlightPin, flashRow, CAMERA_SVG, ageHtml, renderTable, updateSelectionUI, buildTagOptions, renderList, toggleMapPresentation, resetMapView, togglePresSidebar, toggleMapBaseLayer, toggleRiskRadius,
+  loadFindings, ageDays, STATUS_RANK, sortFindings, loadDetail, loadPublicFinding, photoUrl, applyFilters, KPI_RING_CIRCUMFERENCE, renderKpis, renderBudgetKpi, ensureDashMap, popupHtml, showAddFindingPopup, renderMap, highlightPin, flashRow, CAMERA_SVG, ageHtml, renderTable, updateSelectionUI, buildTagOptions, renderList, toggleMapPresentation, resetMapView, togglePresSidebar, toggleRiskRadius,
 } from './features/dashboard';
 
 /* ---------------- CSV export (filtered register, Excel-friendly UTF-8 BOM) ---------------- */
@@ -498,8 +498,6 @@ function initApp() {
     setMapColorBy($('mapColorBy').value);
     renderList();
   });
-
-  $('btnMapBaseLayer')?.addEventListener('click', () => toggleMapBaseLayer());
 
   $('presTerminalFilter')?.addEventListener('change', () => {
     filters.terminal = val('presTerminalFilter');

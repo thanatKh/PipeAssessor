@@ -158,12 +158,7 @@
               <option value="BRP">BRP</option>
             </select>
             <select id="mapColorBy" class="select"><option value="status" selected>Color by: Status</option><option value="type">Color by: Type</option><option value="severity">Color by: Severity</option></select>
-            <!-- 2. Map display toggles (switch-style, grouped together) -->
-            <button type="button" class="map-layer-toggle" id="btnMapBaseLayer" role="switch" aria-checked="false" title="Switch between satellite imagery and street map">
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>
-              <span>Satellite</span>
-              <span class="map-layer-toggle-track" aria-hidden="true"><span class="map-layer-toggle-thumb"></span></span>
-            </button>
+            <!-- 2. Map display toggles -->
             <button type="button" class="map-layer-toggle" id="btnRiskRadius" role="switch" aria-checked="false" title="Show a translucent risk-zone radius circle around each finding">
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" opacity="0.4"/><circle cx="12" cy="12" r="3"/></svg>
               <span>Risk Zones</span>
@@ -240,7 +235,7 @@
             <div class="hdr-btn-group-subtle">
               <button class="btn btn-sm" data-variant="outline" id="btnTogglePhotos" type="button" aria-pressed="true">Hide photos</button>
               <button class="btn btn-sm" data-variant="outline" id="btnImport" type="button">Import</button>
-              <button class="btn btn-sm" data-variant="outline" id="btnExport" type="button">Export</button>
+              <button class="btn btn-sm" data-variant="outline" id="btnExport" type="button"><span class="t-text-swap">Export</span></button>
             </div>
             <button class="btn" id="btnNew" type="button">+ New Finding</button>
           </div>
@@ -335,7 +330,7 @@
             <label class="f-label" for="fTag">Pipe Tag / Line No. <span class="f-optnote">— engineer can add later</span></label>
             <div class="combo">
               <input id="fTag" class="input" type="text" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false">
-              <ul class="combo-menu" id="tagCombo" role="listbox" hidden></ul>
+              <ul class="combo-menu" id="tagCombo" role="listbox"></ul>
             </div>
           </div>
           <div>
