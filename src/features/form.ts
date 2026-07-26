@@ -609,6 +609,14 @@ export function initTagCombo() {
     menu.style.left = r.left + 'px';
     menu.style.top = (r.bottom + 2) + 'px';
     menu.style.width = r.width + 'px';
+    // Clamp height to what's actually visible above the on-screen keyboard — CSS's own
+    // max-height:360px assumes a full-height viewport, but on a phone with the keyboard open,
+    // window.innerHeight still reports the pre-keyboard height (iOS Safari doesn't shrink it),
+    // so the menu was extending its lower rows underneath the keyboard, unreachable. visualViewport
+    // reflects the actual visible area and is what iOS resizes when the keyboard opens/closes.
+    const viewportH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    const available = viewportH - (r.bottom + 2) - 8; // 8px breathing room off the bottom edge
+    menu.style.maxHeight = Math.max(120, Math.min(360, available)) + 'px';
   };
 
   const render = () => {
@@ -651,6 +659,13 @@ export function initTagCombo() {
   $('fTerminal').addEventListener('change', () => { if (isOpen()) openFiltered(); });
   window.addEventListener('resize', () => { if (isOpen()) position(); });
   window.addEventListener('scroll', () => { if (isOpen()) position(); }, true);
+  // iOS Safari doesn't fire window's own resize/scroll when just the on-screen keyboard opens/
+  // closes or the page auto-scrolls to keep a focused field visible above it — only
+  // visualViewport does, since window.innerHeight stays pinned to the pre-keyboard height there.
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => { if (isOpen()) position(); });
+    window.visualViewport.addEventListener('scroll', () => { if (isOpen()) position(); });
+  }
   input.addEventListener('keydown', (e) => {
     if (!isOpen()) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); active = Math.min(active + 1, items.length - 1); render(); }
