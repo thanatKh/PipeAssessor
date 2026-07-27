@@ -417,7 +417,6 @@ body.is-loading .page-loading-bar {
   row-gap: 8px;
   gap: 10px;
   padding: 10px 14px;
-  border-bottom: 1px solid var(--card-border);
 }
 
 /* Right-side cluster in a panel header (e.g. the assessment panel's "Reset to line list"
@@ -459,16 +458,6 @@ body.is-loading .page-loading-bar {
 @media (max-width: 640px) {
   .health-banner { flex-direction: column; align-items: flex-start; gap: 6px; }
   .hb-metrics { text-align: left; }
-}
-
-/* Collapse variant: the separator only makes sense while open (a closed section has
-   nothing below it to separate from) — overrides the always-on border above. */
-.panel-collapse.panel-h {
-  border-bottom-color: transparent;
-}
-
-details.panel[open] > .panel-collapse.panel-h {
-  border-bottom-color: var(--card-border);
 }
 
 /* .panel-collapse: also selects the bare-text case, where .panel-h IS the <summary>
