@@ -449,7 +449,7 @@
         </div>
         <div class="photo-group">
           <div class="photo-group-h">
-            <h3>After Repair (confirmation)</h3>
+            <h3>After Repair</h3>
             <button class="btn" data-variant="outline" id="btnAddRepaired2" type="button">+ Add</button>
           </div>
           <div class="photo-grid" id="gridRepaired2"></div>
@@ -930,7 +930,7 @@
             </div>
             <div class="photo-group">
               <div class="photo-group-h">
-                <h3>After Repair (confirmation)</h3>
+                <h3>After Repair</h3>
                 <button class="btn" data-variant="outline" id="btnAddRepaired" type="button">+ Add</button>
               </div>
               <div class="photo-grid" id="gridRepaired"></div>
@@ -1115,8 +1115,23 @@
   </div>
 </dialog>
 
-<!-- Photo lightbox -->
-<dialog id="lightbox"><img id="lightboxImg" alt="Photo"/></dialog>
+<!-- Photo lightbox. Prev/Next navigate within whichever photo group (As Found / After Repair) was
+     opened from — see openLightbox()/renderLightboxFrame() in detail.ts. Buttons/meta pill are
+     hidden via [hidden] when there's only one photo (or at the current end, for prev/next) rather
+     than wrapping around — see CLAUDE.md/lightbox notes. -->
+<dialog id="lightbox">
+  <div class="lightbox-meta" id="lightboxMeta">
+    <span id="lightboxLabel" class="lightbox-label"></span>
+    <span id="lightboxCounter" class="lightbox-counter"></span>
+  </div>
+  <button type="button" class="lightbox-nav lightbox-prev" id="lightboxPrev" title="Previous photo (←)" aria-label="Previous photo">
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+  </button>
+  <img id="lightboxImg" alt="Photo"/>
+  <button type="button" class="lightbox-nav lightbox-next" id="lightboxNext" title="Next photo (→)" aria-label="Next photo">
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+  </button>
+</dialog>
 
 <!-- Hidden file inputs. No `capture` attribute: on iOS Safari specifically, `capture`'s presence
      makes the input skip straight to the camera app with no "Photo Library" option offered at

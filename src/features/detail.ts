@@ -20,7 +20,7 @@ import {
   current, setCurrent, currentPhotos, setCurrentPhotos, currentHistory, setCurrentHistory,
   currentAssessments, editingId, dlgTarget, setDlgTarget,
   detailMap, setDetailMap, detailMarker, setDetailMarker, photoPasteTarget, setPhotoPasteTarget,
-  isMaintenance,
+  isMaintenance, lightboxPhotos, setLightboxPhotos, lightboxIndex, setLightboxIndex,
 } from '../core/state';
 import { loadDetail, photoUrl } from './dashboard';
 import { uploadPhoto, deletePhotos } from './form';
@@ -303,14 +303,15 @@ export function renderPhotoGroups() {
       btn.disabled = atLimit;
       btn.textContent = atLimit ? `Max ${PHOTO_LIMIT_PER_KIND} reached` : `+ Add (${rows.length}/${PHOTO_LIMIT_PER_KIND})`;
     }
-  });
-
-  document.querySelectorAll('#viewDetail .photo-thumb img, #viewForm .photo-thumb img').forEach(img => {
-    img.addEventListener('click', () => {
-      $('lightboxImg').src = img.dataset.url;
-      openDialog($('lightbox'));
+    // Lightbox nav set comes from THIS grid's own rows (not a flattened cross-page/cross-kind
+    // query) so Prev/Next stays scoped to As Found vs After Repair, regardless of whether it was
+    // opened from the detail page or the edit form's identical panel — see openLightbox() below.
+    const photoList = rows.map(p => ({ url: photoUrl(p.storage_path), kind: p.kind }));
+    el.querySelectorAll('.photo-thumb img').forEach((img, i) => {
+      img.addEventListener('click', () => openLightbox(photoList, i));
     });
   });
+
   document.querySelectorAll('#viewDetail .photo-remove, #viewForm .photo-remove').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!window.confirm('Delete this photo?')) return;
@@ -324,6 +325,36 @@ export function renderPhotoGroups() {
       } catch (e) { notify('Delete failed: ' + e.message, true); }
     });
   });
+}
+
+/* ---------------- lightbox (open + Prev/Next within a photo group) ---------------- */
+
+export function openLightbox(photos, index) {
+  setLightboxPhotos(photos);
+  setLightboxIndex(index);
+  renderLightboxFrame();
+  openDialog($('lightbox'));
+}
+
+export function renderLightboxFrame() {
+  const p = lightboxPhotos[lightboxIndex];
+  if (!p) return;
+  $('lightboxImg').src = p.url;
+  $('lightboxLabel').textContent = p.kind === 'repaired' ? 'After Repair' : 'As Found';
+  const multi = lightboxPhotos.length > 1;
+  $('lightboxCounter').hidden = !multi;
+  $('lightboxCounter').textContent = multi ? `${lightboxIndex + 1} / ${lightboxPhotos.length}` : '';
+  // Clamped at the ends, not wraparound — see the recommendation this followed.
+  $('lightboxPrev').hidden = !multi || lightboxIndex === 0;
+  $('lightboxNext').hidden = !multi || lightboxIndex === lightboxPhotos.length - 1;
+}
+
+export function lightboxPrev() {
+  if (lightboxIndex > 0) { setLightboxIndex(lightboxIndex - 1); renderLightboxFrame(); }
+}
+
+export function lightboxNext() {
+  if (lightboxIndex < lightboxPhotos.length - 1) { setLightboxIndex(lightboxIndex + 1); renderLightboxFrame(); }
 }
 
 // findingId defaults to current.id (the detail page's usage) but the edit form passes its own
@@ -447,8 +478,9 @@ export function renderDlgRepairedPhotos() {
   const atLimit = rows.length >= PHOTO_LIMIT_PER_KIND;
   btn.disabled = atLimit;
   btn.textContent = atLimit ? `Max ${PHOTO_LIMIT_PER_KIND} reached` : `+ Add (${rows.length}/${PHOTO_LIMIT_PER_KIND})`;
-  grid.querySelectorAll('.photo-thumb img').forEach(img => {
-    img.addEventListener('click', () => { $('lightboxImg').src = img.dataset.url; openDialog($('lightbox')); });
+  const photoList = rows.map(p => ({ url: photoUrl(p.storage_path), kind: p.kind }));
+  grid.querySelectorAll('.photo-thumb img').forEach((img, i) => {
+    img.addEventListener('click', () => openLightbox(photoList, i));
   });
   grid.querySelectorAll('.photo-remove').forEach(btn => {
     btn.addEventListener('click', async () => {

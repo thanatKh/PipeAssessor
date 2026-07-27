@@ -101,6 +101,14 @@ export function setLineListValidRows(v: any) { lineListValidRows = v; }
 export let photoPasteTarget: any = 'found';
 export function setPhotoPasteTarget(v: any) { photoPasteTarget = v; }
 
+// Lightbox nav state — the ordered photo list (url + kind) of whichever group (As Found / After
+// Repair) was opened from, and the index currently shown. See openLightbox()/renderLightboxFrame()
+// in detail.ts.
+export let lightboxPhotos: any = [];
+export function setLightboxPhotos(v: any) { lightboxPhotos = v; }
+export let lightboxIndex: number = 0;
+export function setLightboxIndex(v: number) { lightboxIndex = v; }
+
 export let assessResult: any = null;
 export function setAssessResult(v: any) { assessResult = v; }
 

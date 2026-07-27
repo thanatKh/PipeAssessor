@@ -2448,6 +2448,9 @@
       padding: 0;
       max-width: 92vw;
       max-height: 92vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     dialog#lightbox::backdrop { background: rgba(15, 23, 42, 0.8); }
     dialog#lightbox img {
@@ -2457,6 +2460,52 @@
       border-radius: 8px;
       cursor: pointer;
     }
+    /* Prev/Next overlay circles pinned to the image's left/right edges (the dialog's own box is
+       sized to the image, so these anchor against the dialog, not the image directly) — [hidden]
+       at the first/last photo in the group (clamped, not wraparound) or entirely when the group
+       has only one photo. */
+    .lightbox-nav {
+      position: absolute;
+      top: 50%;
+      translate: 0 -50%;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(15, 23, 42, 0.55);
+      color: #ffffff;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 2;
+      transition: background-color 0.15s ease;
+    }
+    .lightbox-nav:hover { background: rgba(15, 23, 42, 0.8); }
+    .lightbox-nav[hidden] { display: none; }
+    .lightbox-prev { left: 10px; }
+    .lightbox-next { right: 10px; }
+    /* As Found / After Repair label + "2 / 5" counter, top-centered over the photo. */
+    .lightbox-meta {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      translate: -50% 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.55);
+      color: #ffffff;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: var(--fs-sm);
+      font-weight: 600;
+      z-index: 2;
+      white-space: nowrap;
+    }
+    .lightbox-meta[hidden] { display: none; }
+    .lightbox-counter { opacity: 0.75; font-weight: 500; }
+    .lightbox-counter[hidden] { display: none; }
 
     .footer {
       text-align: center;

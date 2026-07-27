@@ -694,7 +694,7 @@ export async function buildFindingPdf() {
   // --- Photographic Record ---
   if (photoData.length) {
     section('Photographic Record', 75);
-    for (const [kind, title] of [['found', 'As Found'], ['repaired', 'After Repair (Confirmation)']]) {
+    for (const [kind, title] of [['found', 'As Found'], ['repaired', 'After Repair']]) {
       const items = photoData.filter(p => p.kind === kind);
       if (!items.length) continue;
       ensure(15);

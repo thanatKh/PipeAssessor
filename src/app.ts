@@ -287,7 +287,7 @@ import {
 } from './features/form';
 
 import {
-  dItem, renderDetail, renderDetailMap, fmtN, erfNo, assessPill, materialName, CORR_TYPE_LABEL, assessSetupLine, resFromSnapshot, renderAssessments, photoThumb, PHOTO_GRID_SETS, renderPhotoGroups, addDetailPhotos, renderTimeline, openStatusDialog, renderDlgRepairedPhotos, confirmStatusChange,
+  dItem, renderDetail, renderDetailMap, fmtN, erfNo, assessPill, materialName, CORR_TYPE_LABEL, assessSetupLine, resFromSnapshot, renderAssessments, photoThumb, PHOTO_GRID_SETS, renderPhotoGroups, addDetailPhotos, renderTimeline, openStatusDialog, renderDlgRepairedPhotos, confirmStatusChange, lightboxPrev, lightboxNext,
 } from './features/detail';
 
 /* ---------------- Line Risk Ranking ---------------- */
@@ -558,6 +558,12 @@ function initApp() {
         e.preventDefault();
         saveForm(false);
       }
+    } else if (e.key === 'ArrowLeft' && $('lightbox').open) {
+      e.preventDefault();
+      lightboxPrev();
+    } else if (e.key === 'ArrowRight' && $('lightbox').open) {
+      e.preventDefault();
+      lightboxNext();
     }
   });
 
@@ -668,7 +674,14 @@ function initApp() {
   // dialogs
   $('dlgCancel').addEventListener('click', () => closeDialog($('statusDlg')));
   $('dlgConfirm').addEventListener('click', confirmStatusChange);
-  $('lightbox').addEventListener('click', () => closeDialog($('lightbox')));
+  // Click the backdrop or the image itself to dismiss (previous behavior) — but not the Prev/Next
+  // buttons or the label/counter pill, which now also live inside the dialog and would otherwise
+  // immediately close it on every navigation click.
+  $('lightbox').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget || e.target.id === 'lightboxImg') closeDialog($('lightbox'));
+  });
+  $('lightboxPrev').addEventListener('click', lightboxPrev);
+  $('lightboxNext').addEventListener('click', lightboxNext);
 }
 
 export { initApp };
