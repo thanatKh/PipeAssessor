@@ -2435,7 +2435,13 @@
     .toast[data-category="error"] .toast-content svg { color: var(--danger-color); }
 
     /* ============ Photo lightbox ============ */
-    dialog#lightbox {
+    /* [open]-scoped, not bare `dialog#lightbox` — an unconditional `display: flex` here would
+       out-specificity the UA stylesheet's `dialog:not([open]) { display: none }`, so the closed
+       dialog would stay laid out (and, being position:fixed with unset z-index, stay visible/
+       clickable) any time it closes via something other than our own closeDialog() JS — e.g. the
+       browser's native Escape-to-close, which never runs closeDialog() at all. Scoping to [open]
+       means the native attribute alone is enough to hide it correctly, regardless of JS state. */
+    dialog#lightbox[open] {
       position: fixed;
       inset-block-start: 50%;
       inset-inline-start: 50%;
@@ -2459,6 +2465,11 @@
       display: block;
       border-radius: 8px;
       cursor: pointer;
+      /* Not real DRM (a screenshot is fine, watermarked) — just removes the easy paths: no
+         drag-out-to-save, no desktop right-click "Save image as", no iOS long-press "Save to Photos". */
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
     }
     /* Prev/Next overlay circles pinned to the image's left/right edges (the dialog's own box is
        sized to the image, so these anchor against the dialog, not the image directly) — [hidden]
@@ -2506,6 +2517,28 @@
     .lightbox-meta[hidden] { display: none; }
     .lightbox-counter { opacity: 0.75; font-weight: 500; }
     .lightbox-counter[hidden] { display: none; }
+    /* Provenance watermark, bottom-right over the image: static app + company identity, one line
+       (index.html — same text on every photo, no JS involved). Ellipsized rather than wrapped if
+       a narrow photo can't fit it. No kind label (As Found/After Repair) here — that's already
+       shown in .lightbox-meta above. Always on; pointer-events:none so it never blocks the
+       click-to-close/nav buttons beneath it. */
+    .lightbox-watermark {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      max-width: min(400px, 88%);
+      background: rgba(15, 23, 42, 0.55);
+      color: rgba(255, 255, 255, 0.92);
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: var(--fs-2xs);
+      font-weight: 600;
+      z-index: 2;
+      pointer-events: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
 
     .footer {
       text-align: center;

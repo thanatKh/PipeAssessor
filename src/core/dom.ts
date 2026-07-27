@@ -46,7 +46,24 @@ function setBodyScrollLocked(locked) {
   document.body.style.overflow = openDialogCount > 0 ? 'hidden' : '';
 }
 
+// Native <dialog> can close itself without ever calling our closeDialog() below — e.g. the
+// browser's own Escape-to-cancel handling. That path still fires a native 'close' event, so
+// hook that once per dialog as the single source of truth for cleanup (.is-open/.is-closing
+// class removal + the scroll-lock decrement), instead of only doing it inside closeDialog().
+// Without this, Escape left .is-open stuck and the scroll lock stuck forever (and, for
+// dialog#lightbox specifically, left the photo visibly on screen — see its [open]-scoped CSS).
+const dialogsWithCloseSync = new WeakSet<any>();
+function ensureCloseSync(el) {
+  if (dialogsWithCloseSync.has(el)) return;
+  dialogsWithCloseSync.add(el);
+  el.addEventListener('close', () => {
+    el.classList.remove('is-open', 'is-closing');
+    setBodyScrollLocked(false);
+  });
+}
+
 export function openDialog(el) {
+  ensureCloseSync(el);
   el.showModal();
   el.classList.remove('is-closing');
   void el.offsetWidth; // reflow so the open transition always replays from --modal-scale
@@ -57,7 +74,9 @@ export function closeDialog(el) {
   const closeMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--modal-close-dur')) || 150;
   el.classList.remove('is-open');
   el.classList.add('is-closing');
-  setBodyScrollLocked(false);
+  // setBodyScrollLocked(false) is NOT called here — the 'close' listener from ensureCloseSync
+  // handles it once el.close() actually fires below, so there's exactly one decrement per real
+  // close regardless of which path triggered it.
   setTimeout(() => { el.classList.remove('is-closing'); el.close(); }, closeMs);
 }
 

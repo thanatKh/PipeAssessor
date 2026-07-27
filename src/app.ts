@@ -682,6 +682,9 @@ function initApp() {
   });
   $('lightboxPrev').addEventListener('click', lightboxPrev);
   $('lightboxNext').addEventListener('click', lightboxNext);
+  // Block the desktop "Save image as..." context menu — not real DRM (screenshots are fine, the
+  // watermark travels with those), just removes the one-click save path.
+  $('lightboxImg').addEventListener('contextmenu', (e) => e.preventDefault());
 }
 
 export { initApp };

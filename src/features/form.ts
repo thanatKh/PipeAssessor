@@ -16,7 +16,7 @@ import { downscaleImage } from '../engine/branding';
 import { paCreateAssessView } from '../workbench/assess-view';
 import { resolveAdvisor, paRenderRepairAdvisor } from '../workbench/repair-advisor';
 import {
-  session, current, editingId, setEditingId, pendingPhotos, setPendingPhotos,
+  session, current, setCurrent, editingId, setEditingId, pendingPhotos, setPendingPhotos,
   pickMap, setPickMap, pickMarker, setPickMarker,
   assessResult, setAssessResult, severityTouched, setSeverityTouched,
   lastLoadedAssessInputs, setLastLoadedAssessInputs,
@@ -890,6 +890,10 @@ export function initQuickCalc() {
 
 export function openForm(f) {
   setEditingId(f ? f.id : null);
+  // Lightbox watermark (detail.ts's renderLightboxFrame) reads `current` for the tag — the edit
+  // form doesn't otherwise keep `current` pointed at the finding being edited when reached
+  // directly (e.g. dashboard list -> #/edit/<id> without visiting the detail page first).
+  if (f) setCurrent(f);
   clearValidation();
   setPendingPhotos([]);
   renderPendingGrid();

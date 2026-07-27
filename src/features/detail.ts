@@ -347,6 +347,8 @@ export function renderLightboxFrame() {
   // Clamped at the ends, not wraparound — see the recommendation this followed.
   $('lightboxPrev').hidden = !multi || lightboxIndex === 0;
   $('lightboxNext').hidden = !multi || lightboxIndex === lightboxPhotos.length - 1;
+  // #lightboxWatermark itself is static markup (index.html) — same text on every photo, so
+  // there's nothing to set here.
 }
 
 export function lightboxPrev() {
