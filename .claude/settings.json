@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(curl -sI http://localhost:5176/)",
+      "Bash(PA_TEST_EMAIL='thanat.k@pttor.com' PA_TEST_PASSWORD='Mckhem.2536' node ./__verify_combo.mjs)"
+    ]
+  }
+}
