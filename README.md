@@ -1,6 +1,13 @@
 <h1>Pipe Assessor</h1>
 
 <p>
+    <img src="https://img.shields.io/badge/Vite-6.0-646CFF?logo=vite&logoColor=white" alt="Vite">
+    <img src="https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
+    <img src="https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3ECF8E?logo=supabase&logoColor=white" alt="Supabase">
+    <img src="https://img.shields.io/badge/Leaflet-1.9-199900?logo=leaflet&logoColor=white" alt="Leaflet">
+</p>
+
+<p>
     Pipe Assessor is a Supabase-backed findings tracker for piping inspection programs, with a full
     <strong>ASME B31.3</strong> wall-thickness assessment workbench and an inspection-planning module
     built in. Every abnormal finding from a vendor inspection is logged and tracked through a status
