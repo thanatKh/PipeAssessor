@@ -29,7 +29,7 @@
      — excluding them would hide real problems).
    ============================================================================ */
 import { $, esc, fmtDate } from '../core/dom';
-import { WALL_LOSS_TYPES, TYPE_COLORS, FINDING_TYPE_SHORT } from '../core/constants';
+import { WALL_LOSS_TYPES, TYPE_COLORS, FINDING_TYPE_SHORT, TERMINALS } from '../core/constants';
 import { sb } from '../core/supabase';
 import { paFmt } from '../engine/format';
 import {
@@ -231,9 +231,8 @@ const RISK_LEGEND_HTML = `<div class="legend">
 </div>`;
 
 export function renderRiskTerminalChart(lines) {
-  const terminals = ['KBY', 'SRC', 'BRP'];
   const el = $('riskTerminalChart');
-  const bars = terminals.map(t => {
+  const bars = TERMINALS.map(t => {
     const rows = lines.filter(l => l.terminal === t);
     if (!rows.length) return '';
     const counts = { high: 0, medium: 0, low: 0, na: 0 };

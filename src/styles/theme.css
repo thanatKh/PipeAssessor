@@ -196,7 +196,12 @@ body > header .wrap {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 20px;
+  /* --hdr-pad-x is the single source of truth for this row's left padding — .sb-toggle (below)
+     reads the same variable to pull itself flush with the header's own edge, so the two can never
+     drift out of sync at a breakpoint. Redeclare both together (padding AND --hdr-pad-x) at any
+     breakpoint that changes this padding — see the 480px override further down. */
+  --hdr-pad-x: 20px;
+  padding: 12px var(--hdr-pad-x);
   flex-wrap: wrap;
   gap: 10px;
 }
@@ -218,6 +223,282 @@ body > header .wrap {
 .header-accent-bar {
   height: 3px;
   background: linear-gradient(90deg, var(--header-accent) 0%, var(--header-accent-2) 100%);
+}
+
+/* ============================================================================
+   Sidebar navigation.
+
+   Replaced the old header button row once the app grew past ~4 nav items. This
+   is a deliberate departure from the app's former "wrap, not hamburger" rule —
+   that rule existed because a growing header row had no bounded home and once
+   dragged the page wider than the physical screen. A sidebar gives nav its own
+   axis, so the top bar can stay short permanently.
+
+   The top bar deliberately STAYS. --app-header-h is measured off `body > header`
+   (app.ts's syncHeaderHeight) and two sticky consumers hang off it — .toaster and
+   .sticky-page-header (the one shared sticky-toolbar treatment used by every page
+   that has one) — plus .page-loading-bar is anchored to it. Keeping the bar means
+   none of that needed rework.
+   ============================================================================ */
+:root {
+  --sidebar-w: 240px;
+  --sidebar-w-collapsed: 56px;
+}
+
+/* Icon-rail mode. Set on <body> and persisted in localStorage (same precedent as
+   body.hide-row-photos). Overriding the custom property here means main.wrap's
+   margin follows automatically — no second rule to keep in sync. */
+body.sidebar-collapsed {
+  --sidebar-w: var(--sidebar-w-collapsed);
+}
+
+.app-sidebar {
+  position: fixed;
+  top: var(--app-header-h, 64px);
+  left: 0;
+  bottom: 0;
+  width: var(--sidebar-w);
+  /* Below the header (100) so it tucks under it, above page content, and well
+     below map presentation mode (9000) which is meant to cover everything. */
+  z-index: 90;
+  background: var(--card-bg);
+  border-right: 1px solid var(--card-border);
+  /* Flex column so the account footer (.sb-footer) pins to the bottom of the rail while the nav
+     list (.sb-nav) scrolls independently above it — the footer must never scroll out of view. */
+  display: flex;
+  flex-direction: column;
+}
+
+.sb-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 8px;
+}
+
+.sb-group { margin-bottom: 14px; }
+.sb-group:last-child { margin-bottom: 0; }
+
+.sb-group-title {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-light);
+  padding: 0 10px;
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+
+.sb-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  color: var(--text-color);
+  text-decoration: none;
+  font-size: var(--fs-base);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sb-link:hover { background: var(--button-ghost-hover); }
+
+.sb-link.is-active {
+  background: color-mix(in oklab, var(--button-primary) 12%, transparent);
+  color: var(--button-primary);
+  font-weight: 700;
+}
+
+/* Left accent bar on the active item — reads clearly even at a glance / in peripheral vision,
+   and survives icon-rail mode (where the tinted-background alone reads weaker at 40px wide). */
+.sb-link.is-active::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--button-primary);
+}
+
+.sb-ico {
+  flex: none;
+  width: 20px;
+  text-align: center;
+  font-size: var(--fs-md);
+  color: var(--text-light);
+}
+
+.sb-link.is-active .sb-ico { color: var(--button-primary); }
+
+/* Collapsed rail: labels and group headings go, icons stay centred. The <a>
+   keeps its title attribute (set in app.ts) so the name is still reachable. */
+body.sidebar-collapsed .sb-label,
+body.sidebar-collapsed .sb-group-title { display: none; }
+
+body.sidebar-collapsed .sb-link { justify-content: center; padding: 3px 0; gap: 0; }
+body.sidebar-collapsed .sb-group { margin-bottom: 8px; }
+body.sidebar-collapsed .sb-link.is-active::before { left: -4px; }
+
+/* Icon-rail mode: the hover/active tint sits on a fixed 34x34 box around just the icon, matching
+   the header toggle's own button size and radius exactly — instead of tinting the full-width
+   link row (40px, wider than the toggle), which read as misaligned chrome even though the glyphs
+   inside were already pixel-centered on the same column (verified separately: geometric box
+   center and actual rendered ink centroid agreed to under 1px).
+
+   The 34x34 sizing on .sb-ico is applied UNCONDITIONALLY here — not only on :hover/.is-active.
+   A real regression shipped from getting this wrong: sizing .sb-ico only inside the :hover/
+   .is-active rules meant hovering over an item grew its icon box from 20px to 34px ON HOVER,
+   which grew that link's own row height (align-items:center + the icon being the only visible
+   child), pushing every icon below it down the rail — the icons visibly "moved" whenever the
+   mouse passed over them. Keeping the box permanently 34x34 and only ever toggling its
+   BACKGROUND COLOR on hover/active eliminates any layout shift; nothing about an icon's size or
+   position may change on interaction here, only its color. */
+body.sidebar-collapsed .sb-link:hover,
+body.sidebar-collapsed .sb-link.is-active {
+  background: none;
+}
+
+body.sidebar-collapsed .sb-ico {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+}
+
+body.sidebar-collapsed .sb-link:hover .sb-ico { background: var(--button-ghost-hover); }
+/* After the hover rule (equal specificity) so the active tint wins when both apply at once. */
+body.sidebar-collapsed .sb-link.is-active .sb-ico { background: color-mix(in oklab, var(--button-primary) 12%, transparent); }
+
+/* ---- Account footer: avatar + email/role + icon-only sign out, pinned under .sb-nav ----
+   Lives in the sidebar (not the header) so the header never grows past brand + the sidebar
+   toggle, regardless of how many nav items or roles the app gains later. */
+.sb-footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px;
+  border-top: 1px solid var(--card-border);
+}
+
+.sb-avatar {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in oklab, var(--button-primary) 16%, transparent);
+  color: var(--button-primary);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.sb-user-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sb-user-email {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sb-user-role {
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-light);
+}
+
+.sb-signout {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-light);
+  font-size: var(--fs-md);
+  cursor: pointer;
+}
+
+.sb-signout:hover { background: var(--button-ghost-hover); color: var(--danger-color); }
+
+/* Collapsed rail: stack avatar above the sign-out icon (side-by-side doesn't fit a 56px rail),
+   drop the email/role text (same treatment as .sb-label above). */
+body.sidebar-collapsed .sb-footer { flex-direction: column; padding: 10px 4px; gap: 8px; }
+body.sidebar-collapsed .sb-user-text { display: none; }
+
+/* Hamburger / collapse control in the top bar.
+   The button's hit-box (.sb-toggle) is deliberately WIDER than its visible glyph
+   (.sb-toggle-glyph): fixed to exactly --sidebar-w-collapsed and pulled flush with the header's
+   own left edge via a negative margin equal to --hdr-pad-x (the same variable .wrap's own left
+   padding is built from — see that rule's comment — so the two can never drift apart at a
+   breakpoint). Centering the glyph inside that slot lands its center at exactly half of
+   --sidebar-w-collapsed from the page's left edge — precisely where the collapsed sidebar's own
+   icon column centers too, since its .sb-nav padding is symmetric (8px both sides), which always
+   centers content on half the sidebar's width regardless of the padding value itself. A real
+   user-reported bug: before this, the toggle's fixed 34px box just sat after .wrap's 20px padding
+   with no relation to the sidebar's geometry, so the two visibly drifted apart once the sidebar
+   collapsed to its icon rail (measured: toggle center 37px vs sidebar icon center 27.5px). Fixed
+   here structurally, not with a one-off pixel nudge, so it can't silently reappear if any of
+   these sizes change later. Widening the hit-box also grows the click/tap target, a bonus. */
+.sb-toggle {
+  flex: none;
+  width: var(--sidebar-w-collapsed);
+  margin-left: calc(-1 * var(--hdr-pad-x));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.sb-toggle-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: var(--fs-lg);
+}
+
+.sb-toggle:hover .sb-toggle-glyph { background: var(--button-ghost-hover); }
+
+/* Backdrop for the mobile drawer only — never shown on desktop. */
+.sidebar-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 89;
+  display: none;
 }
 
 /* Global "something is loading" indicator (page-loading skill.dev): an indeterminate sliding bar
@@ -262,19 +543,18 @@ body.is-loading .page-loading-bar {
 }
 
 /* <480px: the title text drops (the logo alone carries brand identity at this width; the full
-   name is still in the browser tab) and buttons condense to fit. Brand + actions still try to
-   share one row (flex-wrap here, not nowrap) — a fixed `nowrap` was tried once but broke down
-   once the roles feature added the Users button: with 4-5 items (logo, Line Risk, Quick Calc,
-   Users, Sign out) there is no amount of shrinking that fits them on one un-wrapping row on a
-   real phone, and forcing it just pushed the header — and with it the whole page, since nothing
-   else clips it — wider than the physical screen. Wrapping lets .header-actions (the button
-   group) drop to its own row only when it doesn't fit, instead of overflowing. Any future header
-   item (badges, counters, etc.) should assume this row can grow again — wrap, don't force
-   nowrap. */
+   name is still in the browser tab). Brand + actions still try to share one row (flex-wrap here,
+   not nowrap) — a fixed `nowrap` was tried once and shipped a real regression (see the sidebar
+   note above `.app-sidebar`): once the header held enough items, nothing clipped the overflow and
+   the whole page got dragged wider than the physical screen. The header is down to just brand +
+   the public-share badge now (account/sign-out moved to the sidebar footer, nav moved to the
+   sidebar), so this rule matters far less than it used to — kept anyway as the standing policy
+   for anything added to the header later: wrap, don't force nowrap. */
 @media (max-width: 480px) {
   body > header .wrap {
     flex-wrap: wrap;
-    padding: 10px 14px;
+    --hdr-pad-x: 14px; /* redeclared alongside padding, see the base rule's comment above */
+    padding: 10px var(--hdr-pad-x);
     gap: 6px 8px;
   }
 
@@ -287,17 +567,6 @@ body.is-loading .page-loading-bar {
     flex-wrap: wrap;
     justify-content: flex-end;
     margin-left: auto;
-  }
-
-  .hdr-btn-group {
-    gap: 6px;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
-
-  .hdr-btn {
-    padding: 7px 10px;
-    font-size: var(--fs-sm); /* was 11.5px */
   }
 }
 
@@ -326,36 +595,6 @@ body.is-loading .page-loading-bar {
   gap: 14px;
 }
 
-.hdr-btn-group {
-  display: flex;
-  gap: 8px;
-}
-
-.hdr-btn {
-  flex: none;
-  padding: 8px 16px;
-  font-size: var(--fs-base);
-  font-weight: 600;
-  white-space: nowrap;
-  border-radius: 6px;
-  text-decoration: none; /* header buttons may be <a> links (page navigation) */
-}
-
-.hdr-btn[data-variant="outline"] {
-  background: var(--button-ghost);
-  border-color: var(--button-ghost-border);
-  color: var(--header-text);
-}
-
-.hdr-btn[data-variant="outline"]:hover {
-  background: var(--button-ghost-hover);
-  border-color: var(--button-primary);
-}
-
-.hdr-btn:not([data-variant="outline"]) {
-  box-shadow: 0 1px 2px rgba(21, 107, 149, 0.25);
-}
-
 @media (max-width: 700px) {
   .hdr-logo {
     height: 30px;
@@ -363,21 +602,6 @@ body.is-loading .page-loading-bar {
 
   .hdr-logo-chip {
     padding: 6px 10px;
-  }
-
-  .hdr-btn {
-    padding: 8px 10px;
-  }
-}
-
-@media (max-width: 520px) {
-  .hdr-btn-group {
-    gap: 6px;
-  }
-
-  .hdr-btn {
-    padding: 7px 8px;
-    font-size: var(--fs-sm);
   }
 }
 

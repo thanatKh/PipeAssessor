@@ -9,7 +9,7 @@
    Extracted from the app monolith.
    ============================================================================ */
 import { $, esc, notify, openDialog, closeDialog, setBusy, todayISO, positionSegPill } from '../core/dom';
-import { FINDING_TYPES } from '../core/constants';
+import { FINDING_TYPES, TERMINALS } from '../core/constants';
 import {
   importValidRows, setImportValidRows, lineListValidRows, setLineListValidRows,
   lineList, setLineList, findings, isMaintenance,
@@ -136,7 +136,7 @@ export function validateImportRow(raw, excelRowIndex = '?') {
   }
   // required + domain checks
   const term = (p.terminal || '').toUpperCase();
-  if (!['KBY', 'SRC', 'BRP'].includes(term)) reasons.push('Terminal must be KBY, SRC or BRP');
+  if (!TERMINALS.includes(term)) reasons.push('Terminal must be one of: ' + TERMINALS.join(', '));
   else p.terminal = term;
   if (!p.pipe_tag) reasons.push('Pipe Tag is required');
   const ft = resolveFindingType(p.finding_type);
@@ -391,7 +391,7 @@ export function validateLineListRow(raw, excelRowIndex = '?') {
   if (!p.pipe_tag) reasons.push('Pipe Tag is required');
   if (p.terminal) {
     const term = p.terminal.toUpperCase();
-    if (!['KBY', 'SRC', 'BRP'].includes(term)) reasons.push('Terminal must be KBY, SRC or BRP');
+    if (!TERMINALS.includes(term)) reasons.push('Terminal must be one of: ' + TERMINALS.join(', '));
     else p.terminal = term;
   }
   const nps = resolveNps(p.nps);
@@ -518,15 +518,16 @@ export async function doLineListImport() {
     closeDialog($('lineListImportDlg'));
     notify(`Imported ${data.length} line list entr${data.length === 1 ? 'y' : 'ies'}.`);
     await loadLineList();
-    if ($('lineListManageDlg').open) {
-      renderLineListManageTable();
-      // Newly-imported tags may have resolved some of the Unlisted set — refresh the badge (and
-      // the tab's own table, if that's the one currently showing) so the count doesn't go stale.
-      const badge = $('lineListUnlistedCount');
-      const unlistedCount = computeUnlistedTags().length;
-      badge.textContent = unlistedCount ? String(unlistedCount) : '';
-      if ($('lineListUnlistedTab').style.display !== 'none') renderLineListUnlistedTable();
-    }
+    // The Import dialog's only trigger (#lineListManageImportBtn) lives on the Line List PAGE
+    // itself (#viewLineList), so reaching this point always means that page is the one currently
+    // showing — unlike the old dialog-over-dialog days, there's no need to check visibility first.
+    renderLineListManageTable();
+    // Newly-imported tags may have resolved some of the Unlisted set — refresh the badge (and
+    // the tab's own table, if that's the one currently showing) so the count doesn't go stale.
+    const badge = $('lineListUnlistedCount');
+    const unlistedCount = computeUnlistedTags().length;
+    badge.textContent = unlistedCount ? String(unlistedCount) : '';
+    if ($('lineListUnlistedTab').style.display !== 'none') renderLineListUnlistedTable();
   } catch (e) {
     $('errLineListImport').textContent = 'Import failed: ' + e.message;
     $('errLineListImport').style.display = 'block';
@@ -692,7 +693,12 @@ export async function deleteLineListRow(id) {
   } catch (e) { notify('Delete failed: ' + e.message, true); }
 }
 
-export function openLineListManageDialog() {
+// Renders the Line List PAGE (#/lines, #viewLineList). This was openLineListManageDialog() until
+// the sidebar gave administration a proper home; the body is unchanged except that it no longer
+// opens a dialog — and no longer needs a manual positionSegPill() call, because app.ts's show()
+// already re-snaps every .seg-row inside the view it activates (the dialog needed one because
+// offsetLeft/Width read 0 while display:none, which show() handles for views).
+export function renderLineListPage() {
   $('lineListSearch').value = '';
   renderLineListManageTable();
   // Badge count needs the unlisted set even while the Master List tab is showing; the table body
@@ -700,13 +706,11 @@ export function openLineListManageDialog() {
   const badge = $('lineListUnlistedCount');
   const unlistedCount = computeUnlistedTags().length;
   badge.textContent = unlistedCount ? String(unlistedCount) : '';
-  // Always reopen on the Master List tab — reset in case a prior session left it on Unlisted.
+  // Always enter on the Master List tab — reset in case a prior visit left it on Unlisted.
   const seg = $('lineListTabSeg');
   seg.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === 'master'));
   $('lineListMasterTab').style.display = 'block';
   $('lineListUnlistedTab').style.display = 'none';
-  openDialog($('lineListManageDlg'));
-  positionSegPill(seg, false); // dialog was display:none until openDialog(); offsetLeft/Width are only valid now
 }
 
 
@@ -716,14 +720,13 @@ export function openLineListManageDialog() {
    can update a role (db/schema.sql section 9). The guards here are just for a
    friendly message; the database is the real boundary.
    ============================================================================ */
-export async function openUsersDialog() {
-  if (!isMaintenance()) {
-    notify('Only the Maintenance role can manage users.', true);
-    return;
-  }
+// Loads + renders the Users & Roles PAGE (#/users, #viewUsers). Was openUsersDialog(); split into
+// a load that route() awaits and a render, matching the loadRiskData()/renderRiskPage() shape used
+// by every other page. The isMaintenance() check in route() gates access — a hash is typeable, so
+// hiding the sidebar link is not enough — and RLS on profiles is the real boundary either way.
+export async function loadUsersPage() {
   $('errUsers').style.display = 'none';
   $('usersTableBody').innerHTML = '<tr><td colspan="2" class="hint">Loading…</td></tr>';
-  openDialog($('usersDlg'));
   try {
     const { data, error } = await sb.from('profiles').select('id, email, role').order('email');
     if (error) throw error;

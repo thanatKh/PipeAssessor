@@ -148,3 +148,41 @@ export interface LineListRow {
   service?: string | null;
   [k: string]: any;
 }
+
+/* ---------------- inspection plan (#/plan) ---------------- */
+
+export type PlanStatus = 'Draft' | 'Active' | 'Complete';
+export type PlanTaskStatus = 'Not Started' | 'In Progress' | 'Done' | 'Cancelled';
+export type PipeCategory = 'Underground' | 'Sub Sea' | 'Piping';
+
+export interface InspectionPlan {
+  id?: string;
+  name: string;
+  year: number;
+  terminal?: string | null;
+  pipe_category?: PipeCategory | string | null;
+  status: PlanStatus | string;
+  notes?: string | null;
+  created_at?: string | null;
+  [k: string]: any;
+}
+
+export interface PlanTask {
+  id?: string;
+  plan_id: string;
+  seq?: number;
+  task_name: string;
+  /** soft reference to line_list.pipe_tag — no FK, may name a tag that no longer exists */
+  pipe_tag?: string | null;
+  /** all four are ISO dates pinned to the 1st of the month, e.g. '2026-03-01' */
+  plan_start?: string | null;
+  plan_end?: string | null;
+  actual_start?: string | null;
+  actual_end?: string | null;
+  progress_pct?: number | null;
+  status: PlanTaskStatus | string;
+  assignee?: string | null;
+  notes?: string | null;
+  created_at?: string | null;
+  [k: string]: any;
+}

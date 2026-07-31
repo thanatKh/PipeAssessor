@@ -525,3 +525,106 @@ drop trigger if exists pa_guard_repair on public.findings;
 create trigger pa_guard_repair
   before insert or update on public.findings
   for each row execute function public.pa_guard_repair_fields();
+
+-- ---------------------------------------------------------------------------
+-- 10. Inspection plan — the scheduling module behind #/plan.
+--
+--     Two tables: a plan header (scope: year + terminal + pipe category) and
+--     its free-text task list. Each task carries a PLANNED month range and an
+--     ACTUAL month range, which the Gantt timeline draws as two stacked bars.
+--
+--     Deliberately NOT stored here: the maintenance side of the timeline. That
+--     is derived at render time from findings' own due dates (dueDateOf /
+--     isOverdue in src/core/dom.ts), so the plan page can never disagree with
+--     the register about what repair work is outstanding.
+--
+--     Self-contained: unlike line_list (whose RLS lives in section 6), this
+--     section enables RLS and declares its own policies, so it can be applied
+--     standalone from db/inspection-plan-migration.sql.
+-- ---------------------------------------------------------------------------
+create table if not exists public.inspection_plan (
+  id uuid primary key default gen_random_uuid(),
+
+  name text not null,
+  year int not null,
+  terminal text check (terminal in ('KBY','SRC','BRP')),
+  -- Installation environment. Manual per-plan attribute: line_list has no
+  -- category column and deliberately gains none (see CLAUDE.md's note on not
+  -- growing a pipe-asset register).
+  pipe_category text check (pipe_category in ('Underground','Sub Sea','Piping')),
+  status text not null default 'Draft' check (status in ('Draft','Active','Complete')),
+  notes text,
+
+  created_by uuid not null default auth.uid(),
+  created_by_email text not null default coalesce(auth.jwt() ->> 'email', ''),
+  created_at timestamptz not null default now(),
+  updated_by uuid,
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_inspection_plan_year on public.inspection_plan (year);
+create index if not exists idx_inspection_plan_terminal on public.inspection_plan (terminal);
+
+create table if not exists public.plan_task (
+  id uuid primary key default gen_random_uuid(),
+  plan_id uuid not null references public.inspection_plan(id) on delete cascade,
+
+  seq int not null default 0,
+  task_name text not null,
+  -- SOFT reference to line_list.pipe_tag — deliberately NOT a foreign key, so
+  -- re-importing or replacing the master line list can never break a saved
+  -- plan (the same invariant line_list itself is built on, section 6a).
+  pipe_tag text,
+
+  -- Month granularity: every one of these is a DATE pinned to the 1st of the
+  -- month. Stored as a real date (not an int month + parent year) so a plan can
+  -- span a year boundary, and so the existing ISO-string date idiom — lexical
+  -- comparison, fmtDate, todayISO — applies unchanged.
+  plan_start date,
+  plan_end date,
+  actual_start date,
+  actual_end date,
+
+  progress_pct numeric check (progress_pct >= 0 and progress_pct <= 100),
+  status text not null default 'Not Started'
+    check (status in ('Not Started','In Progress','Done','Cancelled')),
+  assignee text,
+  notes text,
+
+  created_by uuid not null default auth.uid(),
+  created_by_email text not null default coalesce(auth.jwt() ->> 'email', ''),
+  created_at timestamptz not null default now(),
+  updated_by uuid,
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_plan_task_plan on public.plan_task (plan_id);
+create index if not exists idx_plan_task_tag on public.plan_task (pipe_tag);
+
+drop trigger if exists trg_inspection_plan_touch on public.inspection_plan;
+create trigger trg_inspection_plan_touch
+  before update on public.inspection_plan
+  for each row execute function public.touch_updated_at();
+
+drop trigger if exists trg_plan_task_touch on public.plan_task;
+create trigger trg_plan_task_touch
+  before update on public.plan_task
+  for each row execute function public.touch_updated_at();
+
+-- RLS: any authenticated user may read AND write plans.
+--
+--     This deliberately does NOT follow the line_list pattern (read all / write
+--     maintenance). Inspection scheduling is inspector work — unlike repair
+--     scheduling, cost and closeout, which stay maintenance-owned on findings
+--     via pa_guard_repair_fields. Plans are a shared planning surface, so the
+--     policy pair is the same blanket authenticated access `assessments` uses.
+alter table public.inspection_plan enable row level security;
+alter table public.plan_task enable row level security;
+
+drop policy if exists "plan authenticated full access" on public.inspection_plan;
+create policy "plan authenticated full access" on public.inspection_plan
+  for all to authenticated using (true) with check (true);
+
+drop policy if exists "plan task authenticated full access" on public.plan_task;
+create policy "plan task authenticated full access" on public.plan_task
+  for all to authenticated using (true) with check (true);

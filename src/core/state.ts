@@ -145,3 +145,16 @@ export let riskAssessments: any = [];
 export function setRiskAssessments(v: any) { riskAssessments = v; }
 
 export const riskFilters: any = { terminal: '', includeResolved: false, band: '', q: '' };
+
+// Inspection Plan page (#/plan): plan headers and their tasks, loaded together on each visit
+// (two bulk queries, see features/plan.ts's loadPlanData()). The maintenance half of the timeline
+// is NOT held here — it's derived from `findings` at render time so it can never drift from the
+// register.
+export let plans: any = [];
+export function setPlans(v: any) { plans = v; }
+
+export let planTasks: any = [];
+export function setPlanTasks(v: any) { planTasks = v; }
+
+// `show` selects which layers the Gantt draws: 'both' | 'inspection' | 'maintenance'.
+export const planFilters: any = { year: 0, terminal: '', category: '', show: 'both', q: '' };

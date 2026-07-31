@@ -54,6 +54,14 @@ export const FINDING_TYPE_SHORT = {
   'Other': 'Other'
 };
 
+// The three terminals. Mirrors the `check (terminal in (...))` constraint on findings, line_list
+// and inspection_plan in db/schema.sql — same "must match exactly in both places" rule as STATUSES.
+// Used by import-export.ts's row validators and risk.ts's terminal chart. index.html's several
+// <option>KBY</option>-style selects still hardcode the list in markup — a JS constant can't
+// populate static HTML options without adding render logic those selects don't otherwise need,
+// so that duplication is left alone rather than forcing an unrelated refactor onto them.
+export const TERMINALS = ['KBY', 'SRC', 'BRP'];
+
 export const STATUSES = ['Open', 'Monitoring', 'Repair Planned', 'Repaired', 'Closed'];
 
 // Statuses an `inspector` may set. The rest (Repair Planned / Repaired / Closed) are the repair
@@ -85,6 +93,31 @@ export const REPAIR_METHOD_OPTIONS = [
   'No Repair Required (Monitoring Cleared)',
   'Other',
 ];
+
+/* ============================ Inspection Plan (#/plan) ============================ */
+
+// Pill classes for task status, mirroring STATUS_META's shape/role for findings. (The plain
+// enumerations — plan pipe category, plan status, task status — aren't duplicated here as JS
+// arrays: each only ever needs to equal one of a <select>'s own options, which can't submit an
+// invalid value, so there's no membership check anywhere for them to back — same reason
+// findings' own STATUSES isn't used for that kind of validation either. The database's check
+// constraints, not a client-side array, are what actually enforces these three.)
+export const PLAN_TASK_STATUS_META = {
+  'Not Started': { cls: 'pt-todo' },
+  'In Progress': { cls: 'pt-prog' },
+  'Done':        { cls: 'pt-done' },
+  'Cancelled':   { cls: 'pt-cancel' }
+};
+
+// Gantt bar fills per task status. Fixed hex rather than CSS vars because the same values are
+// reused by the PDF export (features/pdf.ts's buildPlanPdf), where CSS custom properties do not
+// resolve — the same rationale as STATUS_COLORS and the PDF_* constants.
+export const PLAN_TASK_COLORS = {
+  'Not Started': '#64748b',
+  'In Progress': '#2563eb',
+  'Done':        '#059669',
+  'Cancelled':   '#94a3b8'
+};
 
 export const STATUS_META = {
   'Open':           { cls: 'st-open' },

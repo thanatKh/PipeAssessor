@@ -15,6 +15,14 @@
   <div class="page-loading-bar" id="pageLoadingBar" aria-hidden="true"></div>
   <div class="wrap">
     <div class="header-brand">
+      <!-- Collapses the sidebar to an icon rail on desktop; opens/closes the drawer on mobile.
+           Hidden when signed out / on public links, since there is no sidebar to toggle. The
+           button's own hit-box is deliberately wider than its visible glyph (see .sb-toggle in
+           theme.css) so the glyph lands exactly above the collapsed sidebar's icon column. -->
+      <button class="sb-toggle authed-only not-public" id="btnSidebar" type="button"
+              aria-label="Toggle navigation" aria-controls="appSidebar" aria-expanded="true">
+        <span class="sb-toggle-glyph" aria-hidden="true">☰</span>
+      </button>
       <a class="hdr-logo-chip" href="#/list" title="Go to dashboard">
         <img class="hdr-logo" src="/RGB_OR_Full%20color.png" alt="OR Logo" width="80" height="42"/>
       </a>
@@ -26,16 +34,86 @@
     <div class="header-actions">
       <!-- Read-only badge shown only on public share links (body.public-view) -->
       <span class="public-only public-badge">Read-only shared view — no sign-in required</span>
-      <span class="hdr-user authed-only" id="hdrUser"></span>
-      <div class="hdr-btn-group">
-        <a class="btn hdr-btn authed-only" data-variant="outline" href="#/risk">Line Risk</a>
-        <a class="btn hdr-btn not-public" data-variant="outline" href="#/calc">Quick Calc</a>
-        <button class="btn hdr-btn authed-only maintenance-only" data-variant="outline" id="btnUsers" type="button">Users</button>
-        <button class="btn hdr-btn authed-only" data-variant="outline" id="btnSignOut" type="button">Sign out</button>
-      </div>
     </div>
   </div>
 </header>
+
+<!-- ================= SIDEBAR NAV =================
+     Replaced the old header button row once the app outgrew 4 nav items. The top bar deliberately
+     STAYS (slim) rather than folding into the sidebar: --app-header-h is measured off it and two
+     sticky consumers hang off that (.toaster, .sticky-page-header — the one shared sticky-toolbar
+     wrapper every page with a toolbar now uses), plus .page-loading-bar is anchored to it.
+     Keeping it means none of that needed rework.
+     Hidden entirely when signed out and on public share links (body.public-view) — see app.css.
+
+     Account + sign out live in the sidebar's own footer (below), not the header — the header's
+     only job now is brand + the sidebar toggle, so it never grows again regardless of how many nav
+     items or roles the app gains. A flex column: `.sb-nav` scrolls independently, `.sb-footer`
+     stays pinned to the bottom of the rail. -->
+<nav class="app-sidebar authed-only not-public" id="appSidebar" aria-label="Main navigation">
+  <div class="sb-nav">
+    <div class="sb-group">
+      <div class="sb-group-title">Dashboard</div>
+      <a class="sb-link" href="#/list" data-route="#/list">
+        <span class="sb-ico" aria-hidden="true">▦</span><span class="sb-label">Overview</span>
+      </a>
+    </div>
+
+    <div class="sb-group">
+      <div class="sb-group-title">Findings</div>
+      <a class="sb-link" href="#/new" data-route="#/new">
+        <span class="sb-ico" aria-hidden="true">＋</span><span class="sb-label">New Finding</span>
+      </a>
+    </div>
+
+    <div class="sb-group">
+      <div class="sb-group-title">Planning</div>
+      <a class="sb-link" href="#/plan" data-route="#/plan">
+        <span class="sb-ico" aria-hidden="true">▤</span><span class="sb-label">Inspection Plan</span>
+      </a>
+    </div>
+
+    <div class="sb-group">
+      <div class="sb-group-title">Analytics</div>
+      <a class="sb-link" href="#/risk" data-route="#/risk">
+        <span class="sb-ico" aria-hidden="true">◈</span><span class="sb-label">Line Risk Ranking</span>
+      </a>
+      <a class="sb-link" href="#/calc" data-route="#/calc">
+        <span class="sb-ico" aria-hidden="true">∑</span><span class="sb-label">Quick Calc</span>
+      </a>
+    </div>
+
+    <!-- Hidden for inspectors by CSS, but that is UX only — both routes also carry an
+         isMaintenance() guard in app.ts's route(), since a hash is typeable. RLS is the real
+         boundary. -->
+    <div class="sb-group maintenance-only">
+      <div class="sb-group-title">Administration</div>
+      <a class="sb-link" href="#/lines" data-route="#/lines">
+        <span class="sb-ico" aria-hidden="true">▧</span><span class="sb-label">Line List</span>
+      </a>
+      <a class="sb-link" href="#/users" data-route="#/users">
+        <span class="sb-ico" aria-hidden="true">◉</span><span class="sb-label">Users &amp; Roles</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Account footer: avatar (first letter of email) + email + role, and an icon-only sign-out.
+       updateAuthUI() (app.ts) fills all three text/avatar fields; #btnSignOut keeps its id and
+       listener unchanged, only its markup moved here from the header. -->
+  <div class="sb-footer">
+    <span class="sb-avatar" id="sbAvatar" aria-hidden="true"></span>
+    <div class="sb-user-text">
+      <span class="sb-user-email" id="sbUserEmail"></span>
+      <span class="sb-user-role" id="sbUserRole"></span>
+    </div>
+    <button class="sb-signout" id="btnSignOut" type="button" title="Sign out" aria-label="Sign out">
+      <span aria-hidden="true">⏻</span>
+    </button>
+  </div>
+</nav>
+
+<!-- Tap-outside-to-close backdrop for the mobile drawer (<=960px). Inert on desktop. -->
+<div class="sidebar-scrim" id="sidebarScrim" hidden></div>
 
 <main class="wrap">
 
@@ -318,7 +396,10 @@
     <div class="panel" id="panelInfo">
       <div class="panel-h">
         <h2>Finding Info</h2>
-        <button class="btn" data-variant="outline" id="btnLineList" type="button">Manage line list</button>
+        <!-- Opens in a NEW TAB deliberately. This used to be a dialog that overlaid the form, so a
+             half-entered finding survived. The line list is a page now, and navigating in-place
+             would silently discard unsaved form input. -->
+        <a class="btn" data-variant="outline" id="btnLineList" href="#/lines" target="_blank" rel="noopener">Manage line list</a>
       </div>
       <div class="panel-b">
         <div class="fgrid">
@@ -631,21 +712,23 @@
 
   <!-- ================= LINE RISK RANKING ================= -->
   <section id="viewRisk" class="view">
-    <div class="toolbar">
-      <div class="toolbar-id-row">
-        <a class="back-link" href="#/list">&#8592; Dashboard</a>
-        <div class="risk-toolbar-title">Line Risk Ranking</div>
-      </div>
-      <div class="panel-h-btns">
-        <input id="riskSearch" class="input input-sm" type="search" placeholder="Search line tag or location…">
-        <select id="riskTerminalFilter" class="select">
-          <option value="">All terminals</option>
-          <option>KBY</option><option>SRC</option><option>BRP</option>
-        </select>
-        <label class="switch-inline">
-          <input class="input" type="checkbox" role="switch" id="riskIncludeResolved">
-          <span>Include repaired / closed</span>
-        </label>
+    <div class="sticky-page-header">
+      <div class="toolbar">
+        <div class="toolbar-id-row">
+          <a class="back-link" href="#/list">&#8592; Dashboard</a>
+          <div class="risk-toolbar-title">Line Risk Ranking</div>
+        </div>
+        <div class="panel-h-btns">
+          <input id="riskSearch" class="input input-sm" type="search" placeholder="Search line tag or location…">
+          <select id="riskTerminalFilter" class="select">
+            <option value="">All terminals</option>
+            <option>KBY</option><option>SRC</option><option>BRP</option>
+          </select>
+          <label class="switch-inline">
+            <input class="input" type="checkbox" role="switch" id="riskIncludeResolved">
+            <span>Include repaired / closed</span>
+          </label>
+        </div>
       </div>
     </div>
 
@@ -720,6 +803,197 @@
         </table>
       </div>
       <div class="tbl-foot" id="riskTableFoot"></div>
+    </div>
+  </section>
+
+  <!-- ================= INSPECTION PLAN =================
+       Plan headers scoped by year + terminal + pipe category, each holding free-text tasks with a
+       PLANNED and an ACTUAL month range. The Gantt draws those as two stacked bars per row, and
+       overlays finding-derived maintenance work (computed from dueDateOf/isOverdue at render time,
+       never stored) so the timeline can't disagree with the register. -->
+  <section id="viewPlan" class="view">
+    <div class="sticky-page-header">
+      <div class="toolbar">
+        <div class="toolbar-id-row">
+          <a class="back-link" href="#/list">&#8592; Dashboard</a>
+          <div class="risk-toolbar-title">Inspection Plan</div>
+        </div>
+        <div class="panel-h-btns">
+          <input id="planSearch" class="input input-sm" type="search" placeholder="Search task, tag or assignee…">
+          <select id="planYearFilter" class="select"></select>
+          <select id="planTerminalFilter" class="select">
+            <option value="">All terminals</option>
+            <option>KBY</option><option>SRC</option><option>BRP</option>
+          </select>
+          <select id="planCategoryFilter" class="select">
+            <option value="">All pipe types</option>
+            <option>Underground</option><option>Sub Sea</option><option>Piping</option>
+          </select>
+          <select id="planShowFilter" class="select" title="Which layers the timeline draws">
+            <option value="both">Inspection + Maintenance</option>
+            <option value="inspection">Inspection only</option>
+            <option value="maintenance">Maintenance only</option>
+          </select>
+          <button class="btn" data-variant="outline" id="btnPlanPdf" type="button">Export PDF</button>
+          <button class="btn" id="btnNewPlan" type="button">+ New Plan</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="risk-head">
+      <p class="risk-sub">Inspection programme by pipe type and terminal, with planned vs. actual months. Maintenance bars are derived from findings' own due dates — they are not editable here.</p>
+    </div>
+
+    <div class="risk-kpi-band">
+      <div class="risk-kpi rk-total" id="pkCardTotal">
+        <div class="rk-label">Tasks</div>
+        <div class="rk-num" id="planKpiTotal">0</div>
+      </div>
+      <div class="risk-kpi rk-low" id="pkCardDone">
+        <div class="rk-label">Complete</div>
+        <div class="rk-num" id="planKpiDone">0</div>
+        <div class="rk-sub">actual end recorded</div>
+      </div>
+      <div class="risk-kpi rk-med" id="pkCardProg">
+        <div class="rk-label">In Progress</div>
+        <div class="rk-num" id="planKpiProg">0</div>
+      </div>
+      <div class="risk-kpi rk-high" id="pkCardLate">
+        <div class="rk-label">Delayed</div>
+        <div class="rk-num" id="planKpiLate">0</div>
+        <div class="rk-sub">past planned end, not done</div>
+      </div>
+      <div class="risk-kpi rk-na" id="pkCardDue">
+        <div class="rk-label">Findings Due</div>
+        <div class="rk-num" id="planKpiDue">0</div>
+        <div class="rk-sub">maintenance overlay</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h">
+        <h2>Programme Timeline</h2>
+        <span class="h-note" id="planGanttNote">planned vs. actual, by month</span>
+      </div>
+      <div class="panel-b">
+        <div class="gantt-scroll" id="planGantt"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h">
+        <h2>Plans &amp; Tasks</h2>
+        <span class="h-note">click a plan to expand its tasks</span>
+      </div>
+      <div class="tbl-scroll">
+        <table class="list plan-table">
+          <thead>
+            <tr>
+              <th>Plan / Task</th>
+              <th>Pipe Tag</th>
+              <th>Planned</th>
+              <th>Actual</th>
+              <th>Assignee</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="planTableBody"></tbody>
+        </table>
+      </div>
+      <div class="tbl-foot" id="planTableFoot"></div>
+    </div>
+  </section>
+
+  <!-- ================= LINE LIST (was #lineListManageDlg; promoted to a page) ================= -->
+  <section id="viewLineList" class="view">
+    <div class="sticky-page-header">
+      <div class="toolbar">
+        <div class="toolbar-id-row">
+          <a class="back-link" href="#/list">&#8592; Dashboard</a>
+          <div class="risk-toolbar-title">Line List</div>
+        </div>
+        <div class="panel-h-btns">
+          <span class="hint" id="lineListCount" style="margin:0;">0 entries</span>
+          <button class="btn" data-variant="outline" id="lineListManageImportBtn" type="button">Import…</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-b">
+        <!-- No manual positionSegPill() call is needed on entry (the dialog version required one
+             after showModal, since offsets read 0 while display:none) — show() already re-snaps
+             every .seg-row inside the view it activates. -->
+        <div class="seg-row" id="lineListTabSeg" role="tablist" aria-label="Line list view" style="margin-bottom:10px;">
+          <span class="seg-pill" aria-hidden="true"></span>
+          <button class="seg-btn active" data-tab="master" type="button">Master List</button>
+          <button class="seg-btn" data-tab="unlisted" type="button">Unlisted Tags <span id="lineListUnlistedCount" class="seg-badge"></span></button>
+        </div>
+        <div id="lineListMasterTab">
+          <input id="lineListSearch" class="input" type="search" placeholder="Search pipe tag, terminal, NPS, material, P&amp;ID, service…" style="margin-bottom:2px;">
+          <div class="tbl-scroll">
+            <table class="list">
+              <thead>
+                <tr>
+                  <th>Pipe Tag</th><th>Terminal</th><th>NPS</th><th>Schedule</th><th>Material</th>
+                  <th>P design</th><th>P&amp;ID</th><th>Service</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="lineListTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="lineListUnlistedTab" style="display:none;">
+          <p class="hint" style="margin:0 0 6px;">
+            Pipe tags used on findings but not yet in the master list — their NPS/Schedule/Material
+            can't auto-fill on new findings until an engineer adds them here (via Import).
+          </p>
+          <div class="tbl-scroll">
+            <table class="list">
+              <thead>
+                <tr><th>Pipe Tag</th><th>Terminal</th><th>Findings</th></tr>
+              </thead>
+              <tbody id="lineListUnlistedBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= USERS & ROLES (was #usersDlg; promoted to a page) =================
+       Maintenance only. The sidebar link is CSS-hidden for inspectors, but the real guard is the
+       isMaintenance() check in app.ts's route() — a hash is typeable — backed by RLS on profiles. -->
+  <section id="viewUsers" class="view">
+    <div class="sticky-page-header">
+      <div class="toolbar">
+        <div class="toolbar-id-row">
+          <a class="back-link" href="#/list">&#8592; Dashboard</a>
+          <div class="risk-toolbar-title">Users &amp; Roles</div>
+        </div>
+        <div class="panel-h-btns">
+          <span class="hint" id="usersCount" style="margin:0;">0 users</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-b">
+        <p class="hint" style="margin:0 0 8px;">
+          <strong>Inspector</strong> reports findings, assessments, photos and SAP numbers.
+          <strong>Maintenance</strong> additionally owns the repair schedule, cost and handover
+          (Repair Planned / Repaired / Closed), after-repair photos, deletion and the line list.
+          New accounts start as Inspector.
+        </p>
+        <div id="errUsers" class="login-err" style="display:none;"></div>
+        <div class="tbl-scroll">
+          <table class="list">
+            <thead><tr><th>Email</th><th style="width:190px;">Role</th></tr></thead>
+            <tbody id="usersTableBody"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -1010,79 +1284,127 @@
   </div>
 </dialog>
 
-<!-- Line list management dialog -->
-<dialog class="app-dlg" id="lineListManageDlg" style="width:min(960px, calc(100vw - 32px));">
-  <div class="dlg-h" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-    <span>Manage Line List</span>
-    <span class="hint" id="lineListCount" style="margin:0;">0 entries</span>
-  </div>
+<!-- Inspection plan header: scope (year + terminal + pipe category) -->
+<dialog class="app-dlg" id="planDlg" style="width:min(560px, calc(100vw - 32px));">
+  <div class="dlg-h" id="planDlgTitle">New inspection plan</div>
   <div class="dlg-b">
-    <div class="seg-row" id="lineListTabSeg" role="tablist" aria-label="Line list view" style="margin-bottom:10px;">
-      <span class="seg-pill" aria-hidden="true"></span>
-      <button class="seg-btn active" data-tab="master" type="button">Master List</button>
-      <button class="seg-btn" data-tab="unlisted" type="button">Unlisted Tags <span id="lineListUnlistedCount" class="seg-badge"></span></button>
+    <div>
+      <label class="f-label req" for="planDlgName">Plan name</label>
+      <input id="planDlgName" class="input" type="text" placeholder="e.g., 2026 Subsea UT Campaign">
     </div>
-    <div id="lineListMasterTab">
-      <input id="lineListSearch" class="input" type="search" placeholder="Search pipe tag, terminal, NPS, material, P&amp;ID, service…" style="margin-bottom:2px;">
-      <div class="tbl-scroll" style="max-height:50vh;">
-        <table class="list">
-          <thead>
-            <tr>
-              <th>Pipe Tag</th><th>Terminal</th><th>NPS</th><th>Schedule</th><th>Material</th>
-              <th>P design</th><th>P&amp;ID</th><th>Service</th><th></th>
-            </tr>
-          </thead>
-          <tbody id="lineListTableBody"></tbody>
-        </table>
+    <div class="fgrid">
+      <div>
+        <label class="f-label req" for="planDlgYear">Year</label>
+        <input id="planDlgYear" class="input" type="number" step="1" placeholder="2026">
+      </div>
+      <div>
+        <label class="f-label" for="planDlgTerminal">Terminal</label>
+        <select id="planDlgTerminal" class="select">
+          <option value="">—</option>
+          <option>KBY</option><option>SRC</option><option>BRP</option>
+        </select>
       </div>
     </div>
-    <div id="lineListUnlistedTab" style="display:none;">
-      <p class="hint" style="margin:0 0 6px;">
-        Pipe tags used on findings but not yet in the master list — their NPS/Schedule/Material
-        can't auto-fill on new findings until an engineer adds them here (via Import).
-      </p>
-      <div class="tbl-scroll" style="max-height:50vh;">
-        <table class="list">
-          <thead>
-            <tr><th>Pipe Tag</th><th>Terminal</th><th>Findings</th></tr>
-          </thead>
-          <tbody id="lineListUnlistedBody"></tbody>
-        </table>
+    <div class="fgrid">
+      <div>
+        <label class="f-label" for="planDlgCategory">Pipe type</label>
+        <select id="planDlgCategory" class="select">
+          <option value="">—</option>
+          <option>Underground</option><option>Sub Sea</option><option>Piping</option>
+        </select>
+      </div>
+      <div>
+        <label class="f-label" for="planDlgStatus">Status</label>
+        <select id="planDlgStatus" class="select">
+          <option>Draft</option><option>Active</option><option>Complete</option>
+        </select>
       </div>
     </div>
+    <div>
+      <label class="f-label" for="planDlgNotes">Notes</label>
+      <textarea id="planDlgNotes" class="input" rows="2" placeholder="Scope, contractor, reference…"></textarea>
+    </div>
+    <div class="validation-alert" id="errPlanDlg"></div>
   </div>
   <div class="dlg-f">
-    <button class="btn" data-variant="outline" id="lineListManageImportBtn" type="button">Import…</button>
-    <button class="btn" id="lineListManageClose" type="button">Close</button>
+    <button class="btn" data-variant="outline" id="planDlgDelete" type="button" style="margin-right:auto;">Delete</button>
+    <button class="btn" data-variant="outline" id="planDlgCancel" type="button">Cancel</button>
+    <button class="btn" id="planDlgSave" type="button">Save</button>
   </div>
 </dialog>
 
-<!-- User management (maintenance only) — assign the Inspector / Maintenance role.
-     Reads/writes public.profiles, which is RLS-gated so only maintenance can update a role. -->
-<dialog class="app-dlg" id="usersDlg" style="width:min(720px, calc(100vw - 32px));">
-  <div class="dlg-h">
-    Users &amp; roles
-    <span class="hint" id="usersCount" style="margin:0;">0 users</span>
-  </div>
+<!-- Plan task: free-text work item with planned vs. actual month ranges.
+     Month inputs are <input type="month"> (yields YYYY-MM); plan.ts appends '-01' so every stored
+     value is a real first-of-month date — see db/schema.sql section 10. -->
+<dialog class="app-dlg" id="taskDlg" style="width:min(620px, calc(100vw - 32px));">
+  <div class="dlg-h" id="taskDlgTitle">New task</div>
   <div class="dlg-b">
-    <p class="hint" style="margin:0 0 8px;">
-      <strong>Inspector</strong> reports findings, assessments, photos and SAP numbers.
-      <strong>Maintenance</strong> additionally owns the repair schedule, cost and handover
-      (Repair Planned / Repaired / Closed), after-repair photos, deletion and the line list.
-      New accounts start as Inspector.
-    </p>
-    <div id="errUsers" class="login-err" style="display:none;"></div>
-    <div class="table-wrap">
-      <table class="list">
-        <thead><tr><th>Email</th><th style="width:190px;">Role</th></tr></thead>
-        <tbody id="usersTableBody"></tbody>
-      </table>
+    <div>
+      <label class="f-label req" for="taskDlgName">Task</label>
+      <input id="taskDlgName" class="input" type="text" placeholder="e.g., UT survey — Jetty Block 6">
     </div>
+    <div class="fgrid">
+      <div>
+        <label class="f-label" for="taskDlgTag">Pipe tag <span class="hint" style="margin:0;font-weight:400;">(optional)</span></label>
+        <input id="taskDlgTag" class="input" type="text" list="taskDlgTagList" placeholder="e.g., 906100-8&quot;-D3101-N">
+        <datalist id="taskDlgTagList"></datalist>
+      </div>
+      <div>
+        <label class="f-label" for="taskDlgAssignee">Assignee</label>
+        <input id="taskDlgAssignee" class="input" type="text" placeholder="Team or vendor">
+      </div>
+    </div>
+    <div class="fgrid">
+      <div>
+        <label class="f-label" for="taskDlgPlanStart">Planned start</label>
+        <input id="taskDlgPlanStart" class="input" type="month">
+      </div>
+      <div>
+        <label class="f-label" for="taskDlgPlanEnd">Planned end</label>
+        <input id="taskDlgPlanEnd" class="input" type="month">
+      </div>
+    </div>
+    <div class="fgrid">
+      <div>
+        <label class="f-label" for="taskDlgActualStart">Actual start</label>
+        <input id="taskDlgActualStart" class="input" type="month">
+      </div>
+      <div>
+        <label class="f-label" for="taskDlgActualEnd">Actual end</label>
+        <input id="taskDlgActualEnd" class="input" type="month">
+      </div>
+    </div>
+    <div class="fgrid">
+      <div>
+        <label class="f-label" for="taskDlgStatus">Status</label>
+        <select id="taskDlgStatus" class="select">
+          <option>Not Started</option><option>In Progress</option>
+          <option>Done</option><option>Cancelled</option>
+        </select>
+      </div>
+      <div>
+        <label class="f-label" for="taskDlgProgress">Progress (%)</label>
+        <input id="taskDlgProgress" class="input" type="number" step="5" min="0" max="100" placeholder="0">
+      </div>
+    </div>
+    <div>
+      <label class="f-label" for="taskDlgNotes">Notes</label>
+      <textarea id="taskDlgNotes" class="input" rows="2"></textarea>
+    </div>
+    <div class="validation-alert" id="errTaskDlg"></div>
   </div>
   <div class="dlg-f">
-    <button class="btn" id="usersClose" type="button">Close</button>
+    <button class="btn" data-variant="outline" id="taskDlgDelete" type="button" style="margin-right:auto;">Delete</button>
+    <button class="btn" data-variant="outline" id="taskDlgCancel" type="button">Cancel</button>
+    <button class="btn" id="taskDlgSave" type="button">Save</button>
   </div>
 </dialog>
+
+<!-- Line list management dialog -->
+<!-- Line List and Users & Roles used to be dialogs here. Both are now real pages
+     (#/lines -> #viewLineList, #/users -> #viewUsers) inside <main>, reached from the sidebar's
+     Administration group. Their import dialogs below stay dialogs — those are modal workflows
+     launched FROM the page, not browse surfaces. -->
 
 <!-- Export dialog: pick format + whether to include budget -->
 <dialog class="app-dlg" id="exportDlg">

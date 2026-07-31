@@ -39,7 +39,14 @@ function updateAuthUI() {
   // Only stamped while signed in, so the login/public views are unaffected.
   document.body.classList.toggle('role-inspector', !!session && !isMaintenance());
   document.body.classList.toggle('role-maintenance', !!session && isMaintenance());
-  $('hdrUser').textContent = session ? (session.user.email || '') : '';
+  // Account footer lives in the sidebar now (.sb-footer, theme.css), not the header — see
+  // #appSidebar in index.html. Avatar is just the email's first letter; no photo storage exists
+  // or is planned for this.
+  const email = session ? (session.user.email || '') : '';
+  $('sbUserEmail').textContent = email;
+  $('sbUserEmail').title = email;
+  $('sbUserRole').textContent = session ? (isMaintenance() ? 'Maintenance' : 'Inspector') : '';
+  $('sbAvatar').textContent = email ? email[0].toUpperCase() : '';
 }
 
 /* Read the signed-in user's role from public.profiles. Called before route() on every sign-in so
@@ -196,6 +203,58 @@ export function show(viewId) {
   // display:none — same gotcha as the dashboard/detail Leaflet maps. Re-snap (no animation)
   // now that the view is visible.
   document.querySelectorAll(`#${viewId} .seg-row`).forEach(row => positionSegPill(row, false));
+  syncSidebarActive();
+}
+
+// Highlights the sidebar entry for the current hash. Driven from show() rather than from a
+// hashchange listener so it can never disagree with the view that actually rendered (a guarded
+// route that redirects, e.g. an inspector hitting #/users, ends up on #/list and highlights
+// #/list — not the link they clicked).
+function syncSidebarActive() {
+  const h = location.hash || '#/list';
+  document.querySelectorAll('.app-sidebar .sb-link').forEach(a => {
+    const route = a.dataset.route || '';
+    // #/new and #/edit/<id> both render the form; treat the edit route as "not New Finding" so
+    // editing an existing finding doesn't light up the create link.
+    const active = route === '#/list'
+      ? (h === '#/list' || h === '' || h === '#')
+      : h === route;
+    a.classList.toggle('is-active', active);
+  });
+}
+
+/* Sidebar open/collapse.
+   - Desktop (>960px): toggles body.sidebar-collapsed, an icon rail, persisted in localStorage.
+   - Mobile  (<=960px): toggles body.sidebar-open, an off-canvas drawer over a scrim.
+   One button drives both because which one applies is purely a matter of viewport width. */
+const SIDEBAR_KEY = 'pa-sidebar-collapsed';
+
+function isNarrow() { return window.matchMedia('(max-width: 960px)').matches; }
+
+function setSidebarCollapsed(collapsed) {
+  document.body.classList.toggle('sidebar-collapsed', collapsed);
+  try { localStorage.setItem(SIDEBAR_KEY, collapsed ? '1' : '0'); } catch { /* private mode */ }
+  const btn = $('btnSidebar');
+  if (btn) btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+}
+
+function closeSidebarDrawer() {
+  document.body.classList.remove('sidebar-open');
+  const scrim = $('sidebarScrim');
+  if (scrim) scrim.hidden = true;
+}
+
+function toggleSidebar() {
+  if (isNarrow()) {
+    const open = !document.body.classList.contains('sidebar-open');
+    document.body.classList.toggle('sidebar-open', open);
+    const scrim = $('sidebarScrim');
+    if (scrim) scrim.hidden = !open;
+    const btn = $('btnSidebar');
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  } else {
+    setSidebarCollapsed(!document.body.classList.contains('sidebar-collapsed'));
+  }
 }
 
 // Public read-only share view (#/s/<id>) — no sign-in required. Intercepted before the auth gate;
@@ -245,6 +304,34 @@ async function route() {
       renderRiskPage();
       return;
     }
+    if (h === '#/plan') {
+      // Needs findings too — the timeline's maintenance layer is derived from their due dates
+      // (dueDateOf/isOverdue) rather than stored, so it must be loaded alongside the plans.
+      await loadFindings();
+      await loadPlanData();
+      show('viewPlan');
+      renderPlanPage();
+      return;
+    }
+    // Administration routes. The sidebar links are CSS-hidden for inspectors, but a hash is
+    // typeable — so these need a real guard, unlike the dialogs they replaced (which were
+    // implicitly protected by their trigger button being hidden). This is still UX only; RLS on
+    // line_list/profiles is the actual boundary. isMaintenance() is never stale here because
+    // loadProfile() is awaited before route() on every auth flip.
+    if (h === '#/lines') {
+      if (!isMaintenance()) { notify('Maintenance role required.', true); location.hash = '#/list'; return; }
+      if (!lineList.length) await loadLineList();
+      if (!findings.length) await loadFindings(); // the Unlisted Tags tab diffs against findings
+      show('viewLineList');
+      renderLineListPage();
+      return;
+    }
+    if (h === '#/users') {
+      if (!isMaintenance()) { notify('Maintenance role required.', true); location.hash = '#/list'; return; }
+      show('viewUsers');
+      await loadUsersPage();
+      return;
+    }
     if (h.startsWith('#/edit/')) {
       const id = h.slice(7);
       let f = findings.find(x => x.id === id) || (current && current.id === id ? current : null);
@@ -279,7 +366,7 @@ import {
 /* ---------------- CSV export (filtered register, Excel-friendly UTF-8 BOM) ---------------- */
 
 import {
-  CSV_COLS, exportCsv, IMPORT_COLS, importHeaderMap, resolveFindingType, toImportDate, toImportNum, validateImportRow, renderImportPreview, parseImportFile, doImport, downloadImportTemplate, openImportDialog, LINE_LIST_IMPORT_COLS, lineListHeaderMap, resolveNps, resolveSchedule, resolveMaterialCode, validateLineListRow, renderLineListImportPreview, parseLineListImportFile, doLineListImport, downloadLineListTemplate, openLineListImportDialog, loadLineList, renderLineListManageTable, deleteLineListRow, openLineListManageDialog, initLineListTabs, openUsersDialog,
+  CSV_COLS, exportCsv, IMPORT_COLS, importHeaderMap, resolveFindingType, toImportDate, toImportNum, validateImportRow, renderImportPreview, parseImportFile, doImport, downloadImportTemplate, openImportDialog, LINE_LIST_IMPORT_COLS, lineListHeaderMap, resolveNps, resolveSchedule, resolveMaterialCode, validateLineListRow, renderLineListImportPreview, parseLineListImportFile, doLineListImport, downloadLineListTemplate, openLineListImportDialog, loadLineList, renderLineListManageTable, deleteLineListRow, renderLineListPage, initLineListTabs, loadUsersPage,
 } from './features/import-export';
 
 import {
@@ -293,6 +380,10 @@ import {
 /* ---------------- Line Risk Ranking ---------------- */
 
 import { loadRiskData, renderRiskPage, initRiskPage } from './features/risk';
+
+/* ---------------- Inspection Plan ---------------- */
+
+import { loadPlanData, renderPlanPage, initPlanPage } from './features/plan';
 
 /* ===================== Finding PDF report =====================
    Same visual language as the calculator's report (navy headings, hairline
@@ -426,7 +517,14 @@ function initApp() {
       if (flipped) setPageLoading(true);
       try {
         if (flipped) await loadProfile();
-        updateAuthUI();
+        // updateAuthUI() only paints chrome (role classes, the sidebar footer's email/avatar/role
+        // text) — it must never be able to block routing. It's isolated in its own try/catch: if it
+        // throws for any reason (e.g. a DOM element it expects isn't there yet — a stale page that
+        // hasn't picked up a markup change is the classic way to hit this), sign-out/sign-in would
+        // otherwise silently stop dead right here, before the `route()` call below ever runs — the
+        // session flips correctly under the hood, but the visible view never changes, which reads
+        // as "the button doesn't do anything." Routing must survive a chrome-paint failure.
+        try { updateAuthUI(); } catch (e) { console.error('updateAuthUI failed (chrome not repainted, continuing to route):', e); }
         // PASSWORD_RECOVERY fires when the user lands via the emailed reset link — Supabase has
         // already signed them in with a recovery session at this point, so the normal `flipped ->
         // route()` path below would send them straight to the dashboard instead of letting them set
@@ -441,6 +539,21 @@ function initApp() {
 
   // routing
   window.addEventListener('hashchange', route);
+
+  // sidebar: restore the collapsed rail before first paint so it never flashes wide then narrow
+  // (same reasoning as the register's photo toggle above).
+  try {
+    if (localStorage.getItem(SIDEBAR_KEY) === '1') document.body.classList.add('sidebar-collapsed');
+  } catch { /* private mode — default to expanded */ }
+  $('btnSidebar')?.addEventListener('click', toggleSidebar);
+  $('sidebarScrim')?.addEventListener('click', closeSidebarDrawer);
+  // Navigating always dismisses the mobile drawer — otherwise it stays over the page the user
+  // just asked for. No-op on desktop, where the drawer class is never set.
+  document.querySelectorAll('.app-sidebar .sb-link').forEach(a =>
+    a.addEventListener('click', () => { if (isNarrow()) closeSidebarDrawer(); }));
+  // Leaving the drawer open while the viewport grows past the breakpoint would strand the scrim
+  // over a desktop layout, so drop it on any widen.
+  window.addEventListener('resize', () => { if (!isNarrow()) closeSidebarDrawer(); });
 
   // list
   $('btnNew').addEventListener('click', () => { location.hash = '#/new'; });
@@ -495,12 +608,10 @@ function initApp() {
   $('importFile').addEventListener('change', (e) => { if (e.target.files[0]) parseImportFile(e.target.files[0]); });
   $('importConfirm').addEventListener('click', doImport);
 
-  $('btnUsers').addEventListener('click', openUsersDialog);
-  $('usersClose').addEventListener('click', () => closeDialog($('usersDlg')));
-
-  $('btnLineList').addEventListener('click', openLineListManageDialog);
+  // Line List and Users & Roles are pages now (#/lines, #/users) reached from the sidebar, so
+  // there are no open/close dialog listeners here any more — route() renders them. #btnLineList
+  // (the form's shortcut) is a plain <a target="_blank"> so a half-entered finding survives.
   initLineListTabs();
-  $('lineListManageClose').addEventListener('click', () => closeDialog($('lineListManageDlg')));
   $('lineListSearch').addEventListener('input', renderLineListManageTable);
   $('lineListManageImportBtn').addEventListener('click', openLineListImportDialog);
   $('lineListImportCancel').addEventListener('click', () => closeDialog($('lineListImportDlg')));
@@ -625,6 +736,9 @@ function initApp() {
 
   // line risk ranking
   initRiskPage();
+
+  // inspection plan
+  initPlanPage();
 
   // form
   initRepairAdvisor();

@@ -9,7 +9,7 @@
    Extracted from the app monolith.
    ============================================================================ */
 import { $, val, esc, notify, todayISO, isOverdue, dueDateOf, openDialog, closeDialog, setBusy, fmtDate, fmtDateTime } from '../core/dom';
-import { STATUS_COLORS, R2_UPLOAD_ENDPOINT, PUBLIC_BASE_URL } from '../core/constants';
+import { STATUS_COLORS, R2_UPLOAD_ENDPOINT, PUBLIC_BASE_URL, PLAN_TASK_COLORS } from '../core/constants';
 import { computeB313, PA_PIPE_DATABASE } from '../engine/compute';
 import { paFmtDate, paFmtDateTime } from '../engine/format';
 import { OR_LOGO_DATAURL } from '../engine/branding';
@@ -1558,6 +1558,248 @@ export async function buildSummaryPdf(rows, includeBudget) {
     if (doc.putTotalPages) doc.putTotalPages('{tp}');
     return doc.output('blob');
   }
+}
+
+/* ---------------- Inspection Plan PDF (A4 landscape Gantt) ----------------
+   The timeline drawn as VECTOR rectangles, not a rasterized image. A Gantt bar is literally a
+   rounded rect at a computed offset, and jsPDF draws those natively — so this stays crisp at any
+   zoom or print DPI, where a rasterized SVG/HTML capture would blur (the same upscaling problem
+   that already bit the slide deck's map tile). It also means no html2canvas dependency and no
+   <foreignObject> serialization, neither of which could handle the div-based web Gantt anyway.
+
+   Bar geometry comes from ganttBarGeom() in features/plan.ts — the SAME pure function the web
+   renderer uses. The web multiplies its fractions by 100 into '%', this multiplies them by the
+   track width in mm. One source of truth, so the printed timeline can never disagree with the
+   screen (the same principle as re-deriving numbers through computeB313 rather than trusting a
+   saved copy).
+
+   Landscape A4 so twelve months of track get real width. `opts` is built by plan.ts's
+   exportPlanPdf: { plans, tasksOf, maintenance, startIdx, months, year, filters }. */
+export async function buildPlanPdf(opts) {
+  const { monthIndex, monthIndexToLabel, ganttBarGeom } = await import('./plan');
+  const { jsPDF } = await import('jspdf');
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+  await registerGoogleSansFonts(doc); // Sarabun (Latin + Thai in one face) under the 'GoogleSans' name
+  const PW = 297, PH = 210, M = 12;
+  const HEADER_H = 13, FOOTER_H = 14;
+  const now = new Date();
+
+  // Type scale — named roles only; no bare setFontSize() literal appears below (house rule across
+  // all PDF builders).
+  const FS_FOOTER_MICRO = 6.5; // footer division attribution
+  const FS_MICRO = 6.5;        // month ruler labels
+  const FS_META = 7;           // header subline, muted notes
+  const FS_LABEL = 7.5;        // footer primary line, row labels
+  const FS_BODY = 8;           // section headings within the chart
+  const FS_TITLE = 10;         // header report title
+  const FS_LOGO = 11;          // logo-fallback lettering
+
+  const { plans: planRows, tasksOf, maintenance, startIdx, months, year, filters: pf } = opts;
+
+  const logo = (typeof OR_LOGO_DATAURL !== 'undefined' && OR_LOGO_DATAURL) || await fetchAsDataUrl('/RGB_OR_Full color.png', 3000);
+  const logoIm = logo ? await loadImg(logo) : null;
+
+  const scopeBits = [pf && pf.terminal ? pf.terminal : 'All terminals', pf && pf.category ? pf.category : 'All pipe types'];
+
+  function chrome() {
+    const textOR = () => { doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LOGO); doc.setTextColor(PDF_NAVY); doc.text('OR', M, 8.5); };
+    if (logoIm) { const lh = 7.5, lw = lh * logoIm.naturalWidth / logoIm.naturalHeight; try { doc.addImage(logo, 'PNG', M, 2.5, lw, lh); } catch (_) { textOR(); } }
+    else textOR();
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_TITLE); doc.setTextColor(PDF_NAVY);
+    doc.text('INSPECTION PLAN — PROGRAMME TIMELINE', PW - M, 6.5, { align: 'right' });
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_META); doc.setTextColor(PDF_MUTED);
+    doc.text(`${year}  ·  ${scopeBits.join('  ·  ')}  ·  ${paFmtDate(now)}`, PW - M, 10.5, { align: 'right' });
+    doc.setDrawColor(PDF_NAVY); doc.setLineWidth(0.6); doc.line(M, HEADER_H - 1, PW - M, HEADER_H - 1);
+
+    doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2); doc.line(M, PH - FOOTER_H, PW - M, PH - FOOTER_H);
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_MUTED);
+    doc.text('Piping integrity — inspection programme', M, PH - FOOTER_H + 4);
+    doc.text(`Page ${doc.internal.getNumberOfPages()} of {tp}`, PW / 2, PH - FOOTER_H + 4, { align: 'center' });
+    doc.text(`Generated ${paFmtDateTime(now)}`, PW - M, PH - FOOTER_H + 4, { align: 'right' });
+    doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor('#94a3b8');
+    doc.text(['Central and Eastern Engineering and Maintenance Division', 'PTT Oil and Retail Business Public Company Limited'], PW / 2, PH - FOOTER_H + 8, { align: 'center', lineHeightFactor: 1.3 });
+    doc.setTextColor(PDF_TEXT);
+  }
+
+  // Chart geometry. The label gutter is fixed so every row's bars start at the same x, exactly
+  // like the web's CSS grid template.
+  const LABEL_W = 62;
+  const trackX = M + LABEL_W;
+  const trackW = PW - M - trackX;
+  const ROW_H = 7;
+  const BAR_H = 2.2;
+
+  chrome();
+  let y = HEADER_H + 6;
+
+  function ensure(need) {
+    if (y + need <= PH - FOOTER_H - 4) return;
+    doc.addPage();
+    chrome();
+    y = HEADER_H + 6;
+    drawMonthRuler();
+  }
+
+  // Month ruler + vertical month gridlines behind every row. Redrawn per page so a continued
+  // chart still reads.
+  function drawMonthRuler() {
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_MICRO); doc.setTextColor(PDF_MUTED);
+    for (let i = 0; i < months; i++) {
+      const cx = trackX + (i + 0.5) * (trackW / months);
+      doc.text(monthIndexToLabel(startIdx + i).replace(' 20', " '"), cx, y, { align: 'center' });
+    }
+    y += 2;
+    doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.15);
+    doc.line(trackX, y, trackX + trackW, y);
+    y += 3;
+    doc.setTextColor(PDF_TEXT);
+  }
+
+  function gridlines(rowTop, rowH) {
+    doc.setDrawColor('#e2e8f0'); doc.setLineWidth(0.1);
+    for (let i = 0; i <= months; i++) {
+      const gx = trackX + i * (trackW / months);
+      doc.line(gx, rowTop, gx, rowTop + rowH);
+    }
+  }
+
+  function todayLine(rowTop, rowH) {
+    const nowIdx = monthIndex(todayISO());
+    if (nowIdx == null || nowIdx < startIdx || nowIdx > startIdx + months - 1) return;
+    const nx = trackX + ((nowIdx - startIdx + 0.5) / months) * trackW;
+    doc.setDrawColor(PDF_NAVY); doc.setLineWidth(0.3);
+    doc.line(nx, rowTop, nx, rowTop + rowH);
+  }
+
+  // The one place bar geometry becomes millimetres. Everything else about a bar's position is
+  // decided by the shared ganttBarGeom().
+  function drawBar(geom, rowTop, offsetY, color, filled) {
+    if (!geom) return;
+    const x = trackX + geom.startFrac * trackW;
+    // Floor the width so a single-month bar is never a hairline at a wide month count.
+    const w = Math.max(1.2, geom.widthFrac * trackW);
+    if (filled) {
+      doc.setFillColor(color);
+      doc.roundedRect(x, rowTop + offsetY, w, BAR_H, 0.5, 0.5, 'F');
+    } else {
+      doc.setDrawColor(color); doc.setLineWidth(0.3);
+      doc.roundedRect(x, rowTop + offsetY, w, BAR_H, 0.5, 0.5, 'S');
+    }
+  }
+
+  drawMonthRuler();
+
+  const showInsp = !!(planRows && planRows.length);
+  if (showInsp) {
+    planRows.forEach(p => {
+      const tasks = tasksOf(p.id) || [];
+      if (!tasks.length) return;
+      ensure(ROW_H * 2);
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_NAVY);
+      const head = [p.name, p.terminal, p.pipe_category].filter(Boolean).join('  ·  ');
+      doc.text(head, M, y + 3);
+      y += 5.5;
+      doc.setTextColor(PDF_TEXT);
+
+      tasks.forEach(t => {
+        ensure(ROW_H);
+        const rowTop = y;
+        gridlines(rowTop, ROW_H - 1);
+        todayLine(rowTop, ROW_H - 1);
+
+        doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_TEXT);
+        // splitTextToSize measures against the ACTIVE font — set it first, or Thai task names
+        // mis-measure and can render blank (a real bug this project has hit before).
+        const label = doc.splitTextToSize(String(t.task_name || ''), LABEL_W - 3)[0] || '';
+        doc.text(label, M, rowTop + 3.6);
+
+        const color = PLAN_TASK_COLORS[t.status] || '#2563eb';
+        drawBar(ganttBarGeom(t.plan_start, t.plan_end, startIdx, months), rowTop, 0.8, color, false);
+        drawBar(ganttBarGeom(t.actual_start, t.actual_end, startIdx, months), rowTop, 3.6, color, true);
+        y += ROW_H;
+      });
+    });
+  }
+
+  if (maintenance && maintenance.length) {
+    ensure(ROW_H * 2);
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_NAVY);
+    doc.text("Maintenance — from findings' due dates", M, y + 3);
+    y += 5.5;
+    doc.setTextColor(PDF_TEXT);
+
+    maintenance.forEach(({ f, due }) => {
+      ensure(ROW_H);
+      const rowTop = y;
+      gridlines(rowTop, ROW_H - 1);
+      todayLine(rowTop, ROW_H - 1);
+
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_TEXT);
+      const name = f.pipe_tag || f.location_desc || '—';
+      const label = doc.splitTextToSize(String(name), LABEL_W - 3)[0] || '';
+      doc.text(label, M, rowTop + 3.6);
+
+      const color = STATUS_COLORS[f.status] || '#dc2626';
+      const geom = ganttBarGeom(due, due, startIdx, months);
+      if (geom) {
+        const x = trackX + geom.startFrac * trackW;
+        const w = Math.max(1.2, geom.widthFrac * trackW);
+        doc.setFillColor(color);
+        doc.roundedRect(x, rowTop + 2.2, w, BAR_H, 0.5, 0.5, 'F');
+        if (isOverdue(f)) {
+          // Overdue reads as a heavier outline around the block — dashed strokes are unreliable
+          // across PDF viewers, so weight carries the distinction instead of a dash pattern.
+          doc.setDrawColor(PDF_DANGER); doc.setLineWidth(0.5);
+          doc.roundedRect(x - 0.3, rowTop + 1.9, w + 0.6, BAR_H + 0.6, 0.6, 0.6, 'S');
+        }
+      }
+      y += ROW_H;
+    });
+  }
+
+  // Legend — mirrors the web panel's, so the two read the same way.
+  ensure(12);
+  y += 3;
+  doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+  doc.line(M, y, PW - M, y);
+  y += 4;
+  const legend = [
+    { label: 'Planned', color: '#2563eb', filled: false },
+    { label: 'Actual', color: '#2563eb', filled: true },
+    { label: 'Maintenance due', color: PDF_DANGER, filled: true },
+  ];
+  let lx = M;
+  doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_META); doc.setTextColor(PDF_MUTED);
+  legend.forEach(item => {
+    if (item.filled) { doc.setFillColor(item.color); doc.roundedRect(lx, y - 1.8, 6, 2.2, 0.5, 0.5, 'F'); }
+    else { doc.setDrawColor(item.color); doc.setLineWidth(0.3); doc.roundedRect(lx, y - 1.8, 6, 2.2, 0.5, 0.5, 'S'); }
+    doc.text(item.label, lx + 7.5, y);
+    lx += 7.5 + doc.getTextWidth(item.label) + 8;
+  });
+  doc.setTextColor(PDF_TEXT);
+  y += 7;
+
+  ensure(10);
+  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor(PDF_MUTED);
+  doc.text('System-generated record via Pipe Assessor — paperless piping-integrity system. No physical signature required.', M, y);
+  y += 3.6;
+  doc.text(`Maintenance bars are derived from findings' due dates and are not editable in the plan  ·  Generated ${paFmtDateTime(now)}`, M, y);
+  doc.setTextColor(PDF_TEXT);
+  y += 6;
+
+  ensure(10);
+  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor('#94a3b8');
+  doc.text('— End of Report —', PW / 2, y, { align: 'center' });
+
+  if (doc.putTotalPages) doc.putTotalPages('{tp}');
+
+  const blob = doc.output('blob');
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.target = '_blank'; a.rel = 'noopener';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  return blob;
 }
 
 /* ---------------- Presentation slides PDF (one finding per 16:9 page) ----------------

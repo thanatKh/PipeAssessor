@@ -1,27 +1,81 @@
     /* Brand tokens, base styles, .wrap, and the header suite live in asset/theme.css. */
     /* match the calculator's page width (theme.css default 1500px) */
 
-    /* Header additions specific to this page */
+    /* Header additions specific to this page. The header holds only brand + the sidebar toggle
+       now (account + sign out moved into the sidebar's own footer, .sb-footer in theme.css) — so
+       there is nothing left to style here beyond the public-share badge's row and the responsive
+       logo/title shrink. */
     .header-actions { gap: 10px; }
-
-    .hdr-user {
-      font-size: var(--fs-sm); /* was 11.5px */
-      color: var(--text-muted);
-      max-width: 180px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
 
     @media (max-width: 640px) {
       .header-info h1 { font-size: var(--fs-2xl); }
       .hdr-logo { height: 26px; }
       .hdr-logo-chip { padding: 6px 10px; }
-      .hdr-user { display: none; }
-      .hdr-btn { padding: 7px 10px; font-size: var(--fs-sm); /* was 11.5px */ }
     }
 
     body:not(.authed) .authed-only { display: none !important; }
+
+    /* ============ Sidebar layout offset ============
+       The sidebar component itself lives in theme.css; this is only the page-shell geometry.
+
+       The offset goes on `main.wrap`'s MARGIN, deliberately not on its padding and not on <body>.
+       .sticky-page-header uses `margin: -20px -20px 16px -20px` to cancel .wrap's `padding: 20px`
+       and bleed to the container edges (see its rule further down). Touching that padding — or
+       padding <body> — would misalign those bleed bars on all three pages that use them (form,
+       detail, quick calc). Changing margin-left leaves the padding contract intact.
+
+       Consequence, accepted: on ultra-wide screens content sits left-of-centre rather than
+       centred, since margin-left now beats .wrap's `margin: auto`. The max-width: 1500px cap
+       still applies. Standard app-shell behaviour. */
+    @media (min-width: 961px) {
+      body.authed:not(.public-view) main.wrap {
+        margin-left: var(--sidebar-w);
+        /* width:auto is load-bearing, not tidying. .wrap's base rule sets `width: 100%`, which
+           resolves against the VIEWPORT — so margin-left would be added on top of a full-viewport
+           width and push the page 240px wider than the screen, giving every authenticated view a
+           horizontal scrollbar. (Measured: scrollWidth 1625 vs innerWidth 1400. Same failure mode
+           as the old header `nowrap` regression — content wider than the physical screen.)
+           width:auto makes the block fill only the space left over after the margin. */
+        width: auto;
+      }
+    }
+
+    /* Below 961px the sidebar becomes an off-canvas drawer. 961px is the right breakpoint because
+       every two-column layout in the app (.dash-top, .form-split, .quick-calc-split,
+       .detail-split) already stacks there. */
+    @media (max-width: 960px) {
+      .app-sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.2s ease;
+        width: 240px;
+        box-shadow: 4px 0 16px rgba(15, 23, 42, 0.12);
+      }
+      /* The drawer always shows full labels — an icon rail makes no sense as an overlay, so the
+         desktop collapsed state is ignored here rather than compounding with it. Same treatment
+         extends to the account footer: full row (avatar + email/role + sign-out), not the
+         collapsed rail's stacked icon-only form. */
+      body.sidebar-collapsed .app-sidebar { width: 240px; }
+      body.sidebar-collapsed .sb-label,
+      body.sidebar-collapsed .sb-group-title { display: revert; }
+      body.sidebar-collapsed .sb-link { justify-content: flex-start; padding: 7px 10px; gap: 10px; }
+      body.sidebar-collapsed .sb-footer { flex-direction: row; padding: 10px; }
+      body.sidebar-collapsed .sb-user-text { display: flex; }
+
+      body.sidebar-open .app-sidebar { transform: translateX(0); }
+      body.sidebar-open .sidebar-scrim { display: block; }
+      main.wrap { margin-left: auto; }
+    }
+
+    /* A public share link has no navigation at all (every sidebar item is .authed-only or
+       .not-public), so the rail must vanish rather than render empty — and the content offset
+       must go with it, or the page sits mis-centred. Keeps #/s/<id> looking exactly as before. */
+    body.public-view .app-sidebar,
+    body:not(.authed) .app-sidebar,
+    body.public-view .sidebar-scrim { display: none !important; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .app-sidebar { transition: none; }
+    }
 
     /* ============ Views ============ */
     .view { display: none; }
@@ -1675,8 +1729,13 @@
       /* Terminal is redundant with the KBY/SRC/BRP segmented filter right above the table, and
          the tag itself usually encodes it — drop the column here so Pipe Tag gets breathing room. */
       table.register-table th:nth-child(4), table.register-table td:nth-child(4) { display: none; }
-      table.register-table th:nth-child(5), table.register-table td:nth-child(5) { width: 30px; }
-      table.register-table th:nth-child(6), table.register-table td:nth-child(6) { width: 46px; }
+      /* AGE and DUE sat flush against each other with only 4px padding and no visual break, so
+         their right-aligned numbers (e.g. "250d" next to "01 Jan 2027") read as one smeared
+         column instead of two on a narrow screen. Widened both, right-aligned AGE to match DUE's
+         alignment rhythm, and gave DUE a hairline divider so the two are legible as separate
+         columns. */
+      table.register-table th:nth-child(5), table.register-table td:nth-child(5) { width: 38px; text-align: right; }
+      table.register-table th:nth-child(6), table.register-table td:nth-child(6) { width: 58px; border-left: 1px solid var(--border-color); }
       table.register-table th, table.register-table td { padding: 8px 4px; }
       table.register-table th:first-child, table.register-table td:first-child { padding-left: 0; }
       /* Scoped to table.register-table (not a bare .pill) both to beat the base .pill rule's
@@ -1845,16 +1904,6 @@
       border-bottom: none !important;
       margin: 0 0 4px !important;
       padding: 4px 0 !important;
-    }
-
-    #viewRisk .toolbar {
-      position: sticky;
-      top: calc(var(--app-header-h, 64px) - 1px);
-      z-index: 20;
-      background: var(--bg-color);
-      padding: 10px 0;
-      margin: 0 0 12px;
-      border-bottom: 1px solid var(--card-border);
     }
 
     /* Fixed 210px on desktop, but capped to its container so it shrinks instead of forcing
@@ -2773,4 +2822,184 @@ body.auth-register .signin-only { display: none; }
   font-size: var(--fs-sm);
   color: var(--text-muted);
   text-align: center;
+}
+
+/* ============================================================================
+   Inspection Plan (#/plan, src/features/plan.ts)
+
+   The Gantt is a direct extension of the .stack-row / .mech-row idiom above:
+   nested divs sized by inline percentage, laid out by CSS Grid, responsive
+   purely because the track column is 1fr. No charting library and no SVG — the
+   codebase has trended away from hand-drawn SVG charts (the dashboard radar was
+   removed), and crucially the same geometry maths feeds the PDF export, where
+   jsPDF draws the bars as vector rectangles (features/pdf.ts's buildPlanPdf).
+   Bar offsets come from ganttBarGeom() in features/plan.ts — one source of
+   truth, so the printed timeline can never disagree with the screen.
+   ============================================================================ */
+
+/* Sticky toolbar: all seven pages that have one (Form, Detail, Quick Calc, Risk, Plan, Line
+   List, Users) now share the single .sticky-page-header treatment (theme.css/app.css near the
+   top) — shadow, edge-to-edge bleed, same z-index. This page used to have its own bespoke
+   #viewPlan/#viewLineList/#viewUsers rule copied from #viewRisk's now-removed inline variant;
+   consolidated so there is one sticky-toolbar design in the app, not two that quietly drift
+   apart (a real user-reported inconsistency — the inline variant had no shadow). */
+
+#planSearch { width: 200px; max-width: 100%; height: 32px; font-size: var(--fs-sm); }
+
+/* Horizontal scroll once the range exceeds what fits; the label column pins left so a row's
+   identity stays visible while scrolling months. Matches the .tbl-scroll idiom. */
+.gantt-scroll { overflow-x: auto; }
+.gantt-inner { min-width: 620px; }
+
+.gantt-row {
+  display: grid;
+  grid-template-columns: var(--gantt-label-w, 200px) 1fr;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.gantt-row:last-child { margin-bottom: 0; }
+
+.gantt-label {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: sticky;
+  left: 0;
+  background: var(--card-bg);
+  z-index: 2;
+  padding-right: 4px;
+}
+
+.gantt-label-plan { font-weight: 700; color: var(--text-color); font-size: var(--fs-base); }
+
+/* Month grid drawn as a repeating gradient rather than N cell divs — one paint, and it rescales
+   automatically when the month count changes (--gantt-months is set inline by the renderer). */
+.gantt-track {
+  position: relative;
+  height: 30px;
+  border-radius: 4px;
+  background:
+    repeating-linear-gradient(
+      to right,
+      transparent 0,
+      transparent calc(100% / var(--gantt-months, 12) - 1px),
+      var(--card-border) calc(100% / var(--gantt-months, 12) - 1px),
+      var(--card-border) calc(100% / var(--gantt-months, 12))
+    ),
+    var(--button-ghost-hover);
+}
+
+.gantt-head .gantt-track { background: none; height: auto; }
+
+.gantt-months {
+  display: grid;
+  grid-template-columns: repeat(var(--gantt-months, 12), 1fr);
+}
+
+.gantt-month {
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-light);
+  text-align: center;
+  padding-bottom: 4px;
+  white-space: nowrap;
+}
+
+.gantt-month.is-now { color: var(--button-primary); }
+
+.gantt-bar {
+  position: absolute;
+  height: 10px;
+  border-radius: 5px;
+}
+
+/* Planned = tinted outline, Actual = solid fill, stacked. The classic plan-vs-actual read: the
+   outline is the commitment, the solid bar is what happened. */
+.gantt-bar-plan {
+  top: 4px;
+  background: color-mix(in oklab, var(--gantt-c, #2563eb) 22%, transparent);
+  border: 1px solid color-mix(in oklab, var(--gantt-c, #2563eb) 55%, transparent);
+}
+
+.gantt-bar-actual {
+  top: 17px;
+  background: var(--gantt-c, #2563eb);
+}
+
+/* Maintenance overlay: derived from findings' own due dates, never stored (see plan.ts). Dashed
+   so it reads as a due-by marker rather than a scheduled span, and visually distinct from the
+   inspection bars it shares a timeline with. */
+.gantt-bar-maint {
+  top: 9px;
+  height: 13px;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--gantt-c, #dc2626) 30%, transparent);
+  border: 1px solid var(--gantt-c, #dc2626);
+}
+
+.gantt-bar-maint.is-overdue { border-style: dashed; border-width: 2px; }
+
+/* Today marker — one line across the whole track area. */
+.gantt-now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--button-primary);
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.gantt-section {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-light);
+  margin: 12px 0 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--card-border);
+}
+.gantt-section:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+
+.gantt-legend {
+  display: flex;
+  gap: 14px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--card-border);
+  flex-wrap: wrap;
+}
+.gantt-legend .legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--text-muted); }
+.gantt-legend .legend-swatch { width: 18px; height: 9px; border-radius: 4px; flex: none; }
+
+/* Task-status pills, mirroring the finding .pill scale (constants.ts PLAN_TASK_STATUS_META). */
+.pt-todo   { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+.pt-prog   { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+.pt-done   { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
+.pt-cancel { background: #f8fafc; border-color: #e2e8f0; color: #94a3b8; }
+
+/* Plan/task table: same collapsible parent/child pattern as the risk table. */
+.plan-table .plan-row { cursor: pointer; }
+.plan-table .plan-row td { font-weight: 600; }
+.plan-table .task-row { display: none; background: var(--bg-color); }
+.plan-table .task-row td { font-size: var(--fs-sm); }
+.plan-table .plan-row.open + .task-row,
+.plan-table .task-row.is-open { display: table-row; }
+.plan-table .plan-meta { font-size: var(--fs-sm); font-weight: 400; color: var(--text-muted); }
+.plan-table .task-name { padding-left: 19px; }
+
+@media (max-width: 900px) {
+  .plan-table th:nth-child(5), .plan-table td:nth-child(5) { display: none; }
+}
+
+@media (max-width: 640px) {
+  .gantt-row { grid-template-columns: 120px 1fr; }
+  .plan-table th:nth-child(2), .plan-table td:nth-child(2) { display: none; }
 }
