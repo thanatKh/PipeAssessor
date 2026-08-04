@@ -327,11 +327,10 @@ export function collectTempRepair(findingId) {
       const d = s('fTrTestDate');
       const t = s('fTrTestTime');
       if (!d) return null;
-      if (t && /^\d{1,2}:\d{2}$/.test(t)) {
-        const [hh, mm] = t.split(':');
-        return `${d}T${hh.padStart(2, '0')}:${mm.padStart(2, '0')}:00`;
-      }
-      return `${d}T00:00:00`;
+      const hh = t && /^\d{1,2}:\d{2}$/.test(t) ? t.split(':')[0].padStart(2, '0') : '00';
+      const mm = t && /^\d{1,2}:\d{2}$/.test(t) ? t.split(':')[1].padStart(2, '0') : '00';
+      const localDate = new Date(`${d}T${hh}:${mm}:00`);
+      return isNaN(localDate.getTime()) ? `${d}T${hh}:${mm}:00` : localDate.toISOString();
     })(),
     test_result: val('fTrTestResult') || 'Not yet tested',
     test_note: s('fTrTestNote'),
@@ -368,9 +367,25 @@ export function loadTempRepairInto(tr) {
   set('fTrVerifyMethodOther', vm && !vmKnown ? vm : '');
 
   set('fTrTestP', tr && tr.test_pressure_barg);
-  const rawTestedAt = tr && tr.tested_at ? String(tr.tested_at).replace(' ', 'T') : '';
-  set('fTrTestDate', rawTestedAt ? rawTestedAt.slice(0, 10) : '');
-  set('fTrTestTime', rawTestedAt && rawTestedAt.length >= 16 ? rawTestedAt.slice(11, 16) : '');
+  if (tr && tr.tested_at) {
+    const dt = new Date(tr.tested_at);
+    if (!isNaN(dt.getTime())) {
+      const yyyy = dt.getFullYear();
+      const mm = String(dt.getMonth() + 1).padStart(2, '0');
+      const dd = String(dt.getDate()).padStart(2, '0');
+      const hh = String(dt.getHours()).padStart(2, '0');
+      const min = String(dt.getMinutes()).padStart(2, '0');
+      set('fTrTestDate', `${yyyy}-${mm}-${dd}`);
+      set('fTrTestTime', `${hh}:${min}`);
+    } else {
+      const raw = String(tr.tested_at).replace(' ', 'T');
+      set('fTrTestDate', raw.slice(0, 10));
+      set('fTrTestTime', raw.slice(11, 16));
+    }
+  } else {
+    set('fTrTestDate', '');
+    set('fTrTestTime', '');
+  }
   set('fTrTestResult', (tr && tr.test_result) || TEMP_REPAIR_VERIFY_RESULTS[0]);
   set('fTrTestNote', tr && tr.test_note);
 
