@@ -9,7 +9,10 @@
    ============================================================================ */
 import L from 'leaflet';
 import { $, val, esc, notify, setBusy, positionSegPill, pillHtml, isOverdue } from '../core/dom';
-import { R2_UPLOAD_ENDPOINT, PHOTO_LIMIT_PER_KIND, DEFAULT_MAP_VIEW, SAT_TILES, WALL_LOSS_TYPES, NON_LEAKABLE_TYPES } from '../core/constants';
+import {
+  R2_UPLOAD_ENDPOINT, PHOTO_LIMIT_PER_KIND, DEFAULT_MAP_VIEW, SAT_TILES, WALL_LOSS_TYPES, NON_LEAKABLE_TYPES,
+  REPAIR_METHOD_OPTIONS, TEMP_REPAIR_METHODS, TEMP_REPAIR_METHOD_KIND, TEMP_REPAIR_VERIFY_RESULTS,
+} from '../core/constants';
 import { sb } from '../core/supabase';
 import { computeB313, PA_PIPE_DATABASE, PA_MATERIALS, paDefaultScheduleForNps } from '../engine/compute';
 import { downscaleImage } from '../engine/branding';
@@ -239,6 +242,142 @@ export function syncLeakAndAssessRules() {
     $('aToggle').disabled = false;
     if ($('aLeakingNote')) $('aLeakingNote').style.display = 'none';
   }
+
+  // The emergency stop-leak panel only exists for a leaking finding. Toggled from HERE rather than
+  // from the checkbox's own listener so it can never drift out of agreement with #leakingBanner /
+  // the assessment lockout — one function owns every leak-dependent piece of the form.
+  if ($('panelTempRepair')) $('panelTempRepair').style.display = effectiveLnk ? '' : 'none';
+  syncTempRepairFields();
+}
+
+/* ---------------- temporary repair (emergency stop-leak) ----------------
+   Second level of progressive disclosure inside #panelTempRepair: the fields stay hidden until
+   #fTrInstalled is ticked, so "leaking but not yet clamped" is a one-glance state rather than a
+   screen of empty inputs. */
+
+// Whether the finding being edited already had a temp_repair row when the form opened. Only used
+// to decide whether unticking "Installed" needs a confirm before deleting (photos hang off it).
+let loadedTempRepairExists = false;
+function setLoadedTempRepairExists(v) { loadedTempRepairExists = v; }
+
+export function syncTempRepairFields() {
+  const on = !!($('fTrInstalled') && $('fTrInstalled').checked);
+  if ($('trFields')) $('trFields').style.display = on ? '' : 'none';
+  if ($('trHintIdle')) $('trHintIdle').style.display = on ? 'none' : '';
+  // The before/after photo groups live in the Photographic Record panel further down the form and
+  // are revealed by the same switch — renderPhotoGroups reads #fTrInstalled for the form-scoped set.
+  renderPhotoGroups();
+  if (!on) return;
+
+  // Which method-specific block shows is keyed off the method VALUE via TEMP_REPAIR_METHOD_KIND,
+  // never the select's index — reordering TEMP_REPAIR_METHODS must not swap clamp for composite.
+  const method = val('fTrMethod');
+  const kind = TEMP_REPAIR_METHOD_KIND[method] || 'other';
+  if ($('fTrClampBlock')) $('fTrClampBlock').style.display = kind === 'clamp' ? '' : 'none';
+  if ($('fTrCompositeBlock')) $('fTrCompositeBlock').style.display = kind === 'composite' ? '' : 'none';
+  if ($('fTrMethodOtherWrap')) $('fTrMethodOtherWrap').style.display = method === 'Other' ? '' : 'none';
+  if ($('fTrPermMethodOtherWrap')) $('fTrPermMethodOtherWrap').style.display = val('fTrPermMethod') === 'Other' ? '' : 'none';
+}
+
+/**
+ * Snapshot the panel into a temp_repair row, or null when nothing should be stored.
+ *
+ * Deliberately carries NOTHING from the legacy Excel form's section 1 (equipment, tag, location,
+ * nature of the problem, product, design pressure/temperature, reference document) — all of it is
+ * already on the finding or its assessment, and workbench/temp-repair.ts's tempRepairRows reads it
+ * from there when rendering the panel and the PDF section.
+ */
+export function collectTempRepair(findingId) {
+  if (!$('fIsLeaking').checked) return null;
+  if (!$('fTrInstalled') || !$('fTrInstalled').checked) return null;
+  const method = val('fTrMethod');
+  if (!method) return null;
+
+  const s = (id) => { const v = val(id); return v && v.trim() ? v.trim() : null; };
+  const n = (id) => { const v = val(id); return v === '' || v == null ? null : Number(v); };
+  const kind = TEMP_REPAIR_METHOD_KIND[method] || 'other';
+  const permSel = val('fTrPermMethod');
+
+  return {
+    finding_id: findingId,
+    method,
+    method_other: method === 'Other' ? s('fTrMethodOther') : null,
+    installed_date: s('fTrInstalledDate'),
+    installed_by: s('fTrInstalledBy'),
+    install_method: s('fTrInstallMethod'),
+    design_life_months: n('fTrDesignLife'),
+    // Only the selected branch's columns are written; switching method clears the other branch's
+    // values rather than leaving stale clamp data on a composite record (and vice versa).
+    clamp_type: kind === 'clamp' ? s('fTrClampType') : null,
+    clamp_size: kind === 'clamp' ? s('fTrClampSize') : null,
+    clamp_material: kind === 'clamp' ? s('fTrClampMaterial') : null,
+    rated_pressure_barg: kind === 'clamp' ? n('fTrRatedP') : null,
+    composite_system: kind === 'composite' ? s('fTrCompSystem') : null,
+    composite_layers: kind === 'composite' ? n('fTrCompLayers') : null,
+    composite_thickness_mm: kind === 'composite' ? n('fTrCompThk') : null,
+    surface_prep: kind === 'composite' ? s('fTrSurfacePrep') : null,
+    cure_note: kind === 'composite' ? s('fTrCure') : null,
+    verify_method: s('fTrVerifyMethod'),
+    test_pressure_barg: n('fTrTestP'),
+    tested_at: s('fTrTestedAt'),
+    test_result: val('fTrTestResult') || 'Not yet tested',
+    test_note: s('fTrTestNote'),
+    monitor_freq: s('fTrMonitorFreq'),
+    perm_method: permSel === 'Other' ? s('fTrPermMethodOther') : (permSel || null),
+    perm_target_date: s('fTrPermDate'),
+    perm_owner: s('fTrPermOwner'),
+    precautions: s('fTrPrecautions'),
+  };
+}
+
+/** Fill the panel from a saved row (or reset it when there is none). */
+export function loadTempRepairInto(tr) {
+  const set = (id, v) => { if ($(id)) $(id).value = v == null ? '' : String(v); };
+  $('fTrInstalled').checked = !!tr;
+  set('fTrMethod', tr ? tr.method : TEMP_REPAIR_METHODS[0]);
+  set('fTrMethodOther', tr && tr.method === 'Other' ? tr.method_other : '');
+  set('fTrInstalledDate', tr && tr.installed_date);
+  set('fTrInstalledBy', tr && tr.installed_by);
+  set('fTrInstallMethod', tr && tr.install_method);
+  set('fTrDesignLife', tr && tr.design_life_months);
+  set('fTrClampType', tr && tr.clamp_type);
+  set('fTrClampSize', tr && tr.clamp_size);
+  set('fTrClampMaterial', tr && tr.clamp_material);
+  set('fTrRatedP', tr && tr.rated_pressure_barg);
+  set('fTrCompSystem', tr && tr.composite_system);
+  set('fTrCompLayers', tr && tr.composite_layers);
+  set('fTrCompThk', tr && tr.composite_thickness_mm);
+  set('fTrSurfacePrep', tr && tr.surface_prep);
+  set('fTrCure', tr && tr.cure_note);
+  set('fTrVerifyMethod', tr && tr.verify_method);
+  set('fTrTestP', tr && tr.test_pressure_barg);
+  // <input type="datetime-local"> only accepts YYYY-MM-DDTHH:mm; Postgres hands back a full
+  // timestamptz, so trim it (and drop the timezone) rather than letting the input silently blank.
+  set('fTrTestedAt', tr && tr.tested_at ? String(tr.tested_at).replace(' ', 'T').slice(0, 16) : '');
+  set('fTrTestResult', (tr && tr.test_result) || TEMP_REPAIR_VERIFY_RESULTS[0]);
+  set('fTrTestNote', tr && tr.test_note);
+  set('fTrMonitorFreq', tr && tr.monitor_freq);
+  // Same legacy handling as the status dialog's repair-method select: a stored value that is not in
+  // the closed list selects 'Other' and prefills the free text, so nothing is ever silently dropped.
+  const pm = (tr && tr.perm_method) || '';
+  const pmKnown = REPAIR_METHOD_OPTIONS.includes(pm);
+  set('fTrPermMethod', pm && !pmKnown ? 'Other' : pm);
+  set('fTrPermMethodOther', pm && !pmKnown ? pm : '');
+  set('fTrPermDate', tr && tr.perm_target_date);
+  set('fTrPermOwner', tr && tr.perm_owner);
+  set('fTrPrecautions', tr && tr.precautions);
+  syncTempRepairFields();
+}
+
+export function initTempRepair() {
+  $('fTrMethod').innerHTML = TEMP_REPAIR_METHODS.map(m => `<option>${esc(m)}</option>`).join('');
+  $('fTrTestResult').innerHTML = TEMP_REPAIR_VERIFY_RESULTS.map(r => `<option>${esc(r)}</option>`).join('');
+  $('fTrPermMethod').innerHTML =
+    '<option value="">—</option>' + REPAIR_METHOD_OPTIONS.map(m => `<option>${esc(m)}</option>`).join('');
+
+  ['fTrInstalled', 'fTrMethod', 'fTrPermMethod'].forEach(id => {
+    $(id).addEventListener('change', syncTempRepairFields);
+  });
 }
 
 
@@ -937,6 +1076,18 @@ export function openForm(f) {
   const isLnk = f ? !!f.is_leaking : false;
   $('fIsLeaking').checked = isLnk;
   syncCorrTypeFromFinding(); // corrosion type follows the finding type (a saved assessment overrides it below)
+  // Reset the temporary-repair panel synchronously so a previously-opened finding's clamp details
+  // can never linger; the real row (if any) is fetched just below and re-applied.
+  setLoadedTempRepairExists(false);
+  loadTempRepairInto(null);
+  if (f) {
+    sb.from('temp_repair').select('*').eq('finding_id', f.id).maybeSingle()
+      .then(({ data }) => {
+        if (!data) return;
+        setLoadedTempRepairExists(true);
+        loadTempRepairInto(data);
+      });
+  }
   syncLeakAndAssessRules(); // sync non-leakable type & active leak ASME rules
   renderRepairAdvisor(); // show guidance for the loaded finding type/leak state immediately, not just on next change
   // Populate from the stored value without marking severityTouched — the field shows what was
@@ -1124,6 +1275,13 @@ export async function saveForm(addAnother) {
   if (!payload) { notify('Please fill the required fields.', true); return; }
   const assessment = collectAssessment();
   const assessWanted = $('assessPanel').classList.contains('on');
+  // Dropping the temporary-repair record also orphans its before/after photos, so confirm before
+  // saving rather than after — asked here, outside the try, so a "no" costs nothing.
+  const tempRepairWanted = !!collectTempRepair('x');
+  if (loadedTempRepairExists && !tempRepairWanted &&
+      !window.confirm('The temporary repair record for this finding will be deleted. Its before/after photos will no longer be grouped under it. Continue?')) {
+    return;
+  }
   const btn = addAnother ? $('btnSaveAnother') : $('btnSave');
   setBusy(btn, true, 'Saving…');
   try {
@@ -1153,6 +1311,19 @@ export async function saveForm(addAnother) {
       if (aErr) notify('Finding saved, but the assessment could not be recorded: ' + aErr.message, true);
     } else if (assessWanted && !assessment) {
       notify('Finding saved. Assessment left incomplete (needs UT reading + pressure) — not recorded.', true);
+    }
+
+    // Attach (or clear) the emergency stop-leak record. Upsert on finding_id, since temp_repair is
+    // ONE row per finding — unlike assessments, this is the current state, not a dated snapshot.
+    const tempRepair = collectTempRepair(id);
+    if (tempRepair) {
+      const { error: tErr } = await sb.from('temp_repair').upsert(tempRepair, { onConflict: 'finding_id' });
+      if (tErr) notify('Finding saved, but the temporary repair could not be recorded: ' + tErr.message, true);
+      else setLoadedTempRepairExists(true);
+    } else if (loadedTempRepairExists) {
+      const { error: tErr } = await sb.from('temp_repair').delete().eq('finding_id', id);
+      if (tErr) notify('Finding saved, but the temporary repair could not be removed: ' + tErr.message, true);
+      else setLoadedTempRepairExists(false);
     }
 
     if (addAnother) {

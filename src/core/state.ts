@@ -35,6 +35,11 @@ export function setCurrentHistory(v: any) { currentHistory = v; }
 export let currentAssessments: any = [];
 export function setCurrentAssessments(v: any) { currentAssessments = v; }
 
+// The emergency stop-leak record for `current`, or null when none was ever recorded. ONE row per
+// finding (public.temp_repair), so this is an object rather than an array like the lists above.
+export let currentTempRepair: any = null;
+export function setCurrentTempRepair(v: any) { currentTempRepair = v; }
+
 export let editingId: any = null;
 export function setEditingId(v: any) { editingId = v; }
 

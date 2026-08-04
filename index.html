@@ -15,14 +15,6 @@
   <div class="page-loading-bar" id="pageLoadingBar" aria-hidden="true"></div>
   <div class="wrap">
     <div class="header-brand">
-      <!-- Collapses the sidebar to an icon rail on desktop; opens/closes the drawer on mobile.
-           Hidden when signed out / on public links, since there is no sidebar to toggle. The
-           button's own hit-box is deliberately wider than its visible glyph (see .sb-toggle in
-           theme.css) so the glyph lands exactly above the collapsed sidebar's icon column. -->
-      <button class="sb-toggle authed-only not-public" id="btnSidebar" type="button"
-              aria-label="Toggle navigation" aria-controls="appSidebar" aria-expanded="true">
-        <span class="sb-toggle-glyph" aria-hidden="true">☰</span>
-      </button>
       <a class="hdr-logo-chip" href="#/list" title="Go to dashboard">
         <img class="hdr-logo" src="/RGB_OR_Full%20color.png" alt="OR Logo" width="80" height="42"/>
       </a>
@@ -30,90 +22,105 @@
         <h1>Pipe Assessor</h1>
         <div class="hdr-sub">Findings Tracker — Piping abnormal findings — recorded</div>
       </div>
+      <!-- Nav trigger — opens #cmdMenu (Basecoat command palette, below). Replaced the sidebar:
+           with ~9 nav items total, a searchable ⌘K-style palette covers the same navigation need
+           without a persistent 240px rail eating page width on every view. Always-visible (not
+           keyboard-shortcut-only) since this is a field tool used on phones/tablets without a
+           physical keyboard — see the ⌘K hint span for the desktop-power-user path. -->
+      <button class="cmd-trigger authed-only not-public" id="btnCmdMenu" type="button"
+              onclick="document.getElementById('cmdMenu').showModal()">
+        <span class="cmd-trigger-ico" aria-hidden="true">☰</span>
+        <span>Menu</span>
+        <span class="cmd-trigger-kbd" aria-hidden="true">⌘K</span>
+      </button>
     </div>
     <div class="header-actions">
       <!-- Read-only badge shown only on public share links (body.public-view) -->
       <span class="public-only public-badge">Read-only shared view — no sign-in required</span>
+      <!-- Account: avatar (first letter of email) + email/role, and an icon-only sign-out.
+           Was the sidebar footer's job (.sb-footer); moved here now there is no sidebar.
+           updateAuthUI() (app.ts) fills all three text/avatar fields; #btnSignOut keeps its id
+           and listener unchanged. -->
+      <div class="hdr-account authed-only not-public">
+        <span class="hdr-avatar" id="sbAvatar" aria-hidden="true"></span>
+        <div class="hdr-user-text">
+          <span class="hdr-user-email" id="sbUserEmail"></span>
+          <span class="hdr-user-role" id="sbUserRole"></span>
+        </div>
+        <button class="hdr-signout" id="btnSignOut" type="button" title="Sign out" aria-label="Sign out">
+          <span aria-hidden="true">⏻</span>
+        </button>
+      </div>
     </div>
   </div>
 </header>
 
-<!-- ================= SIDEBAR NAV =================
-     Replaced the old header button row once the app outgrew 4 nav items. The top bar deliberately
-     STAYS (slim) rather than folding into the sidebar: --app-header-h is measured off it and two
-     sticky consumers hang off that (.toaster, .sticky-page-header — the one shared sticky-toolbar
-     wrapper every page with a toolbar now uses), plus .page-loading-bar is anchored to it.
-     Keeping it means none of that needed rework.
-     Hidden entirely when signed out and on public share links (body.public-view) — see app.css.
+<!-- ================= COMMAND MENU (navigation) =================
+     Basecoat command component (basecoat-css/command.min + components/command.css, bundled via
+     basecoat.cdn.min.css — see main.ts). Replaced the sidebar nav entirely: this app has ~9 nav
+     items, few enough that a searchable palette (type to filter, arrow keys + Enter, click) beats
+     a persistent 240px rail that permanently narrows every page. Opened via the header's "Menu"
+     button (onclick, above) or Ctrl/Cmd+K (wired in app.ts). Items are plain <a href="#..."> —
+     Basecoat's command.js closes the dialog on click automatically (any role=menuitem click,
+     unless data-keep-command-open), so navigation + close happens in one native action, no extra
+     JS needed. Groups mirror the old sidebar's groupings so nothing was reorganized, only
+     re-presented. `data-keywords` adds search terms beyond each item's visible label (e.g. finding
+     the Line Risk Ranking page by typing "risk" or "pof"). -->
+<dialog id="cmdMenu" class="command-dialog" aria-label="Command menu"
+        onclick="if (event.target === this) this.close()">
+  <div class="command">
+    <header>
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" id="cmdMenu-input" placeholder="Search pages..." autocomplete="off" autocorrect="off"
+             spellcheck="false" aria-autocomplete="list" role="combobox" aria-expanded="true" aria-controls="cmdMenu-list"/>
+    </header>
+    <div role="menu" id="cmdMenu-list" aria-orientation="vertical" data-empty="No pages found.">
+      <div role="group" aria-labelledby="cmd-group-dashboard">
+        <span role="heading" id="cmd-group-dashboard">Dashboard</span>
+        <a href="#/list" role="menuitem" data-filter="Overview">
+          <span class="sb-ico" aria-hidden="true">▦</span><span>Overview</span>
+        </a>
+      </div>
 
-     Account + sign out live in the sidebar's own footer (below), not the header — the header's
-     only job now is brand + the sidebar toggle, so it never grows again regardless of how many nav
-     items or roles the app gains. A flex column: `.sb-nav` scrolls independently, `.sb-footer`
-     stays pinned to the bottom of the rail. -->
-<nav class="app-sidebar authed-only not-public" id="appSidebar" aria-label="Main navigation">
-  <div class="sb-nav">
-    <div class="sb-group">
-      <div class="sb-group-title">Dashboard</div>
-      <a class="sb-link" href="#/list" data-route="#/list">
-        <span class="sb-ico" aria-hidden="true">▦</span><span class="sb-label">Overview</span>
-      </a>
-    </div>
+      <div role="group" aria-labelledby="cmd-group-findings">
+        <span role="heading" id="cmd-group-findings">Findings</span>
+        <a href="#/new" role="menuitem" data-filter="New Finding" data-keywords="add create">
+          <span class="sb-ico" aria-hidden="true">＋</span><span>New Finding</span>
+        </a>
+      </div>
 
-    <div class="sb-group">
-      <div class="sb-group-title">Findings</div>
-      <a class="sb-link" href="#/new" data-route="#/new">
-        <span class="sb-ico" aria-hidden="true">＋</span><span class="sb-label">New Finding</span>
-      </a>
-    </div>
+      <div role="group" aria-labelledby="cmd-group-planning">
+        <span role="heading" id="cmd-group-planning">Planning</span>
+        <a href="#/plan" role="menuitem" data-filter="Inspection Plan" data-keywords="gantt schedule">
+          <span class="sb-ico" aria-hidden="true">▤</span><span>Inspection Plan</span>
+        </a>
+      </div>
 
-    <div class="sb-group">
-      <div class="sb-group-title">Planning</div>
-      <a class="sb-link" href="#/plan" data-route="#/plan">
-        <span class="sb-ico" aria-hidden="true">▤</span><span class="sb-label">Inspection Plan</span>
-      </a>
-    </div>
+      <div role="group" aria-labelledby="cmd-group-analytics">
+        <span role="heading" id="cmd-group-analytics">Analytics</span>
+        <a href="#/risk" role="menuitem" data-filter="Line Risk Ranking" data-keywords="pof rbi">
+          <span class="sb-ico" aria-hidden="true">◈</span><span>Line Risk Ranking</span>
+        </a>
+        <a href="#/calc" role="menuitem" data-filter="Quick Calc" data-keywords="asme b31.3 wall thickness">
+          <span class="sb-ico" aria-hidden="true">∑</span><span>Quick Calc</span>
+        </a>
+      </div>
 
-    <div class="sb-group">
-      <div class="sb-group-title">Analytics</div>
-      <a class="sb-link" href="#/risk" data-route="#/risk">
-        <span class="sb-ico" aria-hidden="true">◈</span><span class="sb-label">Line Risk Ranking</span>
-      </a>
-      <a class="sb-link" href="#/calc" data-route="#/calc">
-        <span class="sb-ico" aria-hidden="true">∑</span><span class="sb-label">Quick Calc</span>
-      </a>
-    </div>
-
-    <!-- Hidden for inspectors by CSS, but that is UX only — both routes also carry an
-         isMaintenance() guard in app.ts's route(), since a hash is typeable. RLS is the real
-         boundary. -->
-    <div class="sb-group maintenance-only">
-      <div class="sb-group-title">Administration</div>
-      <a class="sb-link" href="#/lines" data-route="#/lines">
-        <span class="sb-ico" aria-hidden="true">▧</span><span class="sb-label">Line List</span>
-      </a>
-      <a class="sb-link" href="#/users" data-route="#/users">
-        <span class="sb-ico" aria-hidden="true">◉</span><span class="sb-label">Users &amp; Roles</span>
-      </a>
+      <!-- Hidden for inspectors by CSS, but that is UX only — both routes also carry an
+           isMaintenance() guard in app.ts's route(), since a hash is typeable. RLS is the real
+           boundary. -->
+      <div role="group" aria-labelledby="cmd-group-admin" class="maintenance-only">
+        <span role="heading" id="cmd-group-admin">Administration</span>
+        <a href="#/lines" role="menuitem" data-filter="Line List" data-keywords="pipe tag master">
+          <span class="sb-ico" aria-hidden="true">▧</span><span>Line List</span>
+        </a>
+        <a href="#/users" role="menuitem" data-filter="Users &amp; Roles" data-keywords="admin permissions">
+          <span class="sb-ico" aria-hidden="true">◉</span><span>Users &amp; Roles</span>
+        </a>
+      </div>
     </div>
   </div>
-
-  <!-- Account footer: avatar (first letter of email) + email + role, and an icon-only sign-out.
-       updateAuthUI() (app.ts) fills all three text/avatar fields; #btnSignOut keeps its id and
-       listener unchanged, only its markup moved here from the header. -->
-  <div class="sb-footer">
-    <span class="sb-avatar" id="sbAvatar" aria-hidden="true"></span>
-    <div class="sb-user-text">
-      <span class="sb-user-email" id="sbUserEmail"></span>
-      <span class="sb-user-role" id="sbUserRole"></span>
-    </div>
-    <button class="sb-signout" id="btnSignOut" type="button" title="Sign out" aria-label="Sign out">
-      <span aria-hidden="true">⏻</span>
-    </button>
-  </div>
-</nav>
-
-<!-- Tap-outside-to-close backdrop for the mobile drawer (<=960px). Inert on desktop. -->
-<div class="sidebar-scrim" id="sidebarScrim" hidden></div>
+</dialog>
 
 <main class="wrap">
 
@@ -476,6 +483,161 @@
       </div>
     </div>
 
+    <!-- Emergency stop-leak record. The whole panel is hidden unless #fIsLeaking is checked
+         (syncLeakAndAssessRules owns that), and the fields inside are hidden again unless
+         #fTrInstalled is checked — two levels of progressive disclosure, so a normal finding never
+         sees any of it. Deliberately asks for NOTHING from the legacy Excel form's section 1:
+         equipment / tag / location / nature of problem / product / design P+T / reference document
+         all already live on the finding and the assessment, and the report reads them from there. -->
+    <div class="panel" id="panelTempRepair" style="display:none;">
+      <div class="panel-h">
+        <h2>Temporary Repair <span class="panel-h-th">/ การซ่อมชั่วคราว</span></h2>
+        <label class="switch-inline">
+          <input class="input" type="checkbox" role="switch" id="fTrInstalled">
+          <span>ติดตั้งแล้ว / Installed</span>
+        </label>
+      </div>
+      <div class="panel-b">
+        <div class="hint" id="trHintIdle">Record the emergency stop-leak (clamp / composite wrap) once it has been installed. It will be added to this finding's PDF report.</div>
+
+        <div id="trFields" style="display:none;">
+          <div class="fgrid">
+            <div>
+              <label class="f-label req" for="fTrMethod">วิธีซ่อมแซม / Repair Method</label>
+              <select id="fTrMethod" class="select"></select>
+              <div class="validation-alert" id="errTrMethod">A repair method is required.</div>
+            </div>
+            <div id="fTrMethodOtherWrap" style="display:none;">
+              <label class="f-label" for="fTrMethodOther">ระบุวิธี / Specify method</label>
+              <input id="fTrMethodOther" class="input" type="text" placeholder="e.g., Hot tap plug">
+            </div>
+            <div>
+              <label class="f-label" for="fTrInstalledDate">วันที่ติดตั้ง / Installed Date</label>
+              <input id="fTrInstalledDate" class="input" type="date">
+            </div>
+            <div>
+              <label class="f-label" for="fTrInstalledBy">ผู้ติดตั้ง / Installed By</label>
+              <input id="fTrInstalledBy" class="input" type="text" placeholder="e.g., Maintenance Team A">
+            </div>
+            <div>
+              <label class="f-label" for="fTrDesignLife">อายุออกแบบ / Design Life (months)</label>
+              <input id="fTrDesignLife" class="input" type="number" step="1" min="0" placeholder="optional">
+            </div>
+            <div class="full">
+              <label class="f-label" for="fTrInstallMethod">วิธีการติดตั้ง / Installation Method</label>
+              <textarea id="fTrInstallMethod" class="textarea" rows="2" placeholder="ขั้นตอนที่ใช้ อ้างอิง Procedure / WPS ถ้ามี, on-stream หรือ shutdown…"></textarea>
+            </div>
+          </div>
+
+          <!-- Only ONE of these two blocks is ever visible; which one is keyed off
+               TEMP_REPAIR_METHOD_KIND, never DOM position. -->
+          <div class="tr-branch" id="fTrClampBlock" style="display:none;">
+            <div class="tr-branch-h">รายละเอียด Clamp / Clamp Details</div>
+            <div class="fgrid">
+              <div>
+                <label class="f-label" for="fTrClampType">ประเภท Clamp / Type</label>
+                <input id="fTrClampType" class="input" type="text" placeholder="e.g., Bolted leak-repair clamp">
+              </div>
+              <div>
+                <label class="f-label" for="fTrClampSize">ขนาด / Size</label>
+                <input id="fTrClampSize" class="input" type="text" placeholder='e.g., 8" x 300 mm'>
+              </div>
+              <div>
+                <label class="f-label" for="fTrClampMaterial">วัสดุ Body / Seal</label>
+                <input id="fTrClampMaterial" class="input" type="text" placeholder="e.g., CS body / Viton seal">
+              </div>
+              <div>
+                <label class="f-label" for="fTrRatedP">Pressure ที่รับได้ / Rated (bar(g))</label>
+                <input id="fTrRatedP" class="input" type="number" step="0.1" min="0">
+              </div>
+            </div>
+          </div>
+
+          <div class="tr-branch" id="fTrCompositeBlock" style="display:none;">
+            <div class="tr-branch-h">รายละเอียด Composite / Composite Details <span class="tr-branch-note">ASME PCC-2 Part 4 / ISO 24817</span></div>
+            <div class="fgrid">
+              <div>
+                <label class="f-label" for="fTrCompSystem">ระบบ / System</label>
+                <input id="fTrCompSystem" class="input" type="text" placeholder="Manufacturer + product">
+              </div>
+              <div>
+                <label class="f-label" for="fTrCompLayers">จำนวนชั้น / Layers</label>
+                <input id="fTrCompLayers" class="input" type="number" step="1" min="0">
+              </div>
+              <div>
+                <label class="f-label" for="fTrCompThk">ความหนา Laminate / Thickness (mm)</label>
+                <input id="fTrCompThk" class="input" type="number" step="0.1" min="0">
+              </div>
+              <div>
+                <label class="f-label" for="fTrSurfacePrep">การเตรียมผิว / Surface Prep</label>
+                <input id="fTrSurfacePrep" class="input" type="text" placeholder="e.g., SSPC-SP10 / Sa 2.5">
+              </div>
+              <div class="full">
+                <label class="f-label" for="fTrCure">การบ่ม / Cure</label>
+                <input id="fTrCure" class="input" type="text" placeholder="Cure temperature and time">
+              </div>
+            </div>
+          </div>
+
+          <div class="tr-branch">
+            <div class="tr-branch-h">การตรวจสอบหลังติดตั้ง / Post-Installation Verification</div>
+            <div class="fgrid">
+              <div>
+                <label class="f-label" for="fTrVerifyMethod">วิธีการตรวจสอบ / Method</label>
+                <input id="fTrVerifyMethod" class="input" type="text" placeholder="e.g., Visual + soap bubble, hold test">
+              </div>
+              <div>
+                <label class="f-label" for="fTrTestP">Test Pressure (bar(g))</label>
+                <input id="fTrTestP" class="input" type="number" step="0.1" min="0">
+              </div>
+              <div>
+                <label class="f-label" for="fTrTestedAt">วันเวลาที่ทดสอบ / Tested At</label>
+                <input id="fTrTestedAt" class="input" type="datetime-local">
+              </div>
+              <div>
+                <label class="f-label" for="fTrTestResult">ผลการทดสอบ / Result</label>
+                <select id="fTrTestResult" class="select"></select>
+              </div>
+              <div class="full">
+                <label class="f-label" for="fTrTestNote">บันทึกผล / Result Note</label>
+                <input id="fTrTestNote" class="input" type="text" placeholder="optional">
+              </div>
+              <div class="full">
+                <label class="f-label" for="fTrMonitorFreq">การติดตามเฝ้าระวัง / Monitoring</label>
+                <input id="fTrMonitorFreq" class="input" type="text" placeholder="e.g., ตรวจสอบทุกสัปดาห์ จนกว่าจะซ่อมถาวร">
+              </div>
+            </div>
+          </div>
+
+          <div class="tr-branch">
+            <div class="tr-branch-h">แผนงานซ่อมแซมถาวร / Permanent Repair Plan</div>
+            <div class="fgrid">
+              <div>
+                <label class="f-label" for="fTrPermMethod">แนวทางซ่อมถาวร / Planned Method</label>
+                <select id="fTrPermMethod" class="select"></select>
+              </div>
+              <div id="fTrPermMethodOtherWrap" style="display:none;">
+                <label class="f-label" for="fTrPermMethodOther">ระบุวิธี / Specify method</label>
+                <input id="fTrPermMethodOther" class="input" type="text">
+              </div>
+              <div>
+                <label class="f-label" for="fTrPermDate">กำหนดเวลา / Target Date</label>
+                <input id="fTrPermDate" class="input" type="date">
+              </div>
+              <div>
+                <label class="f-label" for="fTrPermOwner">ผู้รับผิดชอบ / Responsible</label>
+                <input id="fTrPermOwner" class="input" type="text">
+              </div>
+              <div class="full">
+                <label class="f-label" for="fTrPrecautions">ข้อควรระวัง / Precautions</label>
+                <textarea id="fTrPrecautions" class="textarea" rows="2" placeholder="ข้อจำกัดด้านความดัน/อุณหภูมิ ข้อควรระวังระหว่างรอซ่อมถาวร…"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="panel" id="panelPosition">
       <div class="panel-h"><h2>Position</h2></div>
       <div class="panel-b">
@@ -535,6 +697,24 @@
           </div>
           <div class="photo-grid" id="gridRepaired2"></div>
           <div class="photo-empty" id="emptyRepaired2"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No after-repair photos yet — add one when the repair is completed.</span></div>
+        </div>
+        <!-- Temporary-repair evidence (legacy Excel section 5). Both groups are hidden by
+             renderPhotoGroups unless a temp_repair record exists for this finding. -->
+        <div class="photo-group tr-photo-group" id="trPhotoGroupBefore2">
+          <div class="photo-group-h">
+            <h3>Before Temporary Repair <span class="photo-group-th">/ ก่อนติดตั้ง</span></h3>
+            <button class="btn" data-variant="outline" id="btnAddTempBefore2" type="button">+ Add</button>
+          </div>
+          <div class="photo-grid" id="gridTempBefore2"></div>
+          <div class="photo-empty" id="emptyTempBefore2"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No before-installation photos yet.</span></div>
+        </div>
+        <div class="photo-group tr-photo-group" id="trPhotoGroupAfter2">
+          <div class="photo-group-h">
+            <h3>After Temporary Repair <span class="photo-group-th">/ หลังติดตั้ง</span></h3>
+            <button class="btn" data-variant="outline" id="btnAddTempAfter2" type="button">+ Add</button>
+          </div>
+          <div class="photo-grid" id="gridTempAfter2"></div>
+          <div class="photo-empty" id="emptyTempAfter2"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No after-installation photos yet.</span></div>
         </div>
       </div>
     </div>
@@ -1164,6 +1344,16 @@
           </div>
         </div>
 
+        <!-- Emergency stop-leak record. Hidden entirely unless a temp_repair row exists, so a
+             normal finding's detail page is unchanged. Sits ABOVE the Repair Advisor on purpose:
+             a reader needs to know a clamp is already on before reading repair advice. -->
+        <div class="panel" id="detailPanelTempRepair" style="display:none;">
+          <div class="panel-h">
+            <h2>Temporary Repair <span class="panel-h-th">/ การซ่อมชั่วคราว</span></h2>
+          </div>
+          <div class="panel-b" id="trDetailBody"></div>
+        </div>
+
         <div class="panel" id="detailPanelAdvisor">
           <div class="panel-h"><h2>Repair Advisor</h2></div>
           <div class="panel-b" id="raDetailBody"></div>
@@ -1209,6 +1399,24 @@
               </div>
               <div class="photo-grid" id="gridRepaired"></div>
               <div class="photo-empty" id="emptyRepaired"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No after-repair photos yet — add one when the repair is completed.</span></div>
+            </div>
+            <!-- Temporary-repair evidence (legacy Excel section 5). Both groups are hidden by
+                 renderPhotoGroups unless a temp_repair record exists for this finding. -->
+            <div class="photo-group tr-photo-group" id="trPhotoGroupBefore">
+              <div class="photo-group-h">
+                <h3>Before Temporary Repair <span class="photo-group-th">/ ก่อนติดตั้ง</span></h3>
+                <button class="btn" data-variant="outline" id="btnAddTempBefore" type="button">+ Add</button>
+              </div>
+              <div class="photo-grid" id="gridTempBefore"></div>
+              <div class="photo-empty" id="emptyTempBefore"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No before-installation photos yet.</span></div>
+            </div>
+            <div class="photo-group tr-photo-group" id="trPhotoGroupAfter">
+              <div class="photo-group-h">
+                <h3>After Temporary Repair <span class="photo-group-th">/ หลังติดตั้ง</span></h3>
+                <button class="btn" data-variant="outline" id="btnAddTempAfter" type="button">+ Add</button>
+              </div>
+              <div class="photo-grid" id="gridTempAfter"></div>
+              <div class="photo-empty" id="emptyTempAfter"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No after-installation photos yet.</span></div>
             </div>
           </div>
         </div>
@@ -1469,6 +1677,10 @@
 <input type="file" id="fileFound2" accept="image/*" multiple hidden>
 <input type="file" id="fileDlgRepaired" accept="image/*" multiple hidden>
 <input type="file" id="fileRepaired2" accept="image/*" multiple hidden>
+<input type="file" id="fileTempBefore" accept="image/*" multiple hidden>
+<input type="file" id="fileTempAfter" accept="image/*" multiple hidden>
+<input type="file" id="fileTempBefore2" accept="image/*" multiple hidden>
+<input type="file" id="fileTempAfter2" accept="image/*" multiple hidden>
 
 <div id="toaster" class="toaster" data-align="center"></div>
 

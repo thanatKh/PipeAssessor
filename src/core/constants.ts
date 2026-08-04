@@ -82,17 +82,61 @@ export const PHOTO_LIMIT_PER_KIND = 4; // As Found and After Repair each capped 
 // finding types, and a trailing 'Other' that reveals a free-text field. Kept here (not derived from
 // repair-advisor.ts's item titles) since this is a fixed closed list for data entry, independent of
 // any specific finding's advisor content.
+// ASME PCC-2 part numbering: Part 2 = Welded Repairs, Part 3 = Mechanical Repairs (bolted clamps,
+// component replacement), Part 4 = Nonmetallic and Bonded Repairs (composite wraps, ISO 24817).
+// These citations were previously reversed (Composite -> Part 2, Welded -> Part 3, Clamp -> Part 4)
+// and were corrected in place. Findings saved under the OLD strings no longer match this list; the
+// status dialog's legacy path handles that gracefully (openStatusDialog pre-selects 'Other' and
+// prefills the free-text field with the stored value, so nothing is lost) until they are normalized.
 export const REPAIR_METHOD_OPTIONS = [
-  'Composite Repair (PCC-2 Part 2)',
-  'Welded Sleeve (PCC-2 Part 3)',
-  'Weld Overlay / Buildup (PCC-2 Part 3)',
-  'Mechanical Clamp (PCC-2 Part 4)',
+  'Composite Repair (PCC-2 Part 4)',
+  'Welded Sleeve (PCC-2 Part 2)',
+  'Weld Overlay / Buildup (PCC-2 Part 2)',
+  'Mechanical Clamp (PCC-2 Part 3)',
   'Replacement / Spool Replacement (PCC-2 Part 3)',
   'Coating / Recoat Repair',
   'Support Repair / Replacement',
   'No Repair Required (Monitoring Cleared)',
   'Other',
 ];
+
+/* ================= Temporary repair / emergency stop-leak (#panelTempRepair) =================
+   The in-app replacement for the legacy "รายงานการหยุดรั่วฉุกเฉิน" Excel form. The panel is only
+   shown for a finding flagged is_leaking, and the record is one row per finding in public.temp_repair.
+   All three arrays below mirror that table's check constraints EXACTLY — same "must match in both
+   places" rule that already applies to STATUSES. */
+
+export const TEMP_REPAIR_METHODS = [
+  'Mechanical Clamp',
+  'Bolted Split Sleeve / Enclosure',
+  'Composite Wrap',
+  'Epoxy Putty / Sealant',
+  'Injection Sealing',
+  'Other',
+];
+
+// Which branch of method-specific fields the form shows and the report prints. Keyed off the method
+// value, never DOM/array position, so reordering TEMP_REPAIR_METHODS can't silently swap the branch.
+// 'other' methods (injection sealing, a one-off) get the common fields only.
+export const TEMP_REPAIR_METHOD_KIND = {
+  'Mechanical Clamp':               'clamp',
+  'Bolted Split Sleeve / Enclosure': 'clamp',
+  'Composite Wrap':                 'composite',
+  'Epoxy Putty / Sealant':          'composite',
+  'Injection Sealing':              'other',
+  'Other':                          'other',
+};
+
+export const TEMP_REPAIR_VERIFY_RESULTS = ['Not yet tested', 'Pass', 'Pass with observation', 'Fail'];
+
+// Fixed hex rather than CSS vars: the same values drive the PDF's verification callout, where custom
+// properties do not resolve — the same rationale as STATUS_COLORS and the PDF_* constants.
+export const TEMP_REPAIR_RESULT_COLORS = {
+  'Not yet tested':        '#64748b',
+  'Pass':                  '#059669',
+  'Pass with observation': '#d97706',
+  'Fail':                  '#dc2626',
+};
 
 /* ============================ Inspection Plan (#/plan) ============================ */
 

@@ -14,7 +14,7 @@ import { sb } from '../core/supabase';
 import {
   findings, setFindings, lineList, filters, selectedIds, setSelectedIds,
   current, setCurrent, currentPhotos, setCurrentPhotos, currentHistory, setCurrentHistory,
-  currentAssessments, setCurrentAssessments, photoCounts, setPhotoCounts, photoThumbs, setPhotoThumbs,
+  currentAssessments, setCurrentAssessments, setCurrentTempRepair, photoCounts, setPhotoCounts, photoThumbs, setPhotoThumbs,
   dashMap, setDashMap, dashLayer, setDashLayer, dashMarkers, setDashMarkers,
   dashAddMarker, setDashAddMarker, pendingNewCoords, setPendingNewCoords, lastRenderedRows, setLastRenderedRows,
   mapColorBy,
@@ -113,17 +113,21 @@ export function sortFindings(rows) {
 }
 
 export async function loadDetail(id) {
-  const [f, ph, hi, as] = await Promise.all([
+  // temp_repair is ONE row per finding (unique index on finding_id), so maybeSingle — a finding
+  // with no emergency stop-leak record resolves to null rather than erroring.
+  const [f, ph, hi, as, tr] = await Promise.all([
     sb.from('findings').select('*').eq('id', id).single(),
     sb.from('finding_photos').select('*').eq('finding_id', id).order('created_at', { ascending: true }),
     sb.from('status_history').select('*').eq('finding_id', id).order('changed_at', { ascending: false }),
-    sb.from('assessments').select('*').eq('finding_id', id).order('created_at', { ascending: false })
+    sb.from('assessments').select('*').eq('finding_id', id).order('created_at', { ascending: false }),
+    sb.from('temp_repair').select('*').eq('finding_id', id).maybeSingle()
   ]);
   if (f.error) { notify('Finding not found.', true); return false; }
   setCurrent(f.data);
   setCurrentPhotos(ph.data || []);
   setCurrentHistory(hi.data || []);
   setCurrentAssessments(as.data || []);
+  setCurrentTempRepair(tr.data || null);
   return true;
 }
 
@@ -140,6 +144,7 @@ export async function loadPublicFinding(id) {
     setCurrentPhotos(data.photos || []);
     setCurrentHistory(data.history || []);
     setCurrentAssessments(data.assessments || []);
+    setCurrentTempRepair(data.temp_repair || null);
     return true;
   } catch (_) {
     return false;

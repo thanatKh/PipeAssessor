@@ -63,7 +63,10 @@ export interface B313Result {
   ca: number;
   CR: number;
   P_input: number;
-  pUnit: 'bar' | 'psi';
+  /** Echoed back verbatim from the input (defaults to 'bar(g)') and printed as-is, so this is a
+      free string, NOT the 'bar' | 'psi' union it was once declared as — that union never actually
+      matched the runtime value and made `tsc --noEmit` fail at compute.ts's return statement. */
+  pUnit: string;
   isInternal: boolean;
   S: number;
   E: number;
@@ -90,7 +93,9 @@ export interface Material {
 /* ---------------- persistence rows (Supabase) ---------------- */
 
 export type FindingStatus = 'Open' | 'Monitoring' | 'Repair Planned' | 'Repaired' | 'Closed';
-export type PhotoKind = 'found' | 'repaired';
+// 'temp_before' / 'temp_after' are the before/after-installation evidence for the temporary repair
+// record (see TempRepair below). Mirrors finding_photos' kind check constraint in db/schema.sql.
+export type PhotoKind = 'found' | 'repaired' | 'temp_before' | 'temp_after';
 
 export interface Finding {
   id: string;
@@ -118,7 +123,49 @@ export interface Photo {
   id: string;
   finding_id: string;
   kind: PhotoKind;
-  path: string;
+  /** The R2 object key. Named storage_path in the DB and at every call site. */
+  storage_path: string;
+  [k: string]: any;
+}
+
+/**
+ * The emergency stop-leak record — ONE row per finding, written only for a finding flagged
+ * is_leaking (public.temp_repair, db/schema.sql section 7a). Replaces the legacy standalone Excel
+ * form; its section 1 is deliberately absent because every field of it already lives on the
+ * Finding or the latest Assessment snapshot and is read from there.
+ */
+export interface TempRepair {
+  id?: string;
+  finding_id: string;
+  method: string;
+  method_other: string | null;
+  installed_date: string | null;
+  installed_by: string | null;
+  install_method: string | null;
+  design_life_months: number | null;
+  // clamp branch
+  clamp_type: string | null;
+  clamp_size: string | null;
+  clamp_material: string | null;
+  rated_pressure_barg: number | null;
+  // composite branch
+  composite_system: string | null;
+  composite_layers: number | null;
+  composite_thickness_mm: number | null;
+  surface_prep: string | null;
+  cure_note: string | null;
+  // verification
+  verify_method: string | null;
+  test_pressure_barg: number | null;
+  tested_at: string | null;
+  test_result: string;
+  test_note: string | null;
+  monitor_freq: string | null;
+  // permanent repair plan
+  perm_method: string | null;
+  perm_target_date: string | null;
+  perm_owner: string | null;
+  precautions: string | null;
   [k: string]: any;
 }
 

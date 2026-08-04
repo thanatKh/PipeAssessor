@@ -1,10 +1,10 @@
     /* Brand tokens, base styles, .wrap, and the header suite live in asset/theme.css. */
     /* match the calculator's page width (theme.css default 1500px) */
 
-    /* Header additions specific to this page. The header holds only brand + the sidebar toggle
-       now (account + sign out moved into the sidebar's own footer, .sb-footer in theme.css) — so
-       there is nothing left to style here beyond the public-share badge's row and the responsive
-       logo/title shrink. */
+    /* Header additions specific to this page. The header holds only brand now — the sidebar
+       toggle lives in the sidebar's own header and account + sign out moved into the sidebar's
+       own footer (.sb-head/.sb-footer in theme.css) — so there is nothing left to style here
+       beyond the public-share badge's row and the responsive logo/title shrink. */
     .header-actions { gap: 10px; }
 
     @media (max-width: 640px) {
@@ -16,20 +16,39 @@
     body:not(.authed) .authed-only { display: none !important; }
 
     /* ============ Sidebar layout offset ============
-       The sidebar component itself lives in theme.css; this is only the page-shell geometry.
+       The sidebar component itself is Basecoat's .sidebar (theme.css retheme's its tokens);
+       Basecoat's own compiled CSS already handles the off-canvas transform, the content-push
+       margin via `.sidebar + *`, and the mobile backdrop. Its bundled JS (basecoat-css/sidebar.min)
+       is told the real desktop/mobile split via `data-breakpoint="961"` on the <aside> (index.html)
+       — but Basecoat's *CSS* still hardcodes `@media (min-width:48rem)` (768px) for the nav's
+       desktop width/no-transform and the content-push margin. Left alone that opens a 768–960px
+       gap where JS treats the viewport as mobile (closed by default, off-canvas slide-in) while
+       Basecoat's CSS already applies the desktop "no transform, full push" rules — sidebar visible
+       and pushing content even though JS considers it closed. This block re-points that CSS
+       threshold to the app's own 961px stacking breakpoint (every two-column layout —
+       .dash-top, .form-split, .quick-calc-split, .detail-split — already stacks there) and hides
+       the sidebar entirely for signed-out/public-view states.
 
-       The offset goes on `main.wrap`'s MARGIN, deliberately not on its padding and not on <body>.
-       .sticky-page-header uses `margin: -20px -20px 16px -20px` to cancel .wrap's `padding: 20px`
-       and bleed to the container edges (see its rule further down). Touching that padding — or
-       padding <body> — would misalign those bleed bars on all three pages that use them (form,
-       detail, quick calc). Changing margin-left leaves the padding contract intact.
+       The push lands on `main.wrap`'s MARGIN (Basecoat's `.sidebar + *` rule), deliberately not
+       on its padding and not on <body>. .sticky-page-header uses `margin: -20px -20px 16px -20px`
+       to cancel .wrap's `padding: 20px` and bleed to the container edges (see its rule further
+       down) — touching that padding, or padding <body>, would misalign those bleed bars on the
+       three pages that use them (form, detail, quick calc).
 
        Consequence, accepted: on ultra-wide screens content sits left-of-centre rather than
        centred, since margin-left now beats .wrap's `margin: auto`. The max-width: 1500px cap
        still applies. Standard app-shell behaviour. */
+    @media (max-width: 960px) {
+      /* Force Basecoat's nav back to mobile width + off-canvas transform below 961px, undoing
+         its own 768px "desktop" rules early. */
+      .sidebar nav { width: var(--sidebar-mobile-width) !important; }
+      .sidebar[aria-hidden="true"]:not([data-side=right]) nav { transform: translateX(-100%); }
+      body.authed:not(.public-view) main.wrap { margin-left: 0 !important; }
+    }
+
     @media (min-width: 961px) {
-      body.authed:not(.public-view) main.wrap {
-        margin-left: var(--sidebar-w);
+      body.authed:not(.public-view) .sidebar:not([data-side=right]) + main.wrap {
+        margin-left: var(--sidebar-width);
         /* width:auto is load-bearing, not tidying. .wrap's base rule sets `width: 100%`, which
            resolves against the VIEWPORT — so margin-left would be added on top of a full-viewport
            width and push the page 240px wider than the screen, giving every authenticated view a
@@ -38,44 +57,32 @@
            width:auto makes the block fill only the space left over after the margin. */
         width: auto;
       }
-    }
-
-    /* Below 961px the sidebar becomes an off-canvas drawer. 961px is the right breakpoint because
-       every two-column layout in the app (.dash-top, .form-split, .quick-calc-split,
-       .detail-split) already stacks there. */
-    @media (max-width: 960px) {
-      .app-sidebar {
-        transform: translateX(-100%);
-        transition: transform 0.2s ease;
-        width: 240px;
-        box-shadow: 4px 0 16px rgba(15, 23, 42, 0.12);
+      /* Sidebar closed on desktop (Basecoat's open/closed, no rail state — see theme.css):
+         no push, content reflows full width. Basecoat's own [aria-hidden=true]+* rule already
+         does this at 768px; kept explicit here since this block re-points the threshold. */
+      body.authed:not(.public-view) .sidebar[aria-hidden="true"]:not([data-side=right]) + main.wrap {
+        margin-left: 0;
       }
-      /* The drawer always shows full labels — an icon rail makes no sense as an overlay, so the
-         desktop collapsed state is ignored here rather than compounding with it. Same treatment
-         extends to the account footer: full row (avatar + email/role + sign-out), not the
-         collapsed rail's stacked icon-only form. */
-      body.sidebar-collapsed .app-sidebar { width: 240px; }
-      body.sidebar-collapsed .sb-label,
-      body.sidebar-collapsed .sb-group-title { display: revert; }
-      body.sidebar-collapsed .sb-link { justify-content: flex-start; padding: 7px 10px; gap: 10px; }
-      body.sidebar-collapsed .sb-footer { flex-direction: row; padding: 10px; }
-      body.sidebar-collapsed .sb-user-text { display: flex; }
-
-      body.sidebar-open .app-sidebar { transform: translateX(0); }
-      body.sidebar-open .sidebar-scrim { display: block; }
-      main.wrap { margin-left: auto; }
     }
 
     /* A public share link has no navigation at all (every sidebar item is .authed-only or
-       .not-public), so the rail must vanish rather than render empty — and the content offset
+       .not-public), so the sidebar must vanish rather than render empty — and the content offset
        must go with it, or the page sits mis-centred. Keeps #/s/<id> looking exactly as before. */
-    body.public-view .app-sidebar,
-    body:not(.authed) .app-sidebar,
-    body.public-view .sidebar-scrim { display: none !important; }
+    body.public-view .sidebar,
+    body:not(.authed) .sidebar,
+    body.public-view #btnSidebarReopen,
+    body:not(.authed) #btnSidebarReopen { display: none !important; }
 
-    @media (prefers-reduced-motion: reduce) {
-      .app-sidebar { transition: none; }
-    }
+    /* ============ Sidebar reopen control ============
+       Basecoat translateX()'s the ENTIRE sidebar <nav> off-screen when closed, taking the
+       in-sidebar toggle (.sb-head, theme.css) with it — so this separate button, living in the
+       app header instead of inside .sidebar, is the only way back once closed. Shown only while
+       closed (app.ts mirrors #appSidebar's aria-hidden onto body.sidebar-is-open via a
+       MutationObserver, since Basecoat's own click-outside/click-nav-link auto-close paths never
+       touch app.ts's click handlers directly). Hidden while open so the two controls never both
+       show at once. */
+    #btnSidebarReopen { display: none; }
+    body.authed:not(.public-view):not(.sidebar-is-open) #btnSidebarReopen { display: inline-flex; }
 
     /* ============ Views ============ */
     .view { display: none; }
@@ -3003,3 +3010,86 @@ body.auth-register .signin-only { display: none; }
   .gantt-row { grid-template-columns: 120px 1fr; }
   .plan-table th:nth-child(2), .plan-table td:nth-child(2) { display: none; }
 }
+
+/* ============================================================================
+   Temporary repair (emergency stop-leak) — the #panelTempRepair form section and
+   the #detailPanelTempRepair read-only panel. Both panels are display:none in the
+   markup and revealed by JS, so a finding that is not leaking / has no record
+   renders exactly as it did before this feature existed.
+   ============================================================================ */
+
+/* Thai half of a bilingual heading — lighter and smaller so the English/Thai pair
+   reads as one label rather than two competing titles. */
+.panel-h-th,
+.photo-group-th {
+  font-weight: 500;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+/* A method-specific or sub-topic block inside the temporary-repair form section.
+   Indented rule rather than a nested .panel: nesting cards inside a card reads as
+   a second level of page structure, which this is not. */
+.tr-branch {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--card-border);
+}
+
+.tr-branch-h {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.tr-branch-note {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-light);
+}
+
+/* Verification headline on the detail panel. Same light-tint + coloured-spine
+   language as .health-banner and the PDF's integrity band; the spine colour is set
+   inline from TEMP_REPAIR_RESULT_COLORS so the web and the PDF agree. */
+.tr-strip {
+  border-left: 3px solid var(--text-muted);
+  background: var(--bg-color);
+  border-radius: 0 6px 6px 0;
+  padding: 8px 12px;
+  margin-bottom: 14px;
+}
+
+.tr-strip-word {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tr-strip-line {
+  font-size: var(--fs-base);
+  color: var(--text-color);
+  margin-top: 2px;
+}
+
+/* Bilingual section heading between .dgrid blocks in the detail panel, mirroring the
+   legacy Excel form's own numbering so the two read the same way. */
+.tr-sec-h {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--text-muted);
+  margin: 14px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.tr-sec-h:first-child { margin-top: 0; }
+
+/* Continuation row: a value with no label of its own (the anomaly narrative under
+   1.4, the test note under 3.4). Spans the grid so it reads as prose, not a cell. */
+.d-item.tr-cont { grid-column: 1 / -1; }
+.d-item.tr-cont .d-val { color: var(--text-muted); }

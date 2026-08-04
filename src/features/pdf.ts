@@ -16,8 +16,10 @@ import { OR_LOGO_DATAURL } from '../engine/branding';
 import { registerGoogleSansFonts } from '../engine/fonts';
 import { PA_SCOPE_TEXT, paCrossSectionPng, resolveIntegrityBanner } from '../workbench/assess-view';
 import { resolveAdvisor } from '../workbench/repair-advisor';
+import { tempRepairRows, tempRepairHeadline, tempRepairResultColor } from '../workbench/temp-repair';
 import {
-  findings, filters, selectedIds, current, currentPhotos, currentHistory, currentAssessments, photoThumbs,
+  findings, filters, selectedIds, current, currentPhotos, currentHistory, currentAssessments,
+  currentTempRepair, photoThumbs,
 } from '../core/state';
 import { applyFilters, sortFindings, ageDays, photoUrl } from './dashboard';
 import { resFromSnapshot, erfNo, materialName, fmtN } from './detail';
@@ -350,6 +352,9 @@ export async function buildFindingPdf() {
   const assess = currentAssessments.length ? currentAssessments[0] : null;
   const assessRes = assess ? resFromSnapshot(assess) : null;
   const xsecPng = assessRes ? await paCrossSectionPng(assessRes, 2).catch(() => null) : null;
+  // Emergency stop-leak record, or null. loadDetail already fetched it, so nothing extra is
+  // requested here — and with no record the whole Temporary Repair section below is skipped.
+  const tempRepair = currentTempRepair || null;
 
   // QR code → the read-only public share page for this finding (no sign-in). Lazy-imported so
   // qrcode stays out of the entry bundle; degrades to no-QR on any failure.
@@ -671,6 +676,77 @@ export async function buildFindingPdf() {
     }
   }
 
+  // --- Temporary Repair Record (emergency stop-leak) ---
+  // Conditional: with no temp_repair row the whole block is skipped, so a finding without one
+  // produces exactly the report it produced before this section existed (same section numbering,
+  // since secNum only advances inside section()). Placed after the Repair Advisor so the document
+  // reads problem -> advice -> what was actually done -> evidence.
+  //
+  // Sections 1-4 come from the SAME tempRepairRows array the detail page renders, and section 1's
+  // rows are read from the finding + the assessment inputs already loaded above — the legacy Excel
+  // form's section 1 is deliberately not stored on temp_repair.
+  if (tempRepair) {
+    const trRows = tempRepairRows(tempRepair, f, assess ? assess.inputs : null);
+    if (trRows.length) {
+      const trC = tempRepairResultColor(tempRepair);
+      const trTint = tempRepair.test_result === 'Pass' ? '#ecfdf5'
+        : tempRepair.test_result === 'Fail' ? '#fef2f2'
+        : tempRepair.test_result === 'Pass with observation' ? '#fffbeb' : PDF_PANEL;
+
+      section('Temporary Repair Record (Emergency Stop-Leak)', 40);
+
+      // Verification callout — same light-tint + colored-spine language as the integrity band.
+      // setFont BEFORE splitTextToSize: it measures against the ACTIVE font, and this string is Thai.
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY);
+      const trLines = doc.splitTextToSize(tempRepairHeadline(tempRepair), CW - 8);
+      const trH = 6.5 + trLines.length * 3.7 + 2.5;
+      ensure(trH + 8);
+      doc.setFillColor(trTint); doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+      doc.rect(M, y, CW, trH, 'FD');
+      doc.setFillColor(trC); doc.rect(M, y, 2, trH, 'F');
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_VALUE); doc.setTextColor(trC);
+      doc.text(`VERIFICATION: ${String(tempRepair.test_result || 'Not yet tested').toUpperCase()}`, M + 5, y + 5);
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_TEXT);
+      doc.text(trLines, M + 5, y + 9.5);
+      y += trH + 3.5;
+
+      // Label/value table with a full-width section header row wherever the bilingual section
+      // changes, so the printed record maps 1:1 onto the legacy Excel form's numbering.
+      const trBody = [];
+      let trSec = null;
+      trRows.forEach(r => {
+        if (r.section !== trSec) {
+          trSec = r.section;
+          trBody.push([{ content: r.section, colSpan: 2, styles: { fillColor: '#e2e8f0', fontStyle: 'bold', textColor: PDF_NAVY } }]);
+        }
+        trBody.push([r.label, r.value]);
+      });
+      autoTable(doc, {
+        margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
+        startY: y,
+        theme: 'grid',
+        styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.8, lineColor: '#e2e8f0', lineWidth: 0.12, valign: 'top', textColor: PDF_TEXT, overflow: 'linebreak' },
+        columnStyles: {
+          0: { fontStyle: 'bold', textColor: PDF_NAVY, cellWidth: 62, fillColor: '#f8fafc' },
+          1: { textColor: PDF_TEXT },
+        },
+        body: trBody,
+        didDrawPage: () => { if (doc.internal.getNumberOfPages() > 1) chrome(); }
+      });
+      y = doc.lastAutoTable.finalY + 4;
+
+      const trNote = 'บันทึกนี้เป็นการซ่อมแซมชั่วคราวเท่านั้น ต้องดำเนินการซ่อมแซมถาวรตามแผนในหัวข้อ 4 '
+        + '(A temporary repair is an interim measure only; the permanent repair in section 4 remains outstanding. '
+        + 'ASME PCC-2 Part 3 for mechanical clamps, Part 4 / ISO 24817 for composite wraps.)';
+      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_MUTED);
+      const trNoteLines = doc.splitTextToSize(trNote, CW);
+      ensure(trNoteLines.length * 3.4 + 4);
+      doc.text(trNoteLines, M, y + 2);
+      doc.setTextColor(PDF_TEXT);
+      y += trNoteLines.length * 3.4 + 5;
+    }
+  }
+
   // --- Site Location (Map) ---
   if (f.lat != null && f.lng != null) {
     section('Site Location & Geographical Pin', mapImg ? 98 : 16);
@@ -694,7 +770,14 @@ export async function buildFindingPdf() {
   // --- Photographic Record ---
   if (photoData.length) {
     section('Photographic Record', 75);
-    for (const [kind, title] of [['found', 'As Found'], ['repaired', 'After Repair']]) {
+    // The two temporary-repair groups only ever have items when a stop-leak was recorded, so no
+    // extra guard is needed — `continue` on an empty slice already skips them.
+    for (const [kind, title] of [
+      ['found', 'As Found'],
+      ['temp_before', 'Before Temporary Repair / ก่อนติดตั้ง'],
+      ['temp_after', 'After Temporary Repair / หลังติดตั้ง'],
+      ['repaired', 'After Repair'],
+    ]) {
       const items = photoData.filter(p => p.kind === kind);
       if (!items.length) continue;
       ensure(15);

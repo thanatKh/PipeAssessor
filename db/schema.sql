@@ -231,6 +231,100 @@ create policy "auth delete finding-photos" on storage.objects
   for delete to authenticated using (bucket_id = 'finding-photos');
 
 -- ---------------------------------------------------------------------------
+-- 7a. temp_repair — the emergency stop-leak / temporary repair record.
+--
+--     ONE row per finding (unique index on finding_id, so the app writes it with
+--     a plain upsert on conflict). Only ever filled in for a finding flagged
+--     is_leaking; the form panel that writes it is hidden otherwise.
+--
+--     Deliberately NOT stored here: everything in the legacy Excel form's
+--     section 1 (equipment name, tag, location, nature of the problem, product,
+--     operating/design pressure and temperature, reference document). All of it
+--     already lives on findings (pipe_tag / location_desc / finding_type /
+--     description / service / sap_notification) and on the latest assessment
+--     snapshot (P / p_unit / design_temp), so the report reads it from there
+--     rather than asking for it twice.
+--
+--     Placed BEFORE section 8 on purpose: get_public_finding is a `language sql`
+--     function, whose body Postgres parses and validates at definition time, so
+--     the table it selects from must already exist. Same reason section 6a sits
+--     ahead of section 6. Self-contained (declares its own RLS) so it can be
+--     applied standalone from db/temp-repair-migration.sql.
+-- ---------------------------------------------------------------------------
+create table if not exists public.temp_repair (
+  id uuid primary key default gen_random_uuid(),
+  finding_id uuid not null references public.findings(id) on delete cascade,
+
+  -- 2. รายละเอียดการซ่อมแซมชั่วคราว / temporary repair details
+  method text not null check (method in (
+    'Mechanical Clamp','Bolted Split Sleeve / Enclosure','Composite Wrap',
+    'Epoxy Putty / Sealant','Injection Sealing','Other')),
+  method_other text,          -- free text, used only when method = 'Other'
+  installed_date date,        -- 2.4 วันที่ติดตั้ง
+  installed_by text,
+  install_method text,        -- 2.5 วิธีการติดตั้ง / procedure reference
+  design_life_months int,     -- intended service life of the temporary repair
+  -- clamp branch (2.1 / 2.2 / 2.3)
+  clamp_type text,
+  clamp_size text,
+  clamp_material text,
+  rated_pressure_barg numeric,
+  -- composite branch (ASME PCC-2 Part 4 / ISO 24817)
+  composite_system text,
+  composite_layers int,
+  composite_thickness_mm numeric,
+  surface_prep text,
+  cure_note text,
+
+  -- 3. การตรวจสอบหลังติดตั้ง / post-installation verification
+  verify_method text,         -- 3.1
+  test_pressure_barg numeric, -- 3.2
+  tested_at timestamptz,      -- 3.3
+  test_result text not null default 'Not yet tested'
+    check (test_result in ('Not yet tested','Pass','Pass with observation','Fail')),  -- 3.4
+  test_note text,
+  monitor_freq text,          -- 3.5 การติดตามเฝ้าระวัง
+
+  -- 4. แผนงานซ่อมแซมถาวร / permanent repair plan
+  -- perm_target_date lives HERE, not on findings.target_date: that column is one
+  -- of the five pa_guard_repair_fields blocks for inspectors (section 9e), and
+  -- this panel sits on the same form an inspector uses to report the leak.
+  perm_method text,           -- 4.1, from REPAIR_METHOD_OPTIONS
+  perm_target_date date,      -- 4.2
+  perm_owner text,            -- 4.3
+  precautions text,           -- 4.4
+
+  created_by uuid not null default auth.uid(),
+  created_by_email text not null default coalesce(auth.jwt() ->> 'email', ''),
+  created_at timestamptz not null default now(),
+  updated_by uuid,
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists idx_temp_repair_finding on public.temp_repair (finding_id);
+
+drop trigger if exists trg_temp_repair_touch on public.temp_repair;
+create trigger trg_temp_repair_touch
+  before update on public.temp_repair
+  for each row execute function public.touch_updated_at();
+
+-- Blanket authenticated access, like `assessments` and unlike `line_list`: this
+-- record is filled in on the same form an INSPECTOR uses to report the leak, so
+-- gating writes on pa_is_maintenance() would make that save fail outright.
+alter table public.temp_repair enable row level security;
+
+drop policy if exists "temp repair authenticated full access" on public.temp_repair;
+create policy "temp repair authenticated full access" on public.temp_repair
+  for all to authenticated using (true) with check (true);
+
+-- Two new photo kinds for the before/after-installation evidence (Excel section
+-- 5). The constraint is recreated rather than altered because its name is the
+-- auto-generated one from the section 2 create table.
+alter table public.finding_photos drop constraint if exists finding_photos_kind_check;
+alter table public.finding_photos add constraint finding_photos_kind_check
+  check (kind in ('found','repaired','temp_before','temp_after'));
+
+-- ---------------------------------------------------------------------------
 -- 8. Public read-only single-finding access (for the QR-code share links on the
 --    PDF report). The whole app is otherwise RLS-locked to `authenticated`;
 --    this is the ONE public read path. It is a SECURITY DEFINER function (runs
@@ -265,7 +359,10 @@ as $$
       select jsonb_agg(jsonb_build_object('old_status', h.old_status, 'new_status', h.new_status,
                                           'changed_at', h.changed_at, 'note', h.note)
              order by h.changed_at desc)
-      from public.status_history h where h.finding_id = f.id), '[]'::jsonb)
+      from public.status_history h where h.finding_id = f.id), '[]'::jsonb),
+    'temp_repair', (
+      select to_jsonb(t) - 'created_by_email' - 'created_by' - 'updated_by'
+      from public.temp_repair t where t.finding_id = f.id)
   ) end
   from public.findings f
   where f.id = p_id;
@@ -417,7 +514,12 @@ drop policy if exists "findings delete maintenance" on public.findings;
 create policy "findings delete maintenance" on public.findings
   for delete to authenticated using (public.pa_is_maintenance());
 
--- ---- finding_photos: as-found for everyone, repaired for maintenance ----
+-- ---- finding_photos: as-found + temporary-repair evidence for everyone,
+--      after-repair for maintenance.
+--      'temp_before'/'temp_after' sit on the inspector side of the boundary on
+--      purpose: they are attached by the same form panel an inspector uses to
+--      report the leak (section 7a), so gating them would break that save.
+--      'repaired' stays maintenance-only — those photos ARE the repair handover.
 drop policy if exists "authenticated full access" on public.finding_photos;
 
 drop policy if exists "photos read" on public.finding_photos;
@@ -427,18 +529,18 @@ create policy "photos read" on public.finding_photos
 drop policy if exists "photos insert" on public.finding_photos;
 create policy "photos insert" on public.finding_photos
   for insert to authenticated
-  with check (coalesce(kind, 'found') = 'found' or public.pa_is_maintenance());
+  with check (coalesce(kind, 'found') <> 'repaired' or public.pa_is_maintenance());
 
 drop policy if exists "photos update" on public.finding_photos;
 create policy "photos update" on public.finding_photos
   for update to authenticated
-  using (coalesce(kind, 'found') = 'found' or public.pa_is_maintenance())
-  with check (coalesce(kind, 'found') = 'found' or public.pa_is_maintenance());
+  using (coalesce(kind, 'found') <> 'repaired' or public.pa_is_maintenance())
+  with check (coalesce(kind, 'found') <> 'repaired' or public.pa_is_maintenance());
 
 drop policy if exists "photos delete" on public.finding_photos;
 create policy "photos delete" on public.finding_photos
   for delete to authenticated
-  using (coalesce(kind, 'found') = 'found' or public.pa_is_maintenance());
+  using (coalesce(kind, 'found') <> 'repaired' or public.pa_is_maintenance());
 
 -- ---- status_history: only Open/Monitoring entries for inspectors ----
 drop policy if exists "authenticated full access" on public.status_history;

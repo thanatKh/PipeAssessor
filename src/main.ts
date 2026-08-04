@@ -16,6 +16,7 @@ import './styles/theme.css';           // design system (after Basecoat, per the
 import './styles/app.css';             // page-specific components (last)
 import 'basecoat-css/basecoat.min';    // Basecoat component behaviors (was the CDN defer <script>)
 import 'basecoat-css/toast';           // Toaster component JS (registers on window.basecoat — must load after basecoat.min)
+import 'basecoat-css/command.min';     // Command palette (nav menu, #cmdMenu in index.html) — filtering, arrow-key nav, click-to-close — must load after basecoat.min
 
 // Noto Sans Thai — Google Sans's embedded TTFs have no Thai glyphs (documented, intentional), so
 // Thai text was silently falling through to whichever generic Thai font the OS happens to pick

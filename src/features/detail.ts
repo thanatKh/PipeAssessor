@@ -16,9 +16,10 @@ import { computeB313, PA_MATERIALS } from '../engine/compute';
 import { paFmtBaht } from '../engine/format';
 import { paCreateAssessView, resolveIntegrityBanner } from '../workbench/assess-view';
 import { paRenderRepairAdvisor } from '../workbench/repair-advisor';
+import { tempRepairRows, tempRepairHeadline, tempRepairResultColor } from '../workbench/temp-repair';
 import {
   current, setCurrent, currentPhotos, setCurrentPhotos, currentHistory, setCurrentHistory,
-  currentAssessments, editingId, dlgTarget, setDlgTarget,
+  currentAssessments, currentTempRepair, editingId, dlgTarget, setDlgTarget,
   detailMap, setDetailMap, detailMarker, setDetailMarker, photoPasteTarget, setPhotoPasteTarget,
   isMaintenance, lightboxPhotos, setLightboxPhotos, lightboxIndex, setLightboxIndex,
 } from '../core/state';
@@ -88,6 +89,7 @@ export function renderDetail() {
     : '';
 
   renderHealthBanner();
+  renderTempRepair();
   renderRepairAdvisor();
   renderAssessments();
   renderDetailMap();
@@ -112,6 +114,45 @@ export function renderHealthBanner() {
     + `<div class="hb-main"><div class="hb-word">${esc(hb.word)}</div><div class="hb-line">${esc(hb.line)}</div></div>`
     + metricsHtml
     + `</div>`;
+}
+
+// Emergency stop-leak record. The panel is hidden outright when no temp_repair row exists, so a
+// finding without one looks exactly as it did before this feature. Sections 1-4 come from the
+// shared tempRepairRows — the SAME array buildFindingPdf prints — so the screen and the report can
+// never disagree about what the record says. Section 1's rows are read from the finding and the
+// latest assessment inputs, which is why both are passed in.
+export function renderTempRepair() {
+  const panel = $('detailPanelTempRepair');
+  const host = $('trDetailBody');
+  if (!panel || !host) return;
+  const tr = currentTempRepair;
+  if (!tr) { panel.style.display = 'none'; host.innerHTML = ''; return; }
+  panel.style.display = '';
+
+  const latest = currentAssessments.length ? currentAssessments[0] : null;
+  const rows = tempRepairRows(tr, current, latest ? latest.inputs : null);
+  const color = tempRepairResultColor(tr);
+
+  // Group into the bilingual section headings tempRepairRows already assigned, preserving order.
+  let html = `<div class="tr-strip" style="border-left-color:${esc(color)};">`
+    + `<div class="tr-strip-word" style="color:${esc(color)};">${esc(tr.test_result || 'Not yet tested')}</div>`
+    + `<div class="tr-strip-line">${esc(tempRepairHeadline(tr))}</div>`
+    + `</div>`;
+  let openSection = null;
+  rows.forEach(r => {
+    if (r.section !== openSection) {
+      if (openSection !== null) html += '</div>';
+      html += `<div class="tr-sec-h">${esc(r.section)}</div><div class="dgrid">`;
+      openSection = r.section;
+    }
+    // A blank label marks a continuation of the row above (the anomaly narrative under 1.4, the
+    // result note under 3.4) — render it as a full-width note rather than an empty label cell.
+    html += r.label
+      ? dItem(r.label, esc(r.value))
+      : `<div class="d-item tr-cont"><div class="d-val">${esc(r.value)}</div></div>`;
+  });
+  if (openSection !== null) html += '</div>';
+  host.innerHTML = html;
 }
 
 // Standalone Repair Advisor panel — always available, independent of whether an assessment
@@ -265,6 +306,15 @@ export function renderAssessments() {
   }
 }
 
+// Human labels for finding_photos.kind — used by the cap message and the lightbox caption, so a
+// new kind never leaks its raw column value into the UI.
+export const PHOTO_KIND_LABEL = {
+  found: 'As Found',
+  repaired: 'After Repair',
+  temp_before: 'Before Temporary Repair',
+  temp_after: 'After Temporary Repair',
+};
+
 export function photoThumb(p) {
   const url = photoUrl(p.storage_path);
   return `<div class="photo-thumb">
@@ -278,20 +328,35 @@ export function photoThumb(p) {
 // without a detour through the detail page. Both read/write the same currentPhotos array and
 // both are re-rendered together on every change — the ids differ (gridFound/gridFound2 etc.)
 // but the content and behavior are otherwise identical.
+// `group` is the wrapper hidden wholesale when the group does not apply — only the two
+// temporary-repair groups use it, so that a finding with no emergency stop-leak record shows
+// exactly the As Found / After Repair pair it always did.
 export const PHOTO_GRID_SETS = [
   { grid: 'gridFound', empty: 'emptyFound', addBtn: 'btnAddFound', kind: 'found' },
   { grid: 'gridRepaired', empty: 'emptyRepaired', addBtn: 'btnAddRepaired', kind: 'repaired' },
   { grid: 'gridFound2', empty: 'emptyFound2', addBtn: 'btnAddFound2', kind: 'found' },
   { grid: 'gridRepaired2', empty: 'emptyRepaired2', addBtn: 'btnAddRepaired2', kind: 'repaired' },
+  { grid: 'gridTempBefore', empty: 'emptyTempBefore', addBtn: 'btnAddTempBefore', kind: 'temp_before', group: 'trPhotoGroupBefore', scope: 'detail' },
+  { grid: 'gridTempAfter', empty: 'emptyTempAfter', addBtn: 'btnAddTempAfter', kind: 'temp_after', group: 'trPhotoGroupAfter', scope: 'detail' },
+  { grid: 'gridTempBefore2', empty: 'emptyTempBefore2', addBtn: 'btnAddTempBefore2', kind: 'temp_before', group: 'trPhotoGroupBefore2', scope: 'form' },
+  { grid: 'gridTempAfter2', empty: 'emptyTempAfter2', addBtn: 'btnAddTempAfter2', kind: 'temp_after', group: 'trPhotoGroupAfter2', scope: 'form' },
 ];
 
 export function renderPhotoGroups() {
-  const found = currentPhotos.filter(p => p.kind === 'found');
-  const rep = currentPhotos.filter(p => p.kind === 'repaired');
-  PHOTO_GRID_SETS.forEach(({ grid, empty, addBtn, kind }) => {
+  // The temporary-repair groups only make sense once the record they document exists, and the two
+  // surfaces know that from different places: the detail page from the loaded row, the edit form
+  // from its own (possibly still unsaved) "Installed" switch — currentTempRepair can point at a
+  // different finding there, since the form is reachable without visiting a detail page first.
+  // Either way an already-attached photo of that kind also counts, so deleting the last one can't
+  // hide the group and strand the rest.
+  const hasTempPhoto = currentPhotos.some(p => p.kind === 'temp_before' || p.kind === 'temp_after');
+  const showDetailTemp = hasTempPhoto || !!currentTempRepair;
+  const showFormTemp = hasTempPhoto || !!($('fTrInstalled') && $('fTrInstalled').checked);
+  PHOTO_GRID_SETS.forEach(({ grid, empty, addBtn, kind, group, scope }) => {
     const el = $(grid);
     if (!el) return; // markup may not exist yet on first call — harmless no-op
-    const rows = kind === 'found' ? found : rep;
+    if (group && $(group)) $(group).style.display = (scope === 'form' ? showFormTemp : showDetailTemp) ? '' : 'none';
+    const rows = currentPhotos.filter(p => p.kind === kind);
     el.innerHTML = rows.map(photoThumb).join('');
     // 'flex' not 'block' — .photo-empty's CSS lays the icon + text out in a row (display:flex),
     // but an inline style always beats a class rule, so 'block' here silently broke that layout,
@@ -340,7 +405,7 @@ export function renderLightboxFrame() {
   const p = lightboxPhotos[lightboxIndex];
   if (!p) return;
   $('lightboxImg').src = p.url;
-  $('lightboxLabel').textContent = p.kind === 'repaired' ? 'After Repair' : 'As Found';
+  $('lightboxLabel').textContent = PHOTO_KIND_LABEL[p.kind] || 'As Found';
   const multi = lightboxPhotos.length > 1;
   $('lightboxCounter').hidden = !multi;
   $('lightboxCounter').textContent = multi ? `${lightboxIndex + 1} / ${lightboxPhotos.length}` : '';
@@ -375,7 +440,7 @@ export async function addDetailPhotos(files, kind, findingId) {
   const already = currentPhotos.filter(p => p.kind === kind).length;
   const room = Math.max(0, PHOTO_LIMIT_PER_KIND - already);
   if (room <= 0) {
-    notify(`Limit reached: ${PHOTO_LIMIT_PER_KIND} ${kind === 'found' ? 'As Found' : 'After Repair'} photos max.`, true);
+    notify(`Limit reached: ${PHOTO_LIMIT_PER_KIND} ${PHOTO_KIND_LABEL[kind] || kind} photos max.`, true);
     return;
   }
   const toUpload = files.filter(f => f.type && f.type.startsWith('image/')).slice(0, room);

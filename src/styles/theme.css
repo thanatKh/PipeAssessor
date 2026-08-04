@@ -196,10 +196,9 @@ body > header .wrap {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* --hdr-pad-x is the single source of truth for this row's left padding — .sb-toggle (below)
-     reads the same variable to pull itself flush with the header's own edge, so the two can never
-     drift out of sync at a breakpoint. Redeclare both together (padding AND --hdr-pad-x) at any
-     breakpoint that changes this padding — see the 480px override further down. */
+  /* --hdr-pad-x is the single source of truth for this row's left/right padding. Redeclare both
+     together (padding AND --hdr-pad-x) at any breakpoint that changes this padding — see the
+     480px override further down. */
   --hdr-pad-x: 20px;
   padding: 12px var(--hdr-pad-x);
   flex-wrap: wrap;
@@ -226,171 +225,120 @@ body > header .wrap {
 }
 
 /* ============================================================================
-   Sidebar navigation.
-
-   Replaced the old header button row once the app grew past ~4 nav items. This
-   is a deliberate departure from the app's former "wrap, not hamburger" rule —
-   that rule existed because a growing header row had no bounded home and once
-   dragged the page wider than the physical screen. A sidebar gives nav its own
-   axis, so the top bar can stay short permanently.
+   Navigation command menu — Basecoat's own .command / .command-dialog component
+   (basecoat-css/command.min + the compiled command rules in basecoat.cdn.min.css, see
+   main.ts). Replaced the sidebar: with ~9 nav items total, a searchable palette (type to
+   filter, arrow keys + Enter, click) covers the same navigation need without a persistent
+   240px rail permanently narrowing every page. Opened via the header's "Menu" button or
+   Ctrl/Cmd+K (app.ts). This block retheme's Basecoat's own popover/muted tokens to the app's
+   palette (matching the --card/--card-foreground aliases already declared above) and styles
+   the app-specific pieces (nav item icons) — it does not re-implement filtering, keyboard
+   nav, or open/close, that's Basecoat's shipped CSS+JS.
 
    The top bar deliberately STAYS. --app-header-h is measured off `body > header`
    (app.ts's syncHeaderHeight) and two sticky consumers hang off it — .toaster and
    .sticky-page-header (the one shared sticky-toolbar treatment used by every page
-   that has one) — plus .page-loading-bar is anchored to it. Keeping the bar means
-   none of that needed rework.
-   ============================================================================ */
+   that has one) — plus .page-loading-bar is anchored to it. */
 :root {
-  --sidebar-w: 240px;
-  --sidebar-w-collapsed: 56px;
+  --popover: var(--card-bg);
+  --popover-foreground: var(--text-color);
+  --muted: var(--button-ghost-hover);
 }
 
-/* Icon-rail mode. Set on <body> and persisted in localStorage (same precedent as
-   body.hide-row-photos). Overriding the custom property here means main.wrap's
-   margin follows automatically — no second rule to keep in sync. */
-body.sidebar-collapsed {
-  --sidebar-w: var(--sidebar-w-collapsed);
+.command header {
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--card-border);
 }
 
-.app-sidebar {
-  position: fixed;
-  top: var(--app-header-h, 64px);
-  left: 0;
-  bottom: 0;
-  width: var(--sidebar-w);
-  /* Below the header (100) so it tucks under it, above page content, and well
-     below map presentation mode (9000) which is meant to cover everything. */
-  z-index: 90;
-  background: var(--card-bg);
-  border-right: 1px solid var(--card-border);
-  /* Flex column so the account footer (.sb-footer) pins to the bottom of the rail while the nav
-     list (.sb-nav) scrolls independently above it — the footer must never scroll out of view. */
-  display: flex;
-  flex-direction: column;
+.command header svg {
+  width: 16px;
+  height: 16px;
+  color: var(--text-light);
 }
 
-.sb-nav {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 12px 8px;
+.command header input {
+  font-size: var(--fs-base);
+  color: var(--text-color);
 }
 
-.sb-group { margin-bottom: 14px; }
-.sb-group:last-child { margin-bottom: 0; }
+.command [role="menu"] {
+  padding: 6px;
+  max-height: 60vh;
+}
 
-.sb-group-title {
-  font-size: var(--fs-xs);
+.command [role="heading"] {
+  font-size: var(--fs-2xs);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-light);
-  padding: 0 10px;
-  margin-bottom: 4px;
-  white-space: nowrap;
+  padding: 8px 8px 4px;
 }
 
-.sb-link {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
+.command [role="menuitem"] {
+  gap: 9px;
+  padding: 7px 8px;
   border-radius: 6px;
   color: var(--text-color);
   text-decoration: none;
   font-size: var(--fs-base);
   font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-.sb-link:hover { background: var(--button-ghost-hover); }
-
-.sb-link.is-active {
-  background: color-mix(in oklab, var(--button-primary) 12%, transparent);
-  color: var(--button-primary);
-  font-weight: 700;
-}
-
-/* Left accent bar on the active item — reads clearly even at a glance / in peripheral vision,
-   and survives icon-rail mode (where the tinted-background alone reads weaker at 40px wide). */
-.sb-link.is-active::before {
-  content: "";
-  position: absolute;
-  left: -8px;
-  top: 4px;
-  bottom: 4px;
-  width: 3px;
-  border-radius: 0 3px 3px 0;
-  background: var(--button-primary);
+  cursor: pointer;
 }
 
 .sb-ico {
   flex: none;
-  width: 20px;
+  width: 18px;
   text-align: center;
   font-size: var(--fs-md);
   color: var(--text-light);
 }
 
-.sb-link.is-active .sb-ico { color: var(--button-primary); }
-
-/* Collapsed rail: labels and group headings go, icons stay centred. The <a>
-   keeps its title attribute (set in app.ts) so the name is still reachable. */
-body.sidebar-collapsed .sb-label,
-body.sidebar-collapsed .sb-group-title { display: none; }
-
-body.sidebar-collapsed .sb-link { justify-content: center; padding: 3px 0; gap: 0; }
-body.sidebar-collapsed .sb-group { margin-bottom: 8px; }
-body.sidebar-collapsed .sb-link.is-active::before { left: -4px; }
-
-/* Icon-rail mode: the hover/active tint sits on a fixed 34x34 box around just the icon, matching
-   the header toggle's own button size and radius exactly — instead of tinting the full-width
-   link row (40px, wider than the toggle), which read as misaligned chrome even though the glyphs
-   inside were already pixel-centered on the same column (verified separately: geometric box
-   center and actual rendered ink centroid agreed to under 1px).
-
-   The 34x34 sizing on .sb-ico is applied UNCONDITIONALLY here — not only on :hover/.is-active.
-   A real regression shipped from getting this wrong: sizing .sb-ico only inside the :hover/
-   .is-active rules meant hovering over an item grew its icon box from 20px to 34px ON HOVER,
-   which grew that link's own row height (align-items:center + the icon being the only visible
-   child), pushing every icon below it down the rail — the icons visibly "moved" whenever the
-   mouse passed over them. Keeping the box permanently 34x34 and only ever toggling its
-   BACKGROUND COLOR on hover/active eliminates any layout shift; nothing about an icon's size or
-   position may change on interaction here, only its color. */
-body.sidebar-collapsed .sb-link:hover,
-body.sidebar-collapsed .sb-link.is-active {
-  background: none;
-}
-
-body.sidebar-collapsed .sb-ico {
-  display: flex;
+/* ---- Header nav trigger: "Menu" button + ⌘K hint, opens #cmdMenu ---- */
+.cmd-trigger {
+  flex: none;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 34px;
+  gap: 8px;
   height: 34px;
-  border-radius: 6px;
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--text-color);
+  font-size: var(--fs-base);
+  font-weight: 500;
+  cursor: pointer;
 }
 
-body.sidebar-collapsed .sb-link:hover .sb-ico { background: var(--button-ghost-hover); }
-/* After the hover rule (equal specificity) so the active tint wins when both apply at once. */
-body.sidebar-collapsed .sb-link.is-active .sb-ico { background: color-mix(in oklab, var(--button-primary) 12%, transparent); }
+.cmd-trigger:hover { background: var(--button-ghost-hover); }
 
-/* ---- Account footer: avatar + email/role + icon-only sign out, pinned under .sb-nav ----
-   Lives in the sidebar (not the header) so the header never grows past brand + the sidebar
-   toggle, regardless of how many nav items or roles the app gains later. */
-.sb-footer {
+.cmd-trigger-ico { font-size: var(--fs-md); color: var(--text-muted); }
+
+.cmd-trigger-kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  background: var(--bg-color);
+  color: var(--text-light);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+}
+
+/* ---- Header account block: avatar + email/role + icon-only sign out ----
+   Was the sidebar footer's job; moved into .header-actions (right side of the app header)
+   now there is no sidebar to anchor it to. */
+.hdr-account {
   flex: none;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 10px;
-  border-top: 1px solid var(--card-border);
+  padding-left: 10px;
+  border-left: 1px solid var(--card-border);
 }
 
-.sb-avatar {
+.hdr-avatar {
   flex: none;
   width: 28px;
   height: 28px;
@@ -404,7 +352,7 @@ body.sidebar-collapsed .sb-link.is-active .sb-ico { background: color-mix(in okl
   font-weight: 700;
 }
 
-.sb-user-text {
+.hdr-user-text {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
@@ -412,16 +360,17 @@ body.sidebar-collapsed .sb-link.is-active .sb-ico { background: color-mix(in okl
   gap: 1px;
 }
 
-.sb-user-email {
+.hdr-user-email {
   font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text-color);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 180px;
 }
 
-.sb-user-role {
+.hdr-user-role {
   font-size: var(--fs-2xs);
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -429,7 +378,7 @@ body.sidebar-collapsed .sb-link.is-active .sb-ico { background: color-mix(in okl
   color: var(--text-light);
 }
 
-.sb-signout {
+.hdr-signout {
   flex: none;
   width: 30px;
   height: 30px;
@@ -444,62 +393,7 @@ body.sidebar-collapsed .sb-link.is-active .sb-ico { background: color-mix(in okl
   cursor: pointer;
 }
 
-.sb-signout:hover { background: var(--button-ghost-hover); color: var(--danger-color); }
-
-/* Collapsed rail: stack avatar above the sign-out icon (side-by-side doesn't fit a 56px rail),
-   drop the email/role text (same treatment as .sb-label above). */
-body.sidebar-collapsed .sb-footer { flex-direction: column; padding: 10px 4px; gap: 8px; }
-body.sidebar-collapsed .sb-user-text { display: none; }
-
-/* Hamburger / collapse control in the top bar.
-   The button's hit-box (.sb-toggle) is deliberately WIDER than its visible glyph
-   (.sb-toggle-glyph): fixed to exactly --sidebar-w-collapsed and pulled flush with the header's
-   own left edge via a negative margin equal to --hdr-pad-x (the same variable .wrap's own left
-   padding is built from — see that rule's comment — so the two can never drift apart at a
-   breakpoint). Centering the glyph inside that slot lands its center at exactly half of
-   --sidebar-w-collapsed from the page's left edge — precisely where the collapsed sidebar's own
-   icon column centers too, since its .sb-nav padding is symmetric (8px both sides), which always
-   centers content on half the sidebar's width regardless of the padding value itself. A real
-   user-reported bug: before this, the toggle's fixed 34px box just sat after .wrap's 20px padding
-   with no relation to the sidebar's geometry, so the two visibly drifted apart once the sidebar
-   collapsed to its icon rail (measured: toggle center 37px vs sidebar icon center 27.5px). Fixed
-   here structurally, not with a one-off pixel nudge, so it can't silently reappear if any of
-   these sizes change later. Widening the hit-box also grows the click/tap target, a bonus. */
-.sb-toggle {
-  flex: none;
-  width: var(--sidebar-w-collapsed);
-  margin-left: calc(-1 * var(--hdr-pad-x));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  background: none;
-  cursor: pointer;
-}
-
-.sb-toggle-glyph {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border: 1px solid var(--card-border);
-  border-radius: 6px;
-  color: var(--text-muted);
-  font-size: var(--fs-lg);
-}
-
-.sb-toggle:hover .sb-toggle-glyph { background: var(--button-ghost-hover); }
-
-/* Backdrop for the mobile drawer only — never shown on desktop. */
-.sidebar-scrim {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.45);
-  z-index: 89;
-  display: none;
-}
+.hdr-signout:hover { background: var(--button-ghost-hover); color: var(--danger-color); }
 
 /* Global "something is loading" indicator (page-loading skill.dev): an indeterminate sliding bar
    pinned to the header's bottom edge, toggled by body.is-loading (see core/dom.ts's
