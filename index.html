@@ -491,10 +491,10 @@
          all already live on the finding and the assessment, and the report reads them from there. -->
     <div class="panel" id="panelTempRepair" style="display:none;">
       <div class="panel-h">
-        <h2>Temporary Repair <span class="panel-h-th">/ การซ่อมชั่วคราว</span></h2>
+        <h2>Temporary Repair</h2>
         <label class="switch-inline">
           <input class="input" type="checkbox" role="switch" id="fTrInstalled">
-          <span>ติดตั้งแล้ว / Installed</span>
+          <span>Installed</span>
         </label>
       </div>
       <div class="panel-b">
@@ -503,134 +503,142 @@
         <div id="trFields" style="display:none;">
           <div class="fgrid">
             <div>
-              <label class="f-label req" for="fTrMethod">วิธีซ่อมแซม / Repair Method</label>
+              <label class="f-label req" for="fTrMethod">Repair Method</label>
               <select id="fTrMethod" class="select"></select>
               <div class="validation-alert" id="errTrMethod">A repair method is required.</div>
             </div>
             <div id="fTrMethodOtherWrap" style="display:none;">
-              <label class="f-label" for="fTrMethodOther">ระบุวิธี / Specify method</label>
+              <label class="f-label" for="fTrMethodOther">Specify Method</label>
               <input id="fTrMethodOther" class="input" type="text" placeholder="e.g., Hot tap plug">
             </div>
             <div>
-              <label class="f-label" for="fTrInstalledDate">วันที่ติดตั้ง / Installed Date</label>
+              <label class="f-label" for="fTrInstalledDate">Installed Date</label>
               <input id="fTrInstalledDate" class="input" type="date">
             </div>
             <div>
-              <label class="f-label" for="fTrInstalledBy">ผู้ติดตั้ง / Installed By</label>
+              <label class="f-label" for="fTrInstalledBy">Installed By</label>
               <input id="fTrInstalledBy" class="input" type="text" placeholder="e.g., Maintenance Team A">
             </div>
-            <div>
-              <label class="f-label" for="fTrDesignLife">อายุออกแบบ / Design Life (months)</label>
-              <input id="fTrDesignLife" class="input" type="number" step="1" min="0" placeholder="optional">
-            </div>
             <div class="full">
-              <label class="f-label" for="fTrInstallMethod">วิธีการติดตั้ง / Installation Method</label>
-              <textarea id="fTrInstallMethod" class="textarea" rows="2" placeholder="ขั้นตอนที่ใช้ อ้างอิง Procedure / WPS ถ้ามี, on-stream หรือ shutdown…"></textarea>
+              <label class="f-label" for="fTrInstallMethod">Installation Method</label>
+              <textarea id="fTrInstallMethod" class="textarea" rows="2" placeholder="Procedure / WPS reference if any, on-stream or shutdown…"></textarea>
             </div>
           </div>
 
           <!-- Only ONE of these two blocks is ever visible; which one is keyed off
                TEMP_REPAIR_METHOD_KIND, never DOM position. -->
           <div class="tr-branch" id="fTrClampBlock" style="display:none;">
-            <div class="tr-branch-h">รายละเอียด Clamp / Clamp Details</div>
+            <div class="tr-branch-h">Clamp Details</div>
             <div class="fgrid">
               <div>
-                <label class="f-label" for="fTrClampType">ประเภท Clamp / Type</label>
+                <label class="f-label" for="fTrClampType">Clamp Type</label>
                 <input id="fTrClampType" class="input" type="text" placeholder="e.g., Bolted leak-repair clamp">
               </div>
               <div>
-                <label class="f-label" for="fTrClampSize">ขนาด / Size</label>
+                <label class="f-label" for="fTrClampSize">Clamp Size</label>
                 <input id="fTrClampSize" class="input" type="text" placeholder='e.g., 8" x 300 mm'>
               </div>
               <div>
-                <label class="f-label" for="fTrClampMaterial">วัสดุ Body / Seal</label>
+                <label class="f-label" for="fTrClampMaterial">Body / Seal Material</label>
                 <input id="fTrClampMaterial" class="input" type="text" placeholder="e.g., CS body / Viton seal">
               </div>
               <div>
-                <label class="f-label" for="fTrRatedP">Pressure ที่รับได้ / Rated (bar(g))</label>
+                <label class="f-label" for="fTrRatedP">Rated Pressure (bar(g))</label>
                 <input id="fTrRatedP" class="input" type="number" step="0.1" min="0">
               </div>
             </div>
           </div>
 
           <div class="tr-branch" id="fTrCompositeBlock" style="display:none;">
-            <div class="tr-branch-h">รายละเอียด Composite / Composite Details <span class="tr-branch-note">ASME PCC-2 Part 4 / ISO 24817</span></div>
+            <div class="tr-branch-h">Composite Details <span class="tr-branch-note">ASME PCC-2 Part 4 / ISO 24817</span></div>
             <div class="fgrid">
               <div>
-                <label class="f-label" for="fTrCompSystem">ระบบ / System</label>
+                <label class="f-label" for="fTrCompSystem">Composite System</label>
                 <input id="fTrCompSystem" class="input" type="text" placeholder="Manufacturer + product">
               </div>
               <div>
-                <label class="f-label" for="fTrCompLayers">จำนวนชั้น / Layers</label>
+                <label class="f-label" for="fTrCompLayers">Layers</label>
                 <input id="fTrCompLayers" class="input" type="number" step="1" min="0">
               </div>
               <div>
-                <label class="f-label" for="fTrCompThk">ความหนา Laminate / Thickness (mm)</label>
+                <label class="f-label" for="fTrCompThk">Laminate Thickness (mm)</label>
                 <input id="fTrCompThk" class="input" type="number" step="0.1" min="0">
               </div>
               <div>
-                <label class="f-label" for="fTrSurfacePrep">การเตรียมผิว / Surface Prep</label>
+                <label class="f-label" for="fTrSurfacePrep">Surface Prep</label>
                 <input id="fTrSurfacePrep" class="input" type="text" placeholder="e.g., SSPC-SP10 / Sa 2.5">
               </div>
               <div class="full">
-                <label class="f-label" for="fTrCure">การบ่ม / Cure</label>
+                <label class="f-label" for="fTrCure">Cure</label>
                 <input id="fTrCure" class="input" type="text" placeholder="Cure temperature and time">
               </div>
             </div>
           </div>
 
           <div class="tr-branch">
-            <div class="tr-branch-h">การตรวจสอบหลังติดตั้ง / Post-Installation Verification</div>
+            <div class="tr-branch-h">Post-Installation Verification</div>
             <div class="fgrid">
               <div>
-                <label class="f-label" for="fTrVerifyMethod">วิธีการตรวจสอบ / Method</label>
-                <input id="fTrVerifyMethod" class="input" type="text" placeholder="e.g., Visual + soap bubble, hold test">
+                <label class="f-label" for="fTrVerifyMethod">Verification Method</label>
+                <select id="fTrVerifyMethod" class="select"></select>
+              </div>
+              <div id="fTrVerifyMethodOtherWrap" style="display:none;">
+                <label class="f-label" for="fTrVerifyMethodOther">Specify Method</label>
+                <input id="fTrVerifyMethodOther" class="input" type="text" placeholder="Specify custom verification method">
               </div>
               <div>
                 <label class="f-label" for="fTrTestP">Test Pressure (bar(g))</label>
                 <input id="fTrTestP" class="input" type="number" step="0.1" min="0">
               </div>
               <div>
-                <label class="f-label" for="fTrTestedAt">วันเวลาที่ทดสอบ / Tested At</label>
-                <input id="fTrTestedAt" class="input" type="datetime-local">
+                <label class="f-label" for="fTrTestDate">Tested Date</label>
+                <input id="fTrTestDate" class="input" type="date">
               </div>
               <div>
-                <label class="f-label" for="fTrTestResult">ผลการทดสอบ / Result</label>
+                <label class="f-label" for="fTrTestTime">Tested Time (24h)</label>
+                <input id="fTrTestTime" class="input mono" type="text" placeholder="HH:mm (e.g. 14:30)" maxlength="5">
+              </div>
+              <div>
+                <label class="f-label" for="fTrTestResult">Test Result</label>
                 <select id="fTrTestResult" class="select"></select>
               </div>
               <div class="full">
-                <label class="f-label" for="fTrTestNote">บันทึกผล / Result Note</label>
+                <label class="f-label" for="fTrTestNote">Result Note</label>
                 <input id="fTrTestNote" class="input" type="text" placeholder="optional">
               </div>
-              <div class="full">
-                <label class="f-label" for="fTrMonitorFreq">การติดตามเฝ้าระวัง / Monitoring</label>
-                <input id="fTrMonitorFreq" class="input" type="text" placeholder="e.g., ตรวจสอบทุกสัปดาห์ จนกว่าจะซ่อมถาวร">
+              <div>
+                <label class="f-label" for="fTrMonitorFreq">Monitoring Frequency</label>
+                <select id="fTrMonitorFreq" class="select"></select>
+              </div>
+              <div id="fTrMonitorFreqOtherWrap" style="display:none;">
+                <label class="f-label" for="fTrMonitorFreqOther">Specify Frequency</label>
+                <input id="fTrMonitorFreqOther" class="input" type="text" placeholder="Specify custom monitoring frequency">
               </div>
             </div>
           </div>
 
           <div class="tr-branch">
-            <div class="tr-branch-h">แผนงานซ่อมแซมถาวร / Permanent Repair Plan</div>
+            <div class="tr-branch-h">Permanent Repair Plan</div>
             <div class="fgrid">
               <div>
-                <label class="f-label" for="fTrPermMethod">แนวทางซ่อมถาวร / Planned Method</label>
+                <label class="f-label" for="fTrPermMethod">Planned Method</label>
                 <select id="fTrPermMethod" class="select"></select>
               </div>
               <div id="fTrPermMethodOtherWrap" style="display:none;">
-                <label class="f-label" for="fTrPermMethodOther">ระบุวิธี / Specify method</label>
+                <label class="f-label" for="fTrPermMethodOther">Specify Method</label>
                 <input id="fTrPermMethodOther" class="input" type="text">
               </div>
               <div>
-                <label class="f-label" for="fTrPermDate">กำหนดเวลา / Target Date</label>
+                <label class="f-label" for="fTrPermDate">Target Date</label>
                 <input id="fTrPermDate" class="input" type="date">
               </div>
               <div>
-                <label class="f-label" for="fTrPermOwner">ผู้รับผิดชอบ / Responsible</label>
+                <label class="f-label" for="fTrPermOwner">Responsible</label>
                 <input id="fTrPermOwner" class="input" type="text">
               </div>
               <div class="full">
-                <label class="f-label" for="fTrPrecautions">ข้อควรระวัง / Precautions</label>
-                <textarea id="fTrPrecautions" class="textarea" rows="2" placeholder="ข้อจำกัดด้านความดัน/อุณหภูมิ ข้อควรระวังระหว่างรอซ่อมถาวร…"></textarea>
+                <label class="f-label" for="fTrPrecautions">Precautions</label>
+                <textarea id="fTrPrecautions" class="textarea" rows="2" placeholder="Pressure/temperature limitations, precautions while awaiting permanent repair…"></textarea>
               </div>
             </div>
           </div>
@@ -1349,7 +1357,7 @@
              a reader needs to know a clamp is already on before reading repair advice. -->
         <div class="panel" id="detailPanelTempRepair" style="display:none;">
           <div class="panel-h">
-            <h2>Temporary Repair <span class="panel-h-th">/ การซ่อมชั่วคราว</span></h2>
+            <h2>Temporary Repair</h2>
           </div>
           <div class="panel-b" id="trDetailBody"></div>
         </div>

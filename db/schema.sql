@@ -263,7 +263,6 @@ create table if not exists public.temp_repair (
   installed_date date,        -- 2.4 วันที่ติดตั้ง
   installed_by text,
   install_method text,        -- 2.5 วิธีการติดตั้ง / procedure reference
-  design_life_months int,     -- intended service life of the temporary repair
   -- clamp branch (2.1 / 2.2 / 2.3)
   clamp_type text,
   clamp_size text,

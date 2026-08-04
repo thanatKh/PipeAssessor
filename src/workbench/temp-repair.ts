@@ -71,8 +71,8 @@ export function tempRepairResultColor(tr: TempRepair | null | undefined): string
 export function tempRepairHeadline(tr: TempRepair | null | undefined): string {
   if (!tr) return '';
   const bits = [tempRepairMethodLabel(tr)];
-  if (tr.installed_date) bits.push(`ติดตั้ง ${paFmtDate(tr.installed_date as any)}`);
-  bits.push(`ผลการทดสอบ: ${tr.test_result || 'Not yet tested'}`);
+  if (tr.installed_date) bits.push(`Installed ${paFmtDate(tr.installed_date as any)}`);
+  bits.push(`Result: ${tr.test_result || 'Not yet tested'}`);
   return bits.filter(Boolean).join('  ·  ');
 }
 
@@ -83,10 +83,9 @@ export function tempRepairHeadline(tr: TempRepair | null | undefined): string {
    unit column on either surface).
    --------------------------------------------------------------------------- */
 
-const S1 = '1. ข้อมูลพื้นฐานของอุปกรณ์และระบบ / Equipment & System';
-const S2 = '2. รายละเอียดการซ่อมแซมชั่วคราว / Temporary Repair Details';
-const S3 = '3. การตรวจสอบหลังติดตั้ง / Post-Installation Verification';
-const S4 = '4. แผนงานซ่อมแซมถาวร / Permanent Repair Plan';
+const S2 = 'Temporary Repair Details';
+const S3 = 'Post-Installation Verification';
+const S4 = 'Permanent Repair Plan';
 
 function isEmpty(v: unknown): boolean {
   return v == null || v === '' || (typeof v === 'number' && !isFinite(v));
@@ -110,7 +109,7 @@ function dtt(v: unknown): string {
 }
 
 /**
- * The bilingual label/value list for sections 1-4.
+ * The label/value list for sections 1-4.
  *
  * @param tr           the temp_repair row (sections 2-4)
  * @param finding      the finding it hangs off (section 1)
@@ -130,59 +129,38 @@ export function tempRepairRows(
     rows.push({ section, label, value: String(value) });
   };
 
-  /* ---- 1. read straight from the finding + assessment, never re-entered ---- */
-  const f = finding || {};
-  add(S1, '1.1 ชื่ออุปกรณ์ / ท่อ · Equipment', f.pipe_tag || f.location_desc);
-  add(S1, '1.2 รหัสอุปกรณ์ · Tag No.', f.pipe_tag);
-  add(S1, '1.3 ตำแหน่งที่เกิดปัญหา · Location', f.location_desc);
-  const nature = [f.finding_type, f.is_leaking ? 'Actively Leaking' : '', f.severity ? `Severity ${f.severity}` : '']
-    .filter(Boolean).join(' · ');
-  add(S1, '1.4 ลักษณะของปัญหา · Nature of Problem', nature);
-  add(S1, '', f.description);   // the anomaly narrative, unlabelled continuation of 1.4
-  add(S1, '1.5 ผลิตภัณฑ์ที่รั่วไหล · Product', f.service);
-  const ai = assessInputs || {};
-  const designPT = [
-    isEmpty(ai.P) ? '' : `${ai.P} ${ai.p_unit || 'bar(g)'}`,
-    isEmpty(ai.design_temp) ? '' : `${ai.design_temp} °C`,
-  ].filter(Boolean).join(' / ');
-  add(S1, '1.6 ความดันและอุณหภูมิออกแบบ · Design P / T', designPT);
-  const docRef = [f.sap_notification, f.sap_order].filter(Boolean).join(' · ');
-  add(S1, '1.7 เอกสารอ้างอิง / ใบแจ้งซ่อม · Reference', docRef);
-
-  /* ---- 2. temporary repair details ---- */
-  add(S2, '2.0 วิธีซ่อมแซมชั่วคราว · Repair Method', tempRepairMethodLabel(tr));
+/* ---- 1. temporary repair details ---- */
+  add(S2, 'Repair Method', tempRepairMethodLabel(tr));
   const kind = tempRepairMethodKind(tr);
   if (kind === 'clamp') {
-    add(S2, '2.1 ประเภทของ Clamp · Clamp Type', tr.clamp_type);
-    add(S2, '2.2 ขนาด Clamp · Size', tr.clamp_size);
-    add(S2, '2.2 วัสดุ Clamp · Material', tr.clamp_material);
-    add(S2, '2.3 Pressure ที่รับได้ · Rated Pressure', num(tr.rated_pressure_barg, 'bar(g)'));
+    add(S2, 'Clamp Type', tr.clamp_type);
+    add(S2, 'Clamp Size', tr.clamp_size);
+    add(S2, 'Clamp Material', tr.clamp_material);
+    add(S2, 'Rated Pressure', num(tr.rated_pressure_barg, 'bar(g)'));
   } else if (kind === 'composite') {
-    add(S2, '2.1 ระบบ Composite · System', tr.composite_system);
-    add(S2, '2.2 จำนวนชั้น · Layers', isEmpty(tr.composite_layers) ? '' : String(tr.composite_layers));
-    add(S2, '2.2 ความหนา Laminate · Thickness', num(tr.composite_thickness_mm, 'mm'));
-    add(S2, '2.2 การเตรียมผิว · Surface Prep', tr.surface_prep);
-    add(S2, '2.3 การบ่ม · Cure', tr.cure_note);
+    add(S2, 'Composite System', tr.composite_system);
+    add(S2, 'Layers', isEmpty(tr.composite_layers) ? '' : String(tr.composite_layers));
+    add(S2, 'Laminate Thickness', num(tr.composite_thickness_mm, 'mm'));
+    add(S2, 'Surface Prep', tr.surface_prep);
+    add(S2, 'Cure', tr.cure_note);
   }
-  add(S2, '2.4 วันที่ติดตั้ง · Installed', dt(tr.installed_date));
-  add(S2, '2.4 ผู้ติดตั้ง · Installed By', tr.installed_by);
-  add(S2, '2.5 วิธีการติดตั้ง · Installation Method', tr.install_method);
-  add(S2, 'อายุการใช้งานออกแบบ · Design Life',
-    isEmpty(tr.design_life_months) ? '' : `${tr.design_life_months} เดือน / months`);
+  add(S2, 'Installed Date', dt(tr.installed_date));
+  add(S2, 'Installed By', tr.installed_by);
+  add(S2, 'Installation Method', tr.install_method);
 
   /* ---- 3. post-installation verification ---- */
-  add(S3, '3.1 วิธีการตรวจสอบ · Verification Method', tr.verify_method);
-  add(S3, '3.2 Test Pressure', num(tr.test_pressure_barg, 'bar(g)'));
-  add(S3, '3.3 วันเวลาที่ทดสอบ · Tested At', dtt(tr.tested_at));
-  add(S3, '3.4 ผลการทดสอบ · Result', tr.test_result);
-  add(S3, '', tr.test_note);   // unlabelled continuation of 3.4
-  add(S3, '3.5 การติดตามเฝ้าระวัง · Monitoring', tr.monitor_freq);
+  add(S3, 'Verification Method', tr.verify_method);
+  add(S3, 'Test Pressure', num(tr.test_pressure_barg, 'bar(g)'));
+  add(S3, 'Tested At', dtt(tr.tested_at));
+  add(S3, 'Test Result', tr.test_result);
+  add(S3, '', tr.test_note);   // unlabelled continuation of Result
+  add(S3, 'Monitoring', tr.monitor_freq);
 
   /* ---- 4. permanent repair plan ---- */
-  add(S4, '4.1 แนวทางการซ่อมถาวร · Planned Method', tr.perm_method);
-  add(S4, '4.2 กำหนดเวลา · Target Date', dt(tr.perm_target_date));
-  add(S4, '4.3 ผู้รับผิดชอบ · Responsible', tr.perm_owner);
-  add(S4, '4.4 ข้อควรระวัง · Precautions', tr.precautions);
+  add(S4, 'Planned Method', tr.perm_method);
+  add(S4, 'Target Date', dt(tr.perm_target_date));
+  add(S4, 'Responsible', tr.perm_owner);
+  add(S4, 'Precautions', tr.precautions);
 
   return rows;
 }

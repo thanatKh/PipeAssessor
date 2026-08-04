@@ -104,4 +104,121 @@ export async function registerGoogleSansFonts(doc: any): Promise<void> {
   doc.addFont('Sarabun-Italic.ttf', 'GoogleSans', 'italic');
   doc.addFileToVFS('Sarabun-BoldItalic.ttf', boldItalic);
   doc.addFont('Sarabun-BoldItalic.ttf', 'GoogleSans', 'bolditalic');
+
+  if (doc && !doc._thaiAdjustedHook) {
+    doc._thaiAdjustedHook = true;
+
+    const origText = doc.text.bind(doc);
+    doc.text = function(text: any, x: any, y: any, options: any, transform: any) {
+      return renderThaiTextPDF(doc, origText, text, x, y, options, transform);
+    };
+
+    const origSplit = doc.splitTextToSize.bind(doc);
+    doc.splitTextToSize = function(text: any, maxW: any, options: any) {
+      if (typeof text === 'string') {
+        text = adjustThaiForPDF(text);
+      } else if (Array.isArray(text)) {
+        text = text.map((t: any) => typeof t === 'string' ? adjustThaiForPDF(t) : t);
+      }
+      return origSplit(text, maxW, options);
+    };
+  }
+}
+
+/**
+ * Advanced Thai Text Renderer for jsPDF / Sarabun TTF.
+ * Fixes vertical stacking for Thai upper vowels + tone marks (e.g. ที่, รั่ว, ขั้น, ชั่ว, ซ้ำ)
+ * using exact font metrics and standard Thai Unicode characters (U+0E00-U+0E7F).
+ */
+export function renderThaiTextPDF(
+  doc: any,
+  origTextFunc: Function,
+  text: any,
+  x: number,
+  y: number,
+  options?: any,
+  transform?: any
+) {
+  if (Array.isArray(text)) {
+    let currentY = y;
+    const lineHeightFactor = options?.lineHeightFactor || 1.15;
+    const fontSize = doc.internal.getFontSize();
+    const scaleFactor = doc.internal.scaleFactor || 2.83465;
+    const lineSpacing = (fontSize / scaleFactor) * lineHeightFactor;
+
+    text.forEach((line, idx) => {
+      renderThaiTextPDF(doc, origTextFunc, line, x, currentY + idx * lineSpacing, options, transform);
+    });
+    return doc;
+  }
+
+  if (!text || typeof text !== 'string' || !/[\u0E00-\u0E7F]/.test(text)) {
+    return origTextFunc(text, x, y, options, transform);
+  }
+
+  const normalized = adjustThaiForPDF(text);
+  const chars = Array.from(normalized);
+  const isAboveVowel = (c: string) =>
+    c === '\u0E31' || (c >= '\u0E34' && c <= '\u0E37') || c === '\u0E47' || c === '\u0E4D';
+  const isToneMark = (c: string) => c >= '\u0E48' && c <= '\u0E4C';
+
+  const level2Indices = new Set<number>();
+  for (let i = 1; i < chars.length; i++) {
+    if (isToneMark(chars[i]) && isAboveVowel(chars[i - 1])) {
+      level2Indices.add(i);
+    }
+  }
+
+  if (level2Indices.size === 0) {
+    return origTextFunc(normalized, x, y, options, transform);
+  }
+
+  const baseChars = chars.filter((_, idx) => !level2Indices.has(idx));
+  const baseText = baseChars.join('');
+
+  origTextFunc(baseText, x, y, options, transform);
+
+  let alignOriginX = x;
+  const totalWidth = doc.getTextWidth(baseText);
+  if (options && options.align === 'right') {
+    alignOriginX = x - totalWidth;
+  } else if (options && options.align === 'center') {
+    alignOriginX = x - totalWidth / 2;
+  }
+
+  const fontSize = doc.internal.getFontSize();
+  const scaleFactor = doc.internal.scaleFactor || 2.83465;
+  const fontSizeUnits = fontSize / scaleFactor;
+  const verticalShift = fontSizeUnits * 0.14;
+
+  level2Indices.forEach(toneIdx => {
+    const prefixText = chars.slice(0, toneIdx).filter((_, idx) => !level2Indices.has(idx)).join('');
+    const toneChar = chars[toneIdx];
+    const xPos = alignOriginX + doc.getTextWidth(prefixText);
+    const toneOptions = options ? { ...options, align: 'left' } : undefined;
+
+    origTextFunc(toneChar, xPos, y - verticalShift, toneOptions, transform);
+  });
+
+  return doc;
+}
+
+/**
+ * Normalizes Thai Unicode character sequences for PDF engines (jsPDF / Sarabun TTF).
+ * Re-orders Sara Am (ำ) and stacked tone marks using standard Thai Unicode characters
+ * (U+0E00-U+0E7F) present in Sarabun TTF, ensuring zero missing glyphs.
+ */
+export function adjustThaiForPDF(text: string): string {
+  if (!text || typeof text !== 'string') return text;
+  if (!/[\u0E00-\u0E7F]/.test(text)) return text;
+
+  // 1. Re-order tone marks typed before upper/lower vowels:
+  // e.g. [Consonant][ToneMark][Vowel] -> [Consonant][Vowel][ToneMark]
+  let s = text.replace(/([\u0E01-\u0E2E])([\u0E48-\u0E4C])([\u0E31\u0E34-\u0E39\u0E47])/g, '$1$3$2');
+
+  // 2. Decompose Sara Am (ำ = U+0E33) when preceded by a tone mark:
+  // [Consonant][ToneMark]ำ -> [Consonant]ํ[ToneMark]า  (Nikhahit + ToneMark + Sara Aa)
+  s = s.replace(/([\u0E01-\u0E2E])([\u0E48-\u0E4C])\u0E33/g, '$1\u0E4D$2\u0E32');
+
+  return s;
 }

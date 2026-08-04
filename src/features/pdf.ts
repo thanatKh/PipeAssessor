@@ -735,9 +735,8 @@ export async function buildFindingPdf() {
       });
       y = doc.lastAutoTable.finalY + 4;
 
-      const trNote = 'บันทึกนี้เป็นการซ่อมแซมชั่วคราวเท่านั้น ต้องดำเนินการซ่อมแซมถาวรตามแผนในหัวข้อ 4 '
-        + '(A temporary repair is an interim measure only; the permanent repair in section 4 remains outstanding. '
-        + 'ASME PCC-2 Part 3 for mechanical clamps, Part 4 / ISO 24817 for composite wraps.)';
+      const trNote = 'บันทึกนี้จัดทำขึ้นเพื่ออ้างอิงและประเมินความสมบูรณ์ของท่อ (Piping Integrity Management) ตามสภาวะการติดตั้งและการใช้งานที่ระบุไว้เท่านั้น '
+        + '(This record is maintained for piping integrity management reference under the documented installation and operating conditions.)';
       doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_MUTED);
       const trNoteLines = doc.splitTextToSize(trNote, CW);
       ensure(trNoteLines.length * 3.4 + 4);
@@ -780,12 +779,13 @@ export async function buildFindingPdf() {
     ]) {
       const items = photoData.filter(p => p.kind === kind);
       if (!items.length) continue;
-      ensure(15);
+      const gap = 5, cellW = (CW - gap) / 2;
+      const firstRowRh = Math.max.apply(null, items.slice(0, 2).map(p => (cellW / p.w) * p.h));
+      ensure(5.5 + firstRowRh + 10);
       doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_MUTED);
       doc.text(title.toUpperCase(), M, y + 2.5);
       y += 5.5;
       doc.setTextColor(PDF_TEXT);
-      const gap = 5, cellW = (CW - gap) / 2;
       for (let i = 0; i < items.length; i += 2) {
         const rowItems = items.slice(i, i + 2).map(p => {
           const s = cellW / p.w; // 100% unconstrained true aspect ratio
@@ -811,7 +811,7 @@ export async function buildFindingPdf() {
   // --- ASME B31.3 Fitness-for-Service Assessment ---
 
   if (f.is_leaking) {
-    section('ASME B31.3 Integrity Evaluation Note');
+    section('ASME B31.3 Integrity Evaluation Note', 25);
     doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_VALUE); doc.setTextColor(PDF_DANGER);
     doc.text('Notice: ASME B31.3 wall-loss calculation is disabled for actively leaking piping.', M, y + 3);
     y += 5;
@@ -864,7 +864,7 @@ export async function buildFindingPdf() {
     y += 7;
 
     // --- input parameters ---
-    section('Assessment Input Parameters');
+    section('Assessment Input Parameters', 35);
     const modeIsDepth = inp.mode === 'depth';
     autoTable(doc, {
       ...tableBase,
@@ -900,7 +900,7 @@ export async function buildFindingPdf() {
     if (xsecPng) {
       const figW = 150, figH = figW * 270 / 500;
       ensure(26 + figH + 14);
-      section('Wall Thickness Cross-Section');
+      section('Wall Thickness Cross-Section', 65);
       doc.addImage(xsecPng, 'PNG', (PW - figW) / 2, y, figW, figH);
       y += figH + 4;
       figNum++;
@@ -911,7 +911,7 @@ export async function buildFindingPdf() {
     }
 
     // --- results with verdicts ---
-    section('Calculation Results');
+    section('Calculation Results', 40);
     autoTable(doc, {
       ...tableBase,
       startY: y,
@@ -949,7 +949,7 @@ export async function buildFindingPdf() {
     const eqRows = buildEquationRows(r);
     const totalEqH = eqRows.reduce((sum, rw) => sum + fractionRowHeight(rw), 0);
     ensure(26 + Math.min(totalEqH, 120)); // keep the title with at least the first equations
-    section('Governing Equations (Substituted)');
+    section('Governing Equations (Substituted)', 45);
     y += 2.5;
     /* Two-level layout so the *formula* (symbolic rule) and the *worked substitution* (numbers) read
        as distinct roles instead of two near-identical `var = expr` lines: the navy-bold formula
@@ -980,7 +980,7 @@ export async function buildFindingPdf() {
     doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL);
     const scopeLines = doc.splitTextToSize(PA_SCOPE_TEXT, CW);
     ensure(14 + scopeLines.length * 3.3 + 4);
-    section('Scope & Limitations');
+    section('Scope & Limitations', 30);
     doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor('#475569');
     doc.text(scopeLines, M, y + 2);
     doc.setTextColor(PDF_TEXT);
@@ -988,7 +988,7 @@ export async function buildFindingPdf() {
   } else if (assess) {
     // legacy snapshot whose inputs can't re-compute: fall back to its saved results
     const r = assess.results || {};
-    section('ASME B31.3 Assessment (Latest)');
+    section('ASME B31.3 Assessment (Latest)', 35);
     row('Result', r.status);
     row('ERF (no CA — current)', fmtN(erfNo(r), 3));
     row('Required Thk. incl. CA', r.t_req_total != null ? `${fmtN(r.t_req_total, 3)} mm` : null);
@@ -1002,7 +1002,7 @@ export async function buildFindingPdf() {
   }
 
   if (currentHistory.length) {
-    section('Status History');
+    section('Status History', 25);
     // oldest first — a report reads chronologically
     currentHistory.slice().reverse().forEach(h => {
       const head = `${fmtDateTime(h.changed_at)}  —  ${h.old_status ? h.old_status + ' > ' : ''}${h.new_status}${h.changed_by_email ? '  (' + h.changed_by_email + ')' : ''}`;
@@ -1186,7 +1186,7 @@ export async function buildQuickCalcPdf(inputs, res) {
   y += 7;
 
   // --- input parameters ---
-  section('Calculation Input Parameters');
+  section('Calculation Input Parameters', 35);
   const modeIsDepth = inputs.mode === 'depth';
   const inputRows = [
     ['Nominal pipe size / schedule', 'NPS', `${inputs.nps} / ${inputs.schLabel}`, '—', 'ASME B36.10M'],
@@ -1234,7 +1234,7 @@ export async function buildQuickCalcPdf(inputs, res) {
   if (xsecPng) {
     const figW = 150, figH = figW * 270 / 500;
     ensure(26 + figH + 14);
-    section('Wall Thickness Cross-Section');
+    section('Wall Thickness Cross-Section', 65);
     doc.addImage(xsecPng, 'PNG', (PW - figW) / 2, y, figW, figH);
     y += figH + 4;
     figNum++;
@@ -1245,7 +1245,7 @@ export async function buildQuickCalcPdf(inputs, res) {
   }
 
   // --- results with verdicts ---
-  section('Calculation Results');
+  section('Calculation Results', 40);
   autoTable(doc, {
     ...tableBase,
     startY: y,
@@ -1283,7 +1283,7 @@ export async function buildQuickCalcPdf(inputs, res) {
   const eqRows = buildEquationRows(r);
   const totalEqH = eqRows.reduce((sum, rw) => sum + fractionRowHeight(rw), 0);
   ensure(26 + Math.min(totalEqH, 120));
-  section('Governing Equations (Substituted)');
+  section('Governing Equations (Substituted)', 45);
   y += 2.5;
   /* Two-level layout mirroring buildFindingPdf's equation section (same report family): navy-bold
      formula heading (with the standard reference right-aligned) on top, then the substituted
@@ -1309,7 +1309,7 @@ export async function buildQuickCalcPdf(inputs, res) {
   doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL);
   const scopeLines = doc.splitTextToSize(PA_SCOPE_TEXT, CW);
   ensure(14 + scopeLines.length * 3.3 + 4);
-  section('Scope & Limitations');
+  section('Scope & Limitations', 30);
   doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor('#475569');
   doc.text(scopeLines, M, y + 2);
   doc.setTextColor(PDF_TEXT);

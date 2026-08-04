@@ -142,7 +142,7 @@ export interface TempRepair {
   installed_date: string | null;
   installed_by: string | null;
   install_method: string | null;
-  design_life_months: number | null;
+  design_life_months?: number | null;
   // clamp branch
   clamp_type: string | null;
   clamp_size: string | null;

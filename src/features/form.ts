@@ -12,6 +12,7 @@ import { $, val, esc, notify, setBusy, positionSegPill, pillHtml, isOverdue } fr
 import {
   R2_UPLOAD_ENDPOINT, PHOTO_LIMIT_PER_KIND, DEFAULT_MAP_VIEW, SAT_TILES, WALL_LOSS_TYPES, NON_LEAKABLE_TYPES,
   REPAIR_METHOD_OPTIONS, TEMP_REPAIR_METHODS, TEMP_REPAIR_METHOD_KIND, TEMP_REPAIR_VERIFY_RESULTS,
+  TEMP_REPAIR_VERIFY_METHODS, TEMP_REPAIR_MONITOR_FREQS,
 } from '../core/constants';
 import { sb } from '../core/supabase';
 import { computeB313, PA_PIPE_DATABASE, PA_MATERIALS, paDefaultScheduleForNps } from '../engine/compute';
@@ -276,6 +277,8 @@ export function syncTempRepairFields() {
   if ($('fTrClampBlock')) $('fTrClampBlock').style.display = kind === 'clamp' ? '' : 'none';
   if ($('fTrCompositeBlock')) $('fTrCompositeBlock').style.display = kind === 'composite' ? '' : 'none';
   if ($('fTrMethodOtherWrap')) $('fTrMethodOtherWrap').style.display = method === 'Other' ? '' : 'none';
+  if ($('fTrVerifyMethodOtherWrap')) $('fTrVerifyMethodOtherWrap').style.display = val('fTrVerifyMethod') === 'Other' ? '' : 'none';
+  if ($('fTrMonitorFreqOtherWrap')) $('fTrMonitorFreqOtherWrap').style.display = val('fTrMonitorFreq') === 'Other' ? '' : 'none';
   if ($('fTrPermMethodOtherWrap')) $('fTrPermMethodOtherWrap').style.display = val('fTrPermMethod') === 'Other' ? '' : 'none';
 }
 
@@ -296,6 +299,8 @@ export function collectTempRepair(findingId) {
   const s = (id) => { const v = val(id); return v && v.trim() ? v.trim() : null; };
   const n = (id) => { const v = val(id); return v === '' || v == null ? null : Number(v); };
   const kind = TEMP_REPAIR_METHOD_KIND[method] || 'other';
+  const vmSel = val('fTrVerifyMethod');
+  const mfSel = val('fTrMonitorFreq');
   const permSel = val('fTrPermMethod');
 
   return {
@@ -305,7 +310,6 @@ export function collectTempRepair(findingId) {
     installed_date: s('fTrInstalledDate'),
     installed_by: s('fTrInstalledBy'),
     install_method: s('fTrInstallMethod'),
-    design_life_months: n('fTrDesignLife'),
     // Only the selected branch's columns are written; switching method clears the other branch's
     // values rather than leaving stale clamp data on a composite record (and vice versa).
     clamp_type: kind === 'clamp' ? s('fTrClampType') : null,
@@ -317,12 +321,21 @@ export function collectTempRepair(findingId) {
     composite_thickness_mm: kind === 'composite' ? n('fTrCompThk') : null,
     surface_prep: kind === 'composite' ? s('fTrSurfacePrep') : null,
     cure_note: kind === 'composite' ? s('fTrCure') : null,
-    verify_method: s('fTrVerifyMethod'),
+    verify_method: vmSel === 'Other' ? s('fTrVerifyMethodOther') : (vmSel || null),
     test_pressure_barg: n('fTrTestP'),
-    tested_at: s('fTrTestedAt'),
+    tested_at: (() => {
+      const d = s('fTrTestDate');
+      const t = s('fTrTestTime');
+      if (!d) return null;
+      if (t && /^\d{1,2}:\d{2}$/.test(t)) {
+        const [hh, mm] = t.split(':');
+        return `${d}T${hh.padStart(2, '0')}:${mm.padStart(2, '0')}:00`;
+      }
+      return `${d}T00:00:00`;
+    })(),
     test_result: val('fTrTestResult') || 'Not yet tested',
     test_note: s('fTrTestNote'),
-    monitor_freq: s('fTrMonitorFreq'),
+    monitor_freq: mfSel === 'Other' ? s('fTrMonitorFreqOther') : (mfSel || null),
     perm_method: permSel === 'Other' ? s('fTrPermMethodOther') : (permSel || null),
     perm_target_date: s('fTrPermDate'),
     perm_owner: s('fTrPermOwner'),
@@ -339,7 +352,6 @@ export function loadTempRepairInto(tr) {
   set('fTrInstalledDate', tr && tr.installed_date);
   set('fTrInstalledBy', tr && tr.installed_by);
   set('fTrInstallMethod', tr && tr.install_method);
-  set('fTrDesignLife', tr && tr.design_life_months);
   set('fTrClampType', tr && tr.clamp_type);
   set('fTrClampSize', tr && tr.clamp_size);
   set('fTrClampMaterial', tr && tr.clamp_material);
@@ -349,14 +361,24 @@ export function loadTempRepairInto(tr) {
   set('fTrCompThk', tr && tr.composite_thickness_mm);
   set('fTrSurfacePrep', tr && tr.surface_prep);
   set('fTrCure', tr && tr.cure_note);
-  set('fTrVerifyMethod', tr && tr.verify_method);
+
+  const vm = (tr && tr.verify_method) || '';
+  const vmKnown = TEMP_REPAIR_VERIFY_METHODS.includes(vm);
+  set('fTrVerifyMethod', vm && !vmKnown ? 'Other' : vm);
+  set('fTrVerifyMethodOther', vm && !vmKnown ? vm : '');
+
   set('fTrTestP', tr && tr.test_pressure_barg);
-  // <input type="datetime-local"> only accepts YYYY-MM-DDTHH:mm; Postgres hands back a full
-  // timestamptz, so trim it (and drop the timezone) rather than letting the input silently blank.
-  set('fTrTestedAt', tr && tr.tested_at ? String(tr.tested_at).replace(' ', 'T').slice(0, 16) : '');
+  const rawTestedAt = tr && tr.tested_at ? String(tr.tested_at).replace(' ', 'T') : '';
+  set('fTrTestDate', rawTestedAt ? rawTestedAt.slice(0, 10) : '');
+  set('fTrTestTime', rawTestedAt && rawTestedAt.length >= 16 ? rawTestedAt.slice(11, 16) : '');
   set('fTrTestResult', (tr && tr.test_result) || TEMP_REPAIR_VERIFY_RESULTS[0]);
   set('fTrTestNote', tr && tr.test_note);
-  set('fTrMonitorFreq', tr && tr.monitor_freq);
+
+  const mf = (tr && tr.monitor_freq) || '';
+  const mfKnown = TEMP_REPAIR_MONITOR_FREQS.includes(mf);
+  set('fTrMonitorFreq', mf && !mfKnown ? 'Other' : mf);
+  set('fTrMonitorFreqOther', mf && !mfKnown ? mf : '');
+
   // Same legacy handling as the status dialog's repair-method select: a stored value that is not in
   // the closed list selects 'Other' and prefills the free text, so nothing is ever silently dropped.
   const pm = (tr && tr.perm_method) || '';
@@ -371,13 +393,32 @@ export function loadTempRepairInto(tr) {
 
 export function initTempRepair() {
   $('fTrMethod').innerHTML = TEMP_REPAIR_METHODS.map(m => `<option>${esc(m)}</option>`).join('');
+  $('fTrVerifyMethod').innerHTML =
+    '<option value="">—</option>' + TEMP_REPAIR_VERIFY_METHODS.map(m => `<option>${esc(m)}</option>`).join('');
   $('fTrTestResult').innerHTML = TEMP_REPAIR_VERIFY_RESULTS.map(r => `<option>${esc(r)}</option>`).join('');
+  $('fTrMonitorFreq').innerHTML =
+    '<option value="">—</option>' + TEMP_REPAIR_MONITOR_FREQS.map(f => `<option>${esc(f)}</option>`).join('');
   $('fTrPermMethod').innerHTML =
     '<option value="">—</option>' + REPAIR_METHOD_OPTIONS.map(m => `<option>${esc(m)}</option>`).join('');
 
-  ['fTrInstalled', 'fTrMethod', 'fTrPermMethod'].forEach(id => {
-    $(id).addEventListener('change', syncTempRepairFields);
+  ['fTrInstalled', 'fTrMethod', 'fTrVerifyMethod', 'fTrMonitorFreq', 'fTrPermMethod'].forEach(id => {
+    if ($(id)) $(id).addEventListener('change', syncTempRepairFields);
   });
+
+  if ($('fTrTestTime')) {
+    $('fTrTestTime').addEventListener('blur', () => {
+      let v = val('fTrTestTime').trim().replace(/[^0-9]/g, '');
+      if (!v) return;
+      if (v.length <= 2) {
+        let hh = Math.min(23, parseInt(v, 10) || 0);
+        $('fTrTestTime').value = String(hh).padStart(2, '0') + ':00';
+      } else {
+        let hh = Math.min(23, parseInt(v.slice(0, 2), 10) || 0);
+        let mm = Math.min(59, parseInt(v.slice(2, 4), 10) || 0);
+        $('fTrTestTime').value = String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+      }
+    });
+  }
 }
 
 

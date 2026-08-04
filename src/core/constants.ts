@@ -129,6 +129,27 @@ export const TEMP_REPAIR_METHOD_KIND = {
 
 export const TEMP_REPAIR_VERIFY_RESULTS = ['Not yet tested', 'Pass', 'Pass with observation', 'Fail'];
 
+export const TEMP_REPAIR_VERIFY_METHODS = [
+  'Visual Inspection + Soap Bubble Test',
+  'Pressure Hold Test',
+  'Ultrasonic Thickness (UT) Check',
+  'Radiographic Testing (RT)',
+  'Visual Inspection Only',
+  'Other',
+];
+
+export const TEMP_REPAIR_MONITOR_FREQS = [
+  'Visual & Leak Check - Daily',
+  'Visual & Leak Check - Weekly',
+  'Visual & Leak Check - Bi-weekly',
+  'Visual & Leak Check - Monthly',
+  'Visual & Leak Check - Every 2 Months',
+  'Visual & Leak Check - Every 3 Months (Quarterly)',
+  'Visual & Leak Check - Every 6 Months (Semi-annually)',
+  'Visual & Leak Check - Yearly',
+  'Other',
+];
+
 // Fixed hex rather than CSS vars: the same values drive the PDF's verification callout, where custom
 // properties do not resolve — the same rationale as STATUS_COLORS and the PDF_* constants.
 export const TEMP_REPAIR_RESULT_COLORS = {
