@@ -22,19 +22,21 @@
         <h1>Pipe Assessor</h1>
         <div class="hdr-sub">Findings Tracker — Piping abnormal findings — recorded</div>
       </div>
+    </div>
+    <div class="header-actions">
       <!-- Nav trigger — opens #cmdMenu (Basecoat command palette, below). Replaced the sidebar:
            with ~9 nav items total, a searchable ⌘K-style palette covers the same navigation need
            without a persistent 240px rail eating page width on every view. Always-visible (not
            keyboard-shortcut-only) since this is a field tool used on phones/tablets without a
-           physical keyboard — see the ⌘K hint span for the desktop-power-user path. -->
+           physical keyboard — see the ⌘K hint span for the desktop-power-user path. Lives in
+           .header-actions, not .header-brand, so the left side reads as pure brand and every
+           interactive control (Menu, account, sign out) groups together on the right. -->
       <button class="cmd-trigger authed-only not-public" id="btnCmdMenu" type="button"
               onclick="document.getElementById('cmdMenu').showModal()">
         <span class="cmd-trigger-ico" aria-hidden="true">☰</span>
         <span>Menu</span>
         <span class="cmd-trigger-kbd" aria-hidden="true">⌘K</span>
       </button>
-    </div>
-    <div class="header-actions">
       <!-- Read-only badge shown only on public share links (body.public-view) -->
       <span class="public-only public-badge">Read-only shared view — no sign-in required</span>
       <!-- Account: avatar (first letter of email) + email/role, and an icon-only sign-out.
