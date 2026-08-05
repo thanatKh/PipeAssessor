@@ -1,11 +1,12 @@
     /* Brand tokens, base styles, .wrap, and the header suite live in asset/theme.css. */
     /* match the calculator's page width (theme.css default 1500px) */
 
-    /* Header additions specific to this page. The header holds only brand now — the sidebar
-       toggle lives in the sidebar's own header and account + sign out moved into the sidebar's
-       own footer (.sb-head/.sb-footer in theme.css) — so there is nothing left to style here
-       beyond the public-share badge's row and the responsive logo/title shrink. */
-    .header-actions { gap: 10px; }
+    /* Header additions specific to this page. No sidebar any more (replaced by the nav command
+       menu, #cmdMenu — see index.html/theme.css/app.ts) — the header holds brand, the "Menu"
+       trigger (.cmd-trigger), the public-share badge, and the account block (.hdr-account) on
+       the right. No page-content offset logic needed anywhere: with no persistent rail, every
+       view stays full-width regardless of auth/menu state. */
+    .header-actions { gap: 12px; }
 
     @media (max-width: 640px) {
       .header-info h1 { font-size: var(--fs-2xl); }
@@ -14,75 +15,6 @@
     }
 
     body:not(.authed) .authed-only { display: none !important; }
-
-    /* ============ Sidebar layout offset ============
-       The sidebar component itself is Basecoat's .sidebar (theme.css retheme's its tokens);
-       Basecoat's own compiled CSS already handles the off-canvas transform, the content-push
-       margin via `.sidebar + *`, and the mobile backdrop. Its bundled JS (basecoat-css/sidebar.min)
-       is told the real desktop/mobile split via `data-breakpoint="961"` on the <aside> (index.html)
-       — but Basecoat's *CSS* still hardcodes `@media (min-width:48rem)` (768px) for the nav's
-       desktop width/no-transform and the content-push margin. Left alone that opens a 768–960px
-       gap where JS treats the viewport as mobile (closed by default, off-canvas slide-in) while
-       Basecoat's CSS already applies the desktop "no transform, full push" rules — sidebar visible
-       and pushing content even though JS considers it closed. This block re-points that CSS
-       threshold to the app's own 961px stacking breakpoint (every two-column layout —
-       .dash-top, .form-split, .quick-calc-split, .detail-split — already stacks there) and hides
-       the sidebar entirely for signed-out/public-view states.
-
-       The push lands on `main.wrap`'s MARGIN (Basecoat's `.sidebar + *` rule), deliberately not
-       on its padding and not on <body>. .sticky-page-header uses `margin: -20px -20px 16px -20px`
-       to cancel .wrap's `padding: 20px` and bleed to the container edges (see its rule further
-       down) — touching that padding, or padding <body>, would misalign those bleed bars on the
-       three pages that use them (form, detail, quick calc).
-
-       Consequence, accepted: on ultra-wide screens content sits left-of-centre rather than
-       centred, since margin-left now beats .wrap's `margin: auto`. The max-width: 1500px cap
-       still applies. Standard app-shell behaviour. */
-    @media (max-width: 960px) {
-      /* Force Basecoat's nav back to mobile width + off-canvas transform below 961px, undoing
-         its own 768px "desktop" rules early. */
-      .sidebar nav { width: var(--sidebar-mobile-width) !important; }
-      .sidebar[aria-hidden="true"]:not([data-side=right]) nav { transform: translateX(-100%); }
-      body.authed:not(.public-view) main.wrap { margin-left: 0 !important; }
-    }
-
-    @media (min-width: 961px) {
-      body.authed:not(.public-view) .sidebar:not([data-side=right]) + main.wrap {
-        margin-left: var(--sidebar-width);
-        /* width:auto is load-bearing, not tidying. .wrap's base rule sets `width: 100%`, which
-           resolves against the VIEWPORT — so margin-left would be added on top of a full-viewport
-           width and push the page 240px wider than the screen, giving every authenticated view a
-           horizontal scrollbar. (Measured: scrollWidth 1625 vs innerWidth 1400. Same failure mode
-           as the old header `nowrap` regression — content wider than the physical screen.)
-           width:auto makes the block fill only the space left over after the margin. */
-        width: auto;
-      }
-      /* Sidebar closed on desktop (Basecoat's open/closed, no rail state — see theme.css):
-         no push, content reflows full width. Basecoat's own [aria-hidden=true]+* rule already
-         does this at 768px; kept explicit here since this block re-points the threshold. */
-      body.authed:not(.public-view) .sidebar[aria-hidden="true"]:not([data-side=right]) + main.wrap {
-        margin-left: 0;
-      }
-    }
-
-    /* A public share link has no navigation at all (every sidebar item is .authed-only or
-       .not-public), so the sidebar must vanish rather than render empty — and the content offset
-       must go with it, or the page sits mis-centred. Keeps #/s/<id> looking exactly as before. */
-    body.public-view .sidebar,
-    body:not(.authed) .sidebar,
-    body.public-view #btnSidebarReopen,
-    body:not(.authed) #btnSidebarReopen { display: none !important; }
-
-    /* ============ Sidebar reopen control ============
-       Basecoat translateX()'s the ENTIRE sidebar <nav> off-screen when closed, taking the
-       in-sidebar toggle (.sb-head, theme.css) with it — so this separate button, living in the
-       app header instead of inside .sidebar, is the only way back once closed. Shown only while
-       closed (app.ts mirrors #appSidebar's aria-hidden onto body.sidebar-is-open via a
-       MutationObserver, since Basecoat's own click-outside/click-nav-link auto-close paths never
-       touch app.ts's click handlers directly). Hidden while open so the two controls never both
-       show at once. */
-    #btnSidebarReopen { display: none; }
-    body.authed:not(.public-view):not(.sidebar-is-open) #btnSidebarReopen { display: inline-flex; }
 
     /* ============ Views ============ */
     .view { display: none; }
@@ -2804,6 +2736,17 @@ body.public-view #detailPanelStatus .panel-h h2::after {
    declaring it done. */
 .maintenance-only { display: none; }
 body.role-maintenance .maintenance-only { display: revert; }
+
+/* Command menu's Administration group carries .maintenance-only (theme.css/index.html) — the
+   `display: revert` rule above forces it back to `block`, which wins by source order over
+   Basecoat's own `.command [role=group]:not(:has([role=menuitem]:not([aria-hidden=true])))
+   { display: none }` (basecoat.cdn.min.css, loaded earlier). That let a search with no
+   Administration match leave the "ADMINISTRATION" heading visible with an empty body under it —
+   a real bug caught visually. Re-apply the same empty-group check, scoped only to this group, so
+   `.maintenance-only`'s role-gating and Basecoat's search-filtering can't fight each other. */
+body.role-maintenance .command [role="group"].maintenance-only:not(:has([role="menuitem"]:not([aria-hidden="true"]))) {
+  display: none;
+}
 body.role-inspector .maintenance-only,
 body.role-inspector #btnDelete,
 body.role-inspector #btnLineList,
