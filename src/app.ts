@@ -333,10 +333,12 @@ import { loadRiskData, renderRiskPage, initRiskPage } from './features/risk';
 import { loadPlanData, renderPlanPage, initPlanPage } from './features/plan';
 
 /* ===================== Finding PDF report =====================
-   Same visual language as the calculator's report (navy headings, hairline
-   #cbd5e1 frames, dd/Mmm/yyyy dates, WinAnsi-safe text only). Tables are drawn
-   manually — no autotable dependency. Opens in the browser's native PDF viewer
-   via a blob anchor (the one approach that also survives file://). */
+   Same visual language as the calculator's report: a monochrome engineering document —
+   black section headers/rules, neutral gray frames and fills, dd/Mmm/yyyy dates, WinAnsi-safe
+   text only. Color appears ONLY where it carries meaning (integrity health banner, ASME B31.3
+   status band, PASS/CHECK, advisor/temp-repair result banners, OVERDUE) — see the ink-ramp note
+   above PDF_INK in features/pdf.ts. Opens in the browser's native PDF viewer via a blob anchor
+   (the one approach that also survives file://). */
 
 import {
   PDF_NAVY, PDF_TEXT, PDF_MUTED, PDF_BORDER, PDF_OK, PDF_WARN, PDF_WARN_DARK, PDF_WARN_MID, PDF_DANGER, fetchAsDataUrl, loadImg, composeMapPng, buildFindingPdf, exportFindingPdf, exportSummaryPdf, openExportDialog, runExport, buildSummaryPdf,

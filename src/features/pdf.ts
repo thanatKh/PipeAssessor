@@ -35,11 +35,54 @@ export const PDF_BORDER = '#cbd5e1';
    never re-typed hex per call site — same rule as the old calculator report. */
 export const PDF_OK = '#059669';
 export const PDF_WARN = '#d97706';
-export const PDF_WARN_DARK = '#92400e';   // --warn-text — the CS-reference caveat note
-export const PDF_WARN_MID = '#b45309';    // warn accent — the bold FFS recommendation
+export const PDF_WARN_DARK = '#92400e';   // --warn-text — darkest warn tier (no current call site)
+export const PDF_WARN_MID = '#b45309';    // warn accent — the bold FFS recommendation + MONITOR text
 export const PDF_DANGER = '#dc2626';
 export const PDF_NAVY_TINT = '#eef4f8'; // very light navy wash for title-block / section accents
 export const PDF_PANEL = '#f1f5f9';     // neutral panel fill (title-block header strips, labels)
+
+/* ---------------------------------------------------------------------------------------------
+   Monochrome ink ramp — the document chrome of the ENGINEERING REPORTS (buildFindingPdf,
+   buildQuickCalcPdf, buildSummaryPdf). Those three are black/gray/white documents: color in them
+   carries meaning and nothing else, so structure (titles, section headers, rules, table heads,
+   label columns, equation headings) is drawn in ink, and the only colored marks left are the
+   semantic ones — the integrity health banner, the ASME B31.3 status band, PASS/CHECK verdicts,
+   the Repair Advisor / temporary-repair result banners, and the OVERDUE tag. Brand navy
+   (PDF_NAVY) is deliberately NOT used in them any more: it read as decoration and, sitting beside
+   green/amber/red, implied a verdict it never carried.
+
+   This is a TRUE NEUTRAL ramp, not Tailwind slate — the old chrome grays (#64748b / #cbd5e1 /
+   #e2e8f0 / #f8fafc) are blue-tinted, so a page built from them still felt faintly blue even with
+   every navy element removed.
+
+   The two PRESENTATION outputs keep the app's own web palette on purpose and must not be
+   converted: buildSlidesPdf deliberately mirrors the web UI (theme.css tokens, the teal->sky
+   header gradient) because it is a projected meeting deck, not a document, and buildPlanPdf's
+   Gantt needs categorical hues to separate task states. Both still read PDF_NAVY / PDF_TEXT /
+   PDF_MUTED / PDF_BORDER, which is why those four keep their original slate values.
+   --------------------------------------------------------------------------------------------- */
+export const PDF_INK = '#000000';        // section headers, titles, rules, table-head text
+export const PDF_INK_SOFT = '#1a1a1a';   // body copy
+export const PDF_GRAY = '#595959';       // field labels, captions, footnotes
+export const PDF_GRAY_LIGHT = '#8c8c8c'; // footer micro-text
+export const PDF_RULE = '#b3b3b3';       // table / box borders
+export const PDF_HAIRLINE = '#d9d9d9';   // row separators, inner grid lines
+export const PDF_FILL = '#f2f2f2';       // label-column / soft fill
+export const PDF_FILL_MID = '#e6e6e6';   // table-head band, autotable section rows
+export const PDF_ON_DARK = '#f2f2f2';    // secondary text ON a filled semantic band (health banner)
+
+/* Finding status is WORKFLOW, not integrity health — so in the reports its text is plain ink and
+   only the small swatch dot is tinted. 'Repair Planned' drops the register's blue (#2563eb): a
+   fourth hue beside the green/amber/red health language reads as a verdict it does not carry.
+   The dashboard map keeps STATUS_COLORS unchanged — over satellite imagery the blue is doing real
+   categorical work. Overdue is signalled separately, by the red OVERDUE tag. */
+export const PDF_STATUS_DOT = {
+  'Open':           PDF_DANGER,
+  'Monitoring':     PDF_WARN,
+  'Repair Planned': '#404040',
+  'Repaired':       PDF_OK,
+  'Closed':         '#8c8c8c',
+};
 
 /* Slugify a tag/location into a DOC REF suffix (PA-RPT-<slug>). Disallowed characters are DROPPED,
    not replaced with '_' — a naive replace turns e.g. 906100-8"-D3101-N into 906100-8_-D3101-N (a
@@ -194,7 +237,7 @@ export function drawFractionRow(doc, segs, x0, yTop, opts2) {
   const barBaseline = yTop + barOffset;
   let x = x0;
   segs.forEach(seg => {
-    doc.setFont(font, 'normal'); doc.setFontSize(fs); doc.setTextColor(PDF_TEXT);
+    doc.setFont(font, 'normal'); doc.setFontSize(fs); doc.setTextColor(PDF_INK_SOFT);
     if (typeof seg === 'string') {
       doc.text(seg, x, hasFraction ? barBaseline : flatBaseline);
       x += doc.getTextWidth(seg);
@@ -203,13 +246,13 @@ export function drawFractionRow(doc, segs, x0, yTop, opts2) {
       const denW = doc.getTextWidth(seg.den);
       const w = Math.max(numW, denW) + 2;
       doc.text(seg.num, x + w / 2, yTop + numOffset, { align: 'center' });
-      doc.setDrawColor(PDF_TEXT); doc.setLineWidth(0.25);
+      doc.setDrawColor(PDF_INK_SOFT); doc.setLineWidth(0.25);
       doc.line(x, yTop + barOffset, x + w, yTop + barOffset);
       doc.text(seg.den, x + w / 2, yTop + denOffset, { align: 'center' });
       x += w;
     }
   });
-  doc.setTextColor(PDF_TEXT);
+  doc.setTextColor(PDF_INK_SOFT);
   return hasFraction ? denOffset + 2 : 6;
 }
 
@@ -265,20 +308,20 @@ export function buildResultsTableBody(r) {
   const erf_with = r.mawp_with == null ? null : (r.mawp_with > 0 ? (r.P_input / r.mawp_with) : 9.99);
   const life = r.remainingLife !== null ? (r.remainingLife >= 0 ? `${fmtN(r.remainingLife, 2)} years` : '0.00 years (exceeded)') : '—';
   return [
-    [{ content: 'THICKNESS', colSpan: 4, styles: { fillColor: '#e2e8f0', fontStyle: 'bold', fontSize: 7 } }],
+    [{ content: 'THICKNESS', colSpan: 4, styles: { fillColor: PDF_FILL_MID, fontStyle: 'bold', fontSize: 7, textColor: PDF_INK } }],
     ['Nominal wall thickness t_nom', `${fmtN(r.t_nom, 2)} mm`, '—', ''],
     ['Remaining wall percentage', `${fmtN(r.pctRemainNom, 1)} %`, '>= 50 %', r.pctRemainNom >= 50 ? 'PASS' : 'CHECK'],
     ['Required thickness t_req', `${fmtN(r.t_req_noCA, 3)} mm`, '—', ''],
     ['Required incl. CA (t_req + CA)', `${fmtN(r.t_req_total, 3)} mm`, 't_meas >= t_req + CA', r.margin >= 0 ? 'PASS' : 'CHECK'],
     [`API 574 structural min t_struct${r.isCsRef ? ' *' : ''}`, `${fmtN(r.t_struct, 2)} mm`, 't_meas >= t_struct', r.t_meas >= r.t_struct ? 'PASS' : 'CHECK'],
     ['Remaining margin', `${fmtN(r.margin, 3)} mm`, '>= 0', r.margin >= 0 ? 'PASS' : 'CHECK'],
-    [{ content: 'PRESSURE & ERF', colSpan: 4, styles: { fillColor: '#e2e8f0', fontStyle: 'bold', fontSize: 7 } }],
+    [{ content: 'PRESSURE & ERF', colSpan: 4, styles: { fillColor: PDF_FILL_MID, fontStyle: 'bold', fontSize: 7, textColor: PDF_INK } }],
     ['Design pressure P', `${fmtN(r.P_input, 2)} ${r.pUnit}`, '—', ''],
     ['MAWP (no CA — current)', `${fmtN(r.mawp_no, 2)} ${r.pUnit}`, '>= P', r.mawp_no >= r.P_input ? 'PASS' : 'CHECK'],
     ['ERF (no CA — current)', fmtN(erf_no, 3), '<= 1.0', erf_no <= 1.0 ? 'PASS' : 'CHECK'],
     ['MAWP (with CA reserved)', r.mawp_with == null ? 'n/a — wall below CA' : `${fmtN(r.mawp_with, 2)} ${r.pUnit}`, '>= P', r.mawp_with == null ? '—' : (r.mawp_with >= r.P_input ? 'PASS' : 'CHECK')],
     ['ERF (with CA reserved)', erf_with == null ? 'n/a' : fmtN(erf_with, 3), '<= 1.0', erf_with == null ? '—' : (erf_with <= 1.0 ? 'PASS' : 'CHECK')],
-    [{ content: 'REMAINING LIFE', colSpan: 4, styles: { fillColor: '#e2e8f0', fontStyle: 'bold', fontSize: 7 } }],
+    [{ content: 'REMAINING LIFE', colSpan: 4, styles: { fillColor: PDF_FILL_MID, fontStyle: 'bold', fontSize: 7, textColor: PDF_INK } }],
     ['Corrosion allowance CA', `${fmtN(r.ca, 2)} mm`, '—', ''],
     ['Corrosion rate CR', r.CR > 0 ? `${fmtN(r.CR, 3)} mm/yr` : '—', '—', ''],
     ['Estimated remaining life', life, '—', ''],
@@ -300,22 +343,24 @@ export function resultsTableDidParseCell(data) {
 }
 
 /* Numbered section header shared by buildFindingPdf + buildQuickCalcPdf so both reports read as one
-   document family — a solid navy number chip, a navy title, and a full-width navy rule beneath.
+   document family — a solid black number chip, a black title, and a full-width black rule beneath.
    This replaced the old flat "navy uppercase text + hairline" heading (which read as a generic word
-   processor template) with a structured, numbered engineering-document heading. Pure of page-state:
-   the caller owns y-advance + the ensure() that keeps a heading from being orphaned at a page foot.
-   Returns the vertical space the header occupies. */
+   processor template) with a structured, numbered engineering-document heading, and the navy was
+   then dropped for ink: the chip/title/rule are structure, not status, and brand color on them was
+   the single largest reason the report read as a web-app printout rather than an engineering
+   document. Pure of page-state: the caller owns y-advance + the ensure() that keeps a heading from
+   being orphaned at a page foot. Returns the vertical space the header occupies. */
 export function drawSectionHeader(doc, num, title, x, y, right) {
   const chip = 5.6;
-  doc.setFillColor(PDF_NAVY);
+  doc.setFillColor(PDF_INK);
   doc.roundedRect(x, y, chip, chip, 0.9, 0.9, 'F');
   doc.setFont('GoogleSans', 'bold'); doc.setFontSize(8); doc.setTextColor('#ffffff');
   doc.text(String(num), x + chip / 2, y + chip / 2 + 1.35, { align: 'center' });
-  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(9.5); doc.setTextColor(PDF_NAVY);
+  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(9.5); doc.setTextColor(PDF_INK);
   doc.text(String(title).toUpperCase(), x + chip + 3, y + 4.35);
-  doc.setDrawColor(PDF_NAVY); doc.setLineWidth(0.5);
+  doc.setDrawColor(PDF_INK); doc.setLineWidth(0.5);
   doc.line(x, y + chip + 1.9, right, y + chip + 1.9);
-  doc.setTextColor(PDF_TEXT);
+  doc.setTextColor(PDF_INK_SOFT);
   return chip + 5.6; // total header block height (caller advances y by this)
 }
 
@@ -362,7 +407,7 @@ export async function buildFindingPdf() {
   let qrDataUrl = null;
   try {
     const QR = (await import('qrcode')).default;
-    qrDataUrl = await QR.toDataURL(shareUrl, { margin: 1, width: 240, errorCorrectionLevel: 'M', color: { dark: '#0f172aff', light: '#ffffffff' } });
+    qrDataUrl = await QR.toDataURL(shareUrl, { margin: 1, width: 240, errorCorrectionLevel: 'M', color: { dark: '#000000ff', light: '#ffffffff' } });
   } catch (_) { qrDataUrl = null; }
 
   // Fetch photos if currentPhotos is unpopulated
@@ -406,28 +451,28 @@ export async function buildFindingPdf() {
     if (logoIm) {
       const lw = 26, lh = 26 * logoIm.naturalHeight / logoIm.naturalWidth;
       try { doc.addImage(logo, 'PNG', M, 3, lw, lh); }
-      catch (_) { doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LOGO); doc.setTextColor(PDF_NAVY); doc.text('OR', M, 12); }
+      catch (_) { doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LOGO); doc.setTextColor(PDF_INK); doc.text('OR', M, 12); }
     } else {
-      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LOGO); doc.setTextColor(PDF_NAVY);
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LOGO); doc.setTextColor(PDF_INK);
       doc.text('OR', M, 12);
     }
-    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_TITLE); doc.setTextColor(PDF_NAVY);
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_TITLE); doc.setTextColor(PDF_INK);
     doc.text('PIPING ABNORMAL FINDING REPORT', PW - M, 8.5, { align: 'right' });
-    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor('#64748b');
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
     const tagRef = docRefSlug(f.pipe_tag || f.location_desc || f.id.slice(0, 8));
     doc.text(`DOC REF: PA-RPT-${tagRef}-${paFmtDate(now).replace(/\s+/g, '')}`, PW - M, 13.5, { align: 'right' });
-    doc.setDrawColor(PDF_NAVY); doc.setLineWidth(0.8);
+    doc.setDrawColor(PDF_INK); doc.setLineWidth(0.8);
     doc.line(M, HEADER_H - 1, PW - M, HEADER_H - 1);
 
-    doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+    doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
     doc.line(M, PH - FOOTER_H, PW - M, PH - FOOTER_H);
-    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor('#64748b');
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
     doc.text('Piping integrity — abnormal finding record', M, PH - FOOTER_H + 4);
     doc.text(`Page ${doc.internal.getNumberOfPages()} of {tp}`, PW / 2, PH - FOOTER_H + 4, { align: 'center' });
     doc.text(`Generated ${paFmtDateTime(now)}`, PW - M, PH - FOOTER_H + 4, { align: 'right' });
-    doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor('#94a3b8');
+    doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor(PDF_GRAY_LIGHT);
     doc.text(['Central and Eastern Engineering and Maintenance Division', 'PTT Oil and Retail Business Public Company Limited'], PW / 2, PH - FOOTER_H + 9, { align: 'center', lineHeightFactor: 1.35 });
-    doc.setTextColor(PDF_TEXT);
+    doc.setTextColor(PDF_INK_SOFT);
     y = HEADER_H + 4;
   }
 
@@ -448,11 +493,11 @@ export async function buildFindingPdf() {
     const lines = doc.splitTextToSize(v, CW - 48);
     const h = Math.max(6, lines.length * 4 + 2);
     ensure(h);
-    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_MUTED);
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_GRAY);
     doc.text(label, M, y + 3.5);
-    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_VALUE); doc.setTextColor(PDF_TEXT);
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_VALUE); doc.setTextColor(PDF_INK_SOFT);
     doc.text(lines, M + 48, y + 3.5);
-    doc.setDrawColor('#e2e8f0'); doc.setLineWidth(0.15);
+    doc.setDrawColor(PDF_HAIRLINE); doc.setLineWidth(0.15);
     doc.line(M, y + h, PW - M, y + h);
     y += h;
   }
@@ -463,8 +508,10 @@ export async function buildFindingPdf() {
   // reviewer reads healthy/unhealthy from the band color + plain-language line before any detail)
   // over a neutral identity grid. The band reflects the ENGINEERING health (ASME B31.3 verdict /
   // leaking), which is what "positive vs. negative" means here; workflow (Finding Status/Overdue)
-  // stays in the grid below. Band fills are 700-tier shades so white text clears WCAG on all. ---
-  const stColor = STATUS_COLORS[f.status] || PDF_MUTED;
+  // stays in the grid below. Band fills are 700-tier shades so white text clears WCAG on all.
+  // On an otherwise black/gray/white page this band is the ONLY large colored mark, which is the
+  // point — it is the finding's integrity verdict and nothing else in the report competes with it.
+  const stDot = PDF_STATUS_DOT[f.status] || PDF_GRAY; // workflow: tinted dot, ink text (see const)
   const reportRef = `PA-RPT-${docRefSlug(f.pipe_tag || f.location_desc || f.id.slice(0, 8))}`;
   const hb = resolveIntegrityBanner(f, assessRes); // shared with the web detail page's banner
 
@@ -478,12 +525,12 @@ export async function buildFindingPdf() {
   doc.rect(M, y, 2.4, bandH, 'F'); // darker spine for depth
   doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_HERO); doc.setTextColor('#ffffff');
   doc.text(hb.word, M + 6, y + 7);
-  doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_VALUE); doc.setTextColor('#f1f5f9');
+  doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_VALUE); doc.setTextColor(PDF_ON_DARK);
   doc.text(doc.splitTextToSize(hb.line, CW - 62)[0], M + 6, y + 12);
   if (hb.metrics) {
     doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_TITLE); doc.setTextColor('#ffffff');
     doc.text(`ERF ${hb.metrics.erf}`, PW - M - 5, y + 6.8, { align: 'right' });
-    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor('#f1f5f9');
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_ON_DARK);
     doc.text(`MAWP ${hb.metrics.mawp}  ·  ${hb.metrics.pct}% wall`, PW - M - 5, y + 11.5, { align: 'right' });
   }
   y += bandH + 3;
@@ -499,9 +546,9 @@ export async function buildFindingPdf() {
   // neutral identity grid
   const tbCell = (cx, cw, ry, label, value, opts) => {
     opts = opts || {};
-    doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+    doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
     doc.rect(cx, ry, cw, tbRowH);
-    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_MICRO); doc.setTextColor(PDF_MUTED);
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_MICRO); doc.setTextColor(PDF_GRAY);
     doc.text(label.toUpperCase(), cx + 2.4, ry + 3.3);
     let vx = cx + 2.4;
     if (opts.swatch) {
@@ -512,7 +559,7 @@ export async function buildFindingPdf() {
     // opts.fs is a deliberate per-cell override (tuned to each cell's own content width — e.g. the
     // short "Severity" value gets a bigger size, the longer "Finding Type" gets a smaller one) —
     // preserved as-is, not collapsed into a shared constant. FS_VALUE is just the tbCell default.
-    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(opts.fs || FS_VALUE); doc.setTextColor(opts.color || PDF_TEXT);
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(opts.fs || FS_VALUE); doc.setTextColor(opts.color || PDF_INK_SOFT);
     const v = (value == null || value === '') ? '—' : String(value);
     doc.text(doc.splitTextToSize(v, cw - (vx - cx) - 2.5)[0], vx, ry + tbRowH - 2.6);
   };
@@ -525,7 +572,7 @@ export async function buildFindingPdf() {
   // Row 2 — workflow + reference.
   const tbY2 = y + tbRowH;
   tbCell(M,             tbCol, tbY2, 'Report Ref', reportRef, { fs: 8 });
-  tbCell(M + tbCol,     tbCol, tbY2, 'Finding Status', (f.status || '—').toUpperCase(), { swatch: stColor, color: stColor, fs: 9 });
+  tbCell(M + tbCol,     tbCol, tbY2, 'Finding Status', (f.status || '—').toUpperCase(), { swatch: stDot, fs: 9 });
   if (isOverdue(f)) {
     doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_MICRO); doc.setTextColor(PDF_DANGER);
     doc.text('OVERDUE', M + tbCol * 2 - 2.4, tbY2 + 3.3, { align: 'right' });
@@ -563,17 +610,17 @@ export async function buildFindingPdf() {
     margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
     startY: y,
     theme: 'grid',
-    styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.6, lineColor: PDF_BORDER, lineWidth: 0.15 },
+    styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.6, lineColor: PDF_RULE, lineWidth: 0.15, textColor: PDF_INK_SOFT },
     columnStyles: {
-      0: { fontStyle: 'bold', textColor: PDF_MUTED, cellWidth: 32, fillColor: '#f8fafc' },
-      1: { textColor: PDF_TEXT, cellWidth: 59 },
-      2: { fontStyle: 'bold', textColor: PDF_MUTED, cellWidth: 32, fillColor: '#f8fafc' },
-      3: { textColor: PDF_TEXT, cellWidth: 59 },
+      0: { fontStyle: 'bold', textColor: PDF_GRAY, cellWidth: 32, fillColor: PDF_FILL },
+      1: { textColor: PDF_INK_SOFT, cellWidth: 59 },
+      2: { fontStyle: 'bold', textColor: PDF_GRAY, cellWidth: 32, fillColor: PDF_FILL },
+      3: { textColor: PDF_INK_SOFT, cellWidth: 59 },
     },
     body: infoRows,
     didParseCell: (data) => {
       if (data.section === 'body' && data.row.index === 3 && data.column.index === 3 && f.report_link) {
-        data.cell.styles.textColor = '#156B95';
+        data.cell.styles.textColor = PDF_INK;
         data.cell.styles.fontStyle = 'bold';
       }
     }
@@ -592,12 +639,12 @@ export async function buildFindingPdf() {
     margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
     startY: y,
     theme: 'grid',
-    styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.6, lineColor: PDF_BORDER, lineWidth: 0.15 },
+    styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.6, lineColor: PDF_RULE, lineWidth: 0.15, textColor: PDF_INK_SOFT },
     columnStyles: {
-      0: { fontStyle: 'bold', textColor: PDF_MUTED, cellWidth: 32, fillColor: '#f8fafc' },
-      1: { textColor: PDF_TEXT, cellWidth: 59 },
-      2: { fontStyle: 'bold', textColor: PDF_MUTED, cellWidth: 32, fillColor: '#f8fafc' },
-      3: { textColor: PDF_TEXT, cellWidth: 59 },
+      0: { fontStyle: 'bold', textColor: PDF_GRAY, cellWidth: 32, fillColor: PDF_FILL },
+      1: { textColor: PDF_INK_SOFT, cellWidth: 59 },
+      2: { fontStyle: 'bold', textColor: PDF_GRAY, cellWidth: 32, fillColor: PDF_FILL },
+      3: { textColor: PDF_INK_SOFT, cellWidth: 59 },
     },
     body: anomalyRows,
     didParseCell: (data) => {
@@ -623,7 +670,7 @@ export async function buildFindingPdf() {
       else if (assessRes && assessRes.status === 'REPAIR') { aC = PDF_DANGER; aTint = '#fef2f2'; aTxt = '#b91c1c'; aBanner = 'CRITICAL REPAIR REQUIRED (ASME PCC-2)'; }
       else if (assessRes && assessRes.status === 'MONITOR') { aC = PDF_WARN; aTint = '#fffbeb'; aTxt = PDF_WARN_MID; aBanner = 'INTEGRITY MONITORING STRATEGY'; }
       else if (assessRes && assessRes.status === 'OK') { aC = PDF_OK; aTint = '#ecfdf5'; aTxt = '#15803d'; aBanner = 'OPERATIONAL INTEGRITY COMPLIANT'; }
-      else { aC = PDF_NAVY; aTint = PDF_NAVY_TINT; aTxt = PDF_NAVY; aBanner = 'ASME PCC-2 / API 570 GUIDANCE'; }
+      else { aC = PDF_INK; aTint = PDF_FILL; aTxt = PDF_INK; aBanner = 'ASME PCC-2 / API 570 GUIDANCE'; }
 
       section('Repair Advisor', 38);
 
@@ -633,12 +680,12 @@ export async function buildFindingPdf() {
       const sumLines = doc.splitTextToSize(adv.summary, CW - 8);
       const bH = 6.5 + sumLines.length * 3.7 + 2.5;
       ensure(bH + 8);
-      doc.setFillColor(aTint); doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+      doc.setFillColor(aTint); doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
       doc.rect(M, y, CW, bH, 'FD');
       doc.setFillColor(aC); doc.rect(M, y, 2, bH, 'F');
       doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_VALUE); doc.setTextColor(aTxt);
       doc.text(aBanner, M + 5, y + 5);
-      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_TEXT);
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_INK_SOFT);
       doc.text(sumLines, M + 5, y + 9.5);
       y += bH + 3.5;
 
@@ -653,10 +700,10 @@ export async function buildFindingPdf() {
         margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
         startY: y,
         theme: 'grid',
-        styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.8, lineColor: '#e2e8f0', lineWidth: 0.12, valign: 'top', textColor: PDF_TEXT, overflow: 'linebreak' },
+        styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.8, lineColor: PDF_HAIRLINE, lineWidth: 0.12, valign: 'top', textColor: PDF_INK_SOFT, overflow: 'linebreak' },
         columnStyles: {
-          0: { fontStyle: 'bold', textColor: PDF_NAVY, cellWidth: 50, fillColor: '#f8fafc' },
-          1: { textColor: PDF_TEXT },
+          0: { fontStyle: 'bold', textColor: PDF_INK, cellWidth: 50, fillColor: PDF_FILL },
+          1: { textColor: PDF_INK_SOFT },
         },
         body: advBody,
         didDrawPage: () => { if (doc.internal.getNumberOfPages() > 1) chrome(); }
@@ -668,9 +715,9 @@ export async function buildFindingPdf() {
           + (adv.needsReview ? ' (คำแนะนำทั่วไป — โปรดตรวจสอบกับมาตรฐานทางวิศวกรรมของโครงการ)' : '');
         const nLines = doc.splitTextToSize(noteText, CW);
         ensure(nLines.length * 3.4 + 4);
-        doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_MUTED);
+        doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_GRAY);
         doc.text(nLines, M, y + 2);
-        doc.setTextColor(PDF_TEXT);
+        doc.setTextColor(PDF_INK_SOFT);
         y += nLines.length * 3.4 + 5;
       }
     }
@@ -691,7 +738,7 @@ export async function buildFindingPdf() {
       const trC = tempRepairResultColor(tempRepair);
       const trTint = tempRepair.test_result === 'Pass' ? '#ecfdf5'
         : tempRepair.test_result === 'Fail' ? '#fef2f2'
-        : tempRepair.test_result === 'Pass with observation' ? '#fffbeb' : PDF_PANEL;
+        : tempRepair.test_result === 'Pass with observation' ? '#fffbeb' : PDF_FILL;
 
       section('Temporary Repair Record (Emergency Stop-Leak)', 40);
 
@@ -701,12 +748,12 @@ export async function buildFindingPdf() {
       const trLines = doc.splitTextToSize(tempRepairHeadline(tempRepair), CW - 8);
       const trH = 6.5 + trLines.length * 3.7 + 2.5;
       ensure(trH + 8);
-      doc.setFillColor(trTint); doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+      doc.setFillColor(trTint); doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
       doc.rect(M, y, CW, trH, 'FD');
       doc.setFillColor(trC); doc.rect(M, y, 2, trH, 'F');
       doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_VALUE); doc.setTextColor(trC);
       doc.text(`VERIFICATION: ${String(tempRepair.test_result || 'Not yet tested').toUpperCase()}`, M + 5, y + 5);
-      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_TEXT);
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_INK_SOFT);
       doc.text(trLines, M + 5, y + 9.5);
       y += trH + 3.5;
 
@@ -717,7 +764,7 @@ export async function buildFindingPdf() {
       trRows.forEach(r => {
         if (r.section !== trSec) {
           trSec = r.section;
-          trBody.push([{ content: r.section, colSpan: 2, styles: { fillColor: '#e2e8f0', fontStyle: 'bold', textColor: PDF_NAVY } }]);
+          trBody.push([{ content: r.section, colSpan: 2, styles: { fillColor: PDF_HAIRLINE, fontStyle: 'bold', textColor: PDF_INK } }]);
         }
         trBody.push([r.label, r.value]);
       });
@@ -725,10 +772,10 @@ export async function buildFindingPdf() {
         margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
         startY: y,
         theme: 'grid',
-        styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.8, lineColor: '#e2e8f0', lineWidth: 0.12, valign: 'top', textColor: PDF_TEXT, overflow: 'linebreak' },
+        styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.8, lineColor: PDF_HAIRLINE, lineWidth: 0.12, valign: 'top', textColor: PDF_INK_SOFT, overflow: 'linebreak' },
         columnStyles: {
-          0: { fontStyle: 'bold', textColor: PDF_NAVY, cellWidth: 62, fillColor: '#f8fafc' },
-          1: { textColor: PDF_TEXT },
+          0: { fontStyle: 'bold', textColor: PDF_INK, cellWidth: 62, fillColor: PDF_FILL },
+          1: { textColor: PDF_INK_SOFT },
         },
         body: trBody,
         didDrawPage: () => { if (doc.internal.getNumberOfPages() > 1) chrome(); }
@@ -737,11 +784,11 @@ export async function buildFindingPdf() {
 
       const trNote = 'บันทึกนี้จัดทำขึ้นเพื่ออ้างอิงและประเมินความสมบูรณ์ของท่อ (Piping Integrity Management) ตามสภาวะการติดตั้งและการใช้งานที่ระบุไว้เท่านั้น '
         + '(This record is maintained for piping integrity management reference under the documented installation and operating conditions.)';
-      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_MUTED);
+      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_GRAY);
       const trNoteLines = doc.splitTextToSize(trNote, CW);
       ensure(trNoteLines.length * 3.4 + 4);
       doc.text(trNoteLines, M, y + 2);
-      doc.setTextColor(PDF_TEXT);
+      doc.setTextColor(PDF_INK_SOFT);
       y += trNoteLines.length * 3.4 + 5;
     }
   }
@@ -753,13 +800,13 @@ export async function buildFindingPdf() {
       const w = CW, h = w / 2; // 100% natural 2:1 aspect ratio of satellite canvas
       ensure(h + 10);
       doc.addImage(mapImg, 'JPEG', M, y, w, h);
-      doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+      doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
       doc.rect(M, y, w, h);
       y += h + 3.5;
       figNum++;
-      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_MUTED);
+      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_GRAY);
       doc.text(`Figure ${figNum}: Satellite location pin (${Number(f.lat).toFixed(6)}, ${Number(f.lng).toFixed(6)})`, PW / 2, y, { align: 'center' });
-      doc.setTextColor(PDF_TEXT);
+      doc.setTextColor(PDF_INK_SOFT);
       y += 5;
     } else {
       row('Coordinates', `${Number(f.lat).toFixed(6)}, ${Number(f.lng).toFixed(6)}`);
@@ -782,10 +829,10 @@ export async function buildFindingPdf() {
       const gap = 5, cellW = (CW - gap) / 2;
       const firstRowRh = Math.max.apply(null, items.slice(0, 2).map(p => (cellW / p.w) * p.h));
       ensure(5.5 + firstRowRh + 10);
-      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_MUTED);
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_GRAY);
       doc.text(title.toUpperCase(), M, y + 2.5);
       y += 5.5;
-      doc.setTextColor(PDF_TEXT);
+      doc.setTextColor(PDF_INK_SOFT);
       for (let i = 0; i < items.length; i += 2) {
         const rowItems = items.slice(i, i + 2).map(p => {
           const s = cellW / p.w; // 100% unconstrained true aspect ratio
@@ -796,10 +843,10 @@ export async function buildFindingPdf() {
         rowItems.forEach((d, j) => {
           const ix = M + j * (cellW + gap) + (cellW - d.w) / 2;
           doc.addImage(d.src, 'JPEG', ix, y, d.w, d.h);
-          doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+          doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
           doc.rect(ix, y, d.w, d.h);
           figNum++;
-          doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_MUTED);
+          doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_GRAY);
           doc.text(`Figure ${figNum}: Inspection Photo (${title}, #${i + j + 1})`, ix + d.w / 2, y + d.h + 3.5, { align: 'center' });
         });
         y += rh + 7;
@@ -815,7 +862,7 @@ export async function buildFindingPdf() {
     doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_VALUE); doc.setTextColor(PDF_DANGER);
     doc.text('Notice: ASME B31.3 wall-loss calculation is disabled for actively leaking piping.', M, y + 3);
     y += 5;
-    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_TEXT);
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_INK_SOFT);
     const leakNote = 'Pressure boundary integrity is already breached. Per ASME PCC-2 Article 201 / Article 304, immediate mechanical clamping, engineered enclosure, or line isolation is required prior to Fitness-for-Service wall evaluation.';
     const leakLines = doc.splitTextToSize(leakNote, CW);
     doc.text(leakLines, M, y + 3);
@@ -830,8 +877,8 @@ export async function buildFindingPdf() {
 
     const tableBase = {
       margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
-      styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.2, lineColor: PDF_BORDER, lineWidth: 0.15 },
-      headStyles: { fillColor: PDF_NAVY, textColor: '#ffffff', fontStyle: 'bold', fontSize: FS_LABEL },
+      styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.2, lineColor: PDF_RULE, lineWidth: 0.15, textColor: PDF_INK_SOFT },
+      headStyles: { fillColor: PDF_FILL_MID, textColor: PDF_INK, fontStyle: 'bold', fontSize: FS_LABEL, lineColor: PDF_INK, lineWidth: { top: 0, right: 0, bottom: 0.4, left: 0 } },
       didDrawPage: () => { if (doc.internal.getNumberOfPages() > 1) chrome(); }
     };
 
@@ -843,24 +890,24 @@ export async function buildFindingPdf() {
     const iTint = r.status === 'OK' ? '#ecfdf5' : r.status === 'MONITOR' ? '#fffbeb' : '#fef2f2';
     const iText = r.status === 'OK' ? '#15803d' : r.status === 'MONITOR' ? PDF_WARN_MID : '#b91c1c';
     doc.setFillColor(iTint);
-    doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+    doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
     doc.rect(M, y, CW, 12, 'FD');
     doc.setFillColor(iColor);
     doc.rect(M, y, 2, 12, 'F'); // colored spine
     doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_SUB); doc.setTextColor(iText);
     doc.text(`INTEGRITY STATUS: ${r.status}`, M + 5, y + 7.8);
-    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_TEXT);
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_INK_SOFT);
     doc.text(`ERF ${fmtN(erf_no, 3)}   MAWP ${fmtN(r.mawp_no, 1)} ${r.pUnit} (no CA)   MARGIN ${fmtN(r.margin, 3)} mm`, PW - M - 4, y + 7.8, { align: 'right' });
     y += 16;
-    doc.setTextColor('#334155'); doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY);
+    doc.setTextColor(PDF_INK_SOFT); doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY);
     const descLines = doc.splitTextToSize(r.desc, CW);
     ensure(descLines.length * 3.6 + 4);
     doc.text(descLines, M, y);
     y += descLines.length * 3.6 + 2;
-    doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_MUTED);
+    doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
     doc.text(`Assessed ${fmtDateTime(assess.created_at)} by ${assess.created_by_email || '—'}`
       + (currentAssessments.length > 1 ? `  •  ${currentAssessments.length} assessments recorded — latest shown` : ''), M, y);
-    doc.setTextColor(PDF_TEXT);
+    doc.setTextColor(PDF_INK_SOFT);
     y += 7;
 
     // --- input parameters ---
@@ -889,7 +936,7 @@ export async function buildFindingPdf() {
         ['Wall thickness coefficient', 'Y', fmtN(r.Y, 2), '—', 'B31.3 Table 304.1.1'],
       ],
       columnStyles: {
-        1: { font: 'GoogleSans', fontStyle: 'bold', halign: 'center', cellWidth: 20, fillColor: '#f1f5f9', textColor: PDF_NAVY },
+        1: { font: 'GoogleSans', fontStyle: 'bold', halign: 'center', cellWidth: 20, fillColor: PDF_FILL, textColor: PDF_INK },
         2: { font: 'GoogleSans', fontStyle: 'bold', halign: 'right', cellWidth: 40 },
         3: { halign: 'center', cellWidth: 16 },
       },
@@ -904,9 +951,9 @@ export async function buildFindingPdf() {
       doc.addImage(xsecPng, 'PNG', (PW - figW) / 2, y, figW, figH);
       y += figH + 4;
       figNum++;
-      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_MUTED);
+      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
       doc.text(`Figure ${figNum} — Wall thickness cross-section (localized loss pocket; boundaries: t_req, t_req + CA, API 574 structural minimum)`, PW / 2, y, { align: 'center' });
-      doc.setTextColor(PDF_TEXT);
+      doc.setTextColor(PDF_INK_SOFT);
       y += 8;
     }
 
@@ -928,9 +975,9 @@ export async function buildFindingPdf() {
     y = doc.lastAutoTable.finalY + 3;
     if (r.isCsRef) {
       ensure(6);
-      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_WARN_DARK);
+      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
       doc.text('* API 574 structural minimum is a carbon/low-alloy steel reference table; not validated for the selected material.', M, y);
-      doc.setTextColor(PDF_TEXT);
+      doc.setTextColor(PDF_INK_SOFT);
       y += 6;
     } else {
       y += 4;
@@ -941,7 +988,7 @@ export async function buildFindingPdf() {
       ensure(ffsLines.length * 3.4 + 4);
       doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_WARN_MID);
       doc.text(ffsLines, M, y);
-      doc.setTextColor(PDF_TEXT);
+      doc.setTextColor(PDF_INK_SOFT);
       y += ffsLines.length * 3.4 + 4;
     }
 
@@ -963,10 +1010,10 @@ export async function buildFindingPdf() {
       const workedH = isFrac ? 11 : 6;     // vertical space the substituted line occupies
       ensure(7 + workedH + 4);
       // formula (symbolic rule) — navy-bold heading + right-aligned standard reference
-      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_NAVY);
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_INK);
       doc.text(rw.label, M, y + 2.7);
       if (rw.ref) {
-        doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_MUTED);
+        doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_GRAY);
         doc.text(rw.ref, PW - M, y + 2.7, { align: 'right' });
       }
       y += 6.5;
@@ -981,9 +1028,9 @@ export async function buildFindingPdf() {
     const scopeLines = doc.splitTextToSize(PA_SCOPE_TEXT, CW);
     ensure(14 + scopeLines.length * 3.3 + 4);
     section('Scope & Limitations', 30);
-    doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor('#475569');
+    doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
     doc.text(scopeLines, M, y + 2);
-    doc.setTextColor(PDF_TEXT);
+    doc.setTextColor(PDF_INK_SOFT);
     y += scopeLines.length * 3.3 + 6;
   } else if (assess) {
     // legacy snapshot whose inputs can't re-compute: fall back to its saved results
@@ -1009,12 +1056,12 @@ export async function buildFindingPdf() {
       const noteLines = h.note ? doc.splitTextToSize(h.note, CW - 8) : [];
       const hh = 5.5 + (noteLines.length ? noteLines.length * 4 + 2 : 0);
       ensure(hh);
-      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_VALUE); doc.setTextColor(PDF_TEXT);
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_VALUE); doc.setTextColor(PDF_INK_SOFT);
       doc.text(head, M, y + 3.5);
       if (noteLines.length) {
-        doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_VALUE); doc.setTextColor(PDF_MUTED);
+        doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_VALUE); doc.setTextColor(PDF_GRAY);
         doc.text(noteLines, M + 4, y + 8);
-        doc.setTextColor(PDF_TEXT);
+        doc.setTextColor(PDF_INK_SOFT);
       }
       y += hh;
     });
@@ -1025,19 +1072,19 @@ export async function buildFindingPdf() {
   // the generation timestamp. ---
   ensure(14);
   y += 4;
-  doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+  doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
   doc.line(M, y, PW - M, y);
   y += 4;
-  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor(PDF_MUTED);
+  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor(PDF_GRAY);
   doc.text(`System-generated record via Pipe Assessor — paperless piping-integrity system. No physical signature required.`, M, y);
   y += 3.6;
   doc.text(`Recorded by ${f.created_by_email || 'System User'}  ·  ASME B31.3-2022 / API 574 assessment engine  ·  Record ID: PA-${f.id}  ·  Generated ${paFmtDateTime(now)}`, M, y);
-  doc.setTextColor(PDF_TEXT);
+  doc.setTextColor(PDF_INK_SOFT);
   y += 6;
 
   ensure(12);
   y += 4;
-  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor('#94a3b8');
+  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY_LIGHT);
   doc.text('— End of Report —', PW / 2, y, { align: 'center' });
 
   if (doc.putTotalPages) doc.putTotalPages('{tp}');
@@ -1108,28 +1155,28 @@ export async function buildQuickCalcPdf(inputs, res) {
     if (logoIm) {
       const lw = 26, lh = 26 * logoIm.naturalHeight / logoIm.naturalWidth;
       try { doc.addImage(logo, 'PNG', M, 3, lw, lh); }
-      catch (_) { doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LOGO); doc.setTextColor(PDF_NAVY); doc.text('OR', M, 12); }
+      catch (_) { doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LOGO); doc.setTextColor(PDF_INK); doc.text('OR', M, 12); }
     } else {
-      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LOGO); doc.setTextColor(PDF_NAVY);
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LOGO); doc.setTextColor(PDF_INK);
       doc.text('OR', M, 12);
     }
-    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_TITLE); doc.setTextColor(PDF_NAVY);
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_TITLE); doc.setTextColor(PDF_INK);
     doc.text('ASME B31.3 QUICK CALCULATION REPORT', PW - M, 8.5, { align: 'right' });
-    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor('#64748b');
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
     const npsRef = String(inputs.nps || '').replace(/[^a-zA-Z0-9-]/g, '');
     doc.text(`DOC REF: PA-QCALC-${npsRef}-${paFmtDate(now).replace(/\s+/g, '')}`, PW - M, 13.5, { align: 'right' });
-    doc.setDrawColor(PDF_NAVY); doc.setLineWidth(0.8);
+    doc.setDrawColor(PDF_INK); doc.setLineWidth(0.8);
     doc.line(M, HEADER_H - 1, PW - M, HEADER_H - 1);
 
-    doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+    doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
     doc.line(M, PH - FOOTER_H, PW - M, PH - FOOTER_H);
-    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor('#64748b');
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
     doc.text('Piping integrity — what-if calculation (not a recorded finding)', M, PH - FOOTER_H + 4);
     doc.text(`Page ${doc.internal.getNumberOfPages()} of {tp}`, PW / 2, PH - FOOTER_H + 4, { align: 'center' });
     doc.text(`Generated ${paFmtDateTime(now)}`, PW - M, PH - FOOTER_H + 4, { align: 'right' });
-    doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor('#94a3b8');
+    doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor(PDF_GRAY_LIGHT);
     doc.text(['Central and Eastern Engineering and Maintenance Division', 'PTT Oil and Retail Business Public Company Limited'], PW / 2, PH - FOOTER_H + 9, { align: 'center', lineHeightFactor: 1.35 });
-    doc.setTextColor(PDF_TEXT);
+    doc.setTextColor(PDF_INK_SOFT);
     y = HEADER_H + 4;
   }
 
@@ -1146,16 +1193,19 @@ export async function buildQuickCalcPdf(inputs, res) {
   chrome();
 
   // --- scratch-calculation disclaimer: the one thing this report must never be mistaken for is a
-  // recorded finding — no finding_id, no assessments row, nothing saved to the database. ---
+  // recorded finding — no finding_id, no assessments row, nothing saved to the database. Drawn as a
+  // black-ruled notice box on white, NOT an amber caution band: this is a scope/provenance
+  // statement about the document, not a condition verdict, and amber here competed with the
+  // MONITOR tier of the integrity band sitting directly beneath it. ---
   ensure(16);
-  doc.setDrawColor(PDF_WARN_DARK); doc.setLineWidth(0.3);
-  doc.setFillColor('#fffbeb');
-  doc.roundedRect(M, y, CW, 13, 1.5, 1.5, 'FD');
-  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_WARN_DARK);
+  doc.setDrawColor(PDF_INK); doc.setLineWidth(0.4);
+  doc.setFillColor('#ffffff');
+  doc.rect(M, y, CW, 13, 'FD');
+  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_INK);
   doc.text('SCRATCH WHAT-IF CALCULATION — NOT A RECORDED FINDING', M + 4, y + 5);
-  doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_DISCLAIMER); doc.setTextColor('#78350f');
+  doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_DISCLAIMER); doc.setTextColor(PDF_INK_SOFT);
   doc.text('Produced by the standalone Quick Calculator. No finding record or assessment snapshot was created or saved.', M + 4, y + 9.5);
-  doc.setTextColor(PDF_TEXT);
+  doc.setTextColor(PDF_INK_SOFT);
   y += 17;
 
   // --- integrity status band (same visual language as the finding report's assessment band) ---
@@ -1166,23 +1216,23 @@ export async function buildQuickCalcPdf(inputs, res) {
   const iTint = r.status === 'OK' ? '#ecfdf5' : r.status === 'MONITOR' ? '#fffbeb' : '#fef2f2';
   const iText = r.status === 'OK' ? '#15803d' : r.status === 'MONITOR' ? PDF_WARN_MID : '#b91c1c';
   doc.setFillColor(iTint);
-  doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+  doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
   doc.rect(M, y, CW, 12, 'FD');
   doc.setFillColor(iColor);
   doc.rect(M, y, 2, 12, 'F'); // colored spine
   doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_SUB); doc.setTextColor(iText);
   doc.text(`INTEGRITY STATUS: ${r.status}`, M + 5, y + 7.8);
-  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_TEXT);
+  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_INK_SOFT);
   doc.text(`ERF ${fmtN(erf_no, 3)}   MAWP ${fmtN(r.mawp_no, 1)} ${r.pUnit} (no CA)   MARGIN ${fmtN(r.margin, 3)} mm`, PW - M - 4, y + 7.8, { align: 'right' });
   y += 16;
-  doc.setTextColor('#334155'); doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY);
+  doc.setTextColor(PDF_INK_SOFT); doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY);
   const descLines = doc.splitTextToSize(r.desc, CW);
   ensure(descLines.length * 3.6 + 4);
   doc.text(descLines, M, y);
   y += descLines.length * 3.6 + 2;
-  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_MUTED);
+  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
   doc.text(`Calculated ${paFmtDateTime(now)}`, M, y);
-  doc.setTextColor(PDF_TEXT);
+  doc.setTextColor(PDF_INK_SOFT);
   y += 7;
 
   // --- input parameters ---
@@ -1211,8 +1261,8 @@ export async function buildQuickCalcPdf(inputs, res) {
 
   const tableBase = {
     margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
-    styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.2, lineColor: PDF_BORDER, lineWidth: 0.15 },
-    headStyles: { fillColor: PDF_NAVY, textColor: '#ffffff', fontStyle: 'bold', fontSize: FS_LABEL },
+    styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.2, lineColor: PDF_RULE, lineWidth: 0.15, textColor: PDF_INK_SOFT },
+    headStyles: { fillColor: PDF_FILL_MID, textColor: PDF_INK, fontStyle: 'bold', fontSize: FS_LABEL, lineColor: PDF_INK, lineWidth: { top: 0, right: 0, bottom: 0.4, left: 0 } },
     didDrawPage: () => { if (doc.internal.getNumberOfPages() > 1) chrome(); }
   };
 
@@ -1223,7 +1273,7 @@ export async function buildQuickCalcPdf(inputs, res) {
     head: [['Parameter', 'Symbol', 'Value', 'Unit', 'Source']],
     body: inputRows,
     columnStyles: {
-      1: { font: 'GoogleSans', fontStyle: 'bold', halign: 'center', cellWidth: 20, fillColor: '#f1f5f9', textColor: PDF_NAVY },
+      1: { font: 'GoogleSans', fontStyle: 'bold', halign: 'center', cellWidth: 20, fillColor: PDF_FILL, textColor: PDF_INK },
       2: { font: 'GoogleSans', fontStyle: 'bold', halign: 'right', cellWidth: 40 },
       3: { halign: 'center', cellWidth: 16 },
     },
@@ -1238,9 +1288,9 @@ export async function buildQuickCalcPdf(inputs, res) {
     doc.addImage(xsecPng, 'PNG', (PW - figW) / 2, y, figW, figH);
     y += figH + 4;
     figNum++;
-    doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_MUTED);
+    doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
     doc.text(`Figure ${figNum} — Wall thickness cross-section (localized loss pocket; boundaries: t_req, t_req + CA, API 574 structural minimum)`, PW / 2, y, { align: 'center' });
-    doc.setTextColor(PDF_TEXT);
+    doc.setTextColor(PDF_INK_SOFT);
     y += 8;
   }
 
@@ -1262,9 +1312,9 @@ export async function buildQuickCalcPdf(inputs, res) {
   y = doc.lastAutoTable.finalY + 3;
   if (r.isCsRef) {
     ensure(6);
-    doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_WARN_DARK);
+    doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
     doc.text('* API 574 structural minimum is a carbon/low-alloy steel reference table; not validated for the selected material.', M, y);
-    doc.setTextColor(PDF_TEXT);
+    doc.setTextColor(PDF_INK_SOFT);
     y += 6;
   } else {
     y += 4;
@@ -1275,7 +1325,7 @@ export async function buildQuickCalcPdf(inputs, res) {
     ensure(ffsLines.length * 3.4 + 4);
     doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_WARN_MID);
     doc.text(ffsLines, M, y);
-    doc.setTextColor(PDF_TEXT);
+    doc.setTextColor(PDF_INK_SOFT);
     y += ffsLines.length * 3.4 + 4;
   }
 
@@ -1293,10 +1343,10 @@ export async function buildQuickCalcPdf(inputs, res) {
     const isFrac = rw.segs.some(s => typeof s !== 'string');
     const workedH = isFrac ? 11 : 6;
     ensure(7 + workedH + 4);
-    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_NAVY);
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_INK);
     doc.text(rw.label, M, y + 2.7);
     if (rw.ref) {
-      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_DISCLAIMER); doc.setTextColor(PDF_MUTED);
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_DISCLAIMER); doc.setTextColor(PDF_GRAY);
       doc.text(rw.ref, PW - M, y + 2.7, { align: 'right' });
     }
     y += 6.5;
@@ -1310,28 +1360,28 @@ export async function buildQuickCalcPdf(inputs, res) {
   const scopeLines = doc.splitTextToSize(PA_SCOPE_TEXT, CW);
   ensure(14 + scopeLines.length * 3.3 + 4);
   section('Scope & Limitations', 30);
-  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor('#475569');
+  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
   doc.text(scopeLines, M, y + 2);
-  doc.setTextColor(PDF_TEXT);
+  doc.setTextColor(PDF_INK_SOFT);
   y += scopeLines.length * 3.3 + 6;
 
   // --- System-generated record footnote (matches the finding report's paperless closing; adapted
   // for the scratch what-if — no finding Record ID, and it re-states this is not a recorded finding). ---
   ensure(14);
   y += 2;
-  doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+  doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
   doc.line(M, y, PW - M, y);
   y += 4;
-  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor(PDF_MUTED);
+  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor(PDF_GRAY);
   doc.text('System-generated what-if calculation via Pipe Assessor — paperless piping-integrity system. No physical signature required.', M, y);
   y += 3.6;
   doc.text(`ASME B31.3-2022 / API 574 assessment engine  ·  Not a recorded finding  ·  Generated ${paFmtDateTime(now)}`, M, y);
-  doc.setTextColor(PDF_TEXT);
+  doc.setTextColor(PDF_INK_SOFT);
   y += 6;
 
   ensure(12);
   y += 2;
-  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor('#94a3b8');
+  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY_LIGHT);
   doc.text('— End of Report —', PW / 2, y, { align: 'center' });
 
   if (doc.putTotalPages) doc.putTotalPages('{tp}');
@@ -1485,30 +1535,30 @@ export async function buildSummaryPdf(rows, includeBudget) {
     // band (HEADER_H=13 vs the portrait reports' 18 — this report has no title/date subline
     // worth the extra height, so logo + title share one compact row instead of two).
     function chrome() {
-      const textOR = () => { doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LOGO); doc.setTextColor(PDF_NAVY); doc.text('OR', M, 8.5); };
+      const textOR = () => { doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LOGO); doc.setTextColor(PDF_INK); doc.text('OR', M, 8.5); };
       if (logoIm) { const lh = 7.5, lw = lh * logoIm.naturalWidth / logoIm.naturalHeight; try { doc.addImage(logo, 'PNG', M, 2.5, lw, lh); } catch (_) { textOR(); } }
       else textOR();
-      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_TITLE); doc.setTextColor(PDF_NAVY);
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_TITLE); doc.setTextColor(PDF_INK);
       doc.text('PIPING FINDINGS SUMMARY', PW - M, 6.5, { align: 'right' });
-      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_META); doc.setTextColor('#64748b');
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_META); doc.setTextColor(PDF_GRAY);
       doc.text(`${term}  ·  ${stat}  ·  ${paFmtDate(now)}`, PW - M, 10.5, { align: 'right' });
-      doc.setDrawColor(PDF_NAVY); doc.setLineWidth(0.6); doc.line(M, HEADER_H - 1, PW - M, HEADER_H - 1);
+      doc.setDrawColor(PDF_INK); doc.setLineWidth(0.6); doc.line(M, HEADER_H - 1, PW - M, HEADER_H - 1);
 
-      doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2); doc.line(M, PH - FOOTER_H, PW - M, PH - FOOTER_H);
-      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor('#64748b');
+      doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2); doc.line(M, PH - FOOTER_H, PW - M, PH - FOOTER_H);
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
       doc.text('Piping integrity — findings summary', M, PH - FOOTER_H + 4);
       doc.text(`Page ${doc.internal.getNumberOfPages()} of {tp}`, PW / 2, PH - FOOTER_H + 4, { align: 'center' });
       doc.text(`Generated ${paFmtDateTime(now)}`, PW - M, PH - FOOTER_H + 4, { align: 'right' });
-      doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor('#94a3b8');
+      doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor(PDF_GRAY_LIGHT);
       doc.text(['Central and Eastern Engineering and Maintenance Division', 'PTT Oil and Retail Business Public Company Limited'], PW / 2, PH - FOOTER_H + 8, { align: 'center', lineHeightFactor: 1.3 });
-      doc.setTextColor(PDF_TEXT);
+      doc.setTextColor(PDF_INK_SOFT);
     }
 
     chrome();
     let y = HEADER_H + 4;
-    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_SUMMARY); doc.setTextColor(PDF_TEXT);
+    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_SUMMARY); doc.setTextColor(PDF_INK_SOFT);
     doc.text(`${rows.length} findings   ·   Open ${cnt('Open')}   ·   Monitoring ${cnt('Monitoring')}   ·   Repair Planned ${cnt('Repair Planned')}   ·   Repaired ${cnt('Repaired')}`, M, y);
-    if (overdue) { doc.setFont('GoogleSans', 'bold'); doc.setTextColor(DANGER); doc.text(`${overdue} OVERDUE`, PW - M, y, { align: 'right' }); doc.setTextColor(PDF_TEXT); doc.setFont('GoogleSans', 'normal'); }
+    if (overdue) { doc.setFont('GoogleSans', 'bold'); doc.setTextColor(DANGER); doc.text(`${overdue} OVERDUE`, PW - M, y, { align: 'right' }); doc.setTextColor(PDF_INK_SOFT); doc.setFont('GoogleSans', 'normal'); }
     y += 6;
 
     // Budget headline (opt-in) — outstanding = not yet Repaired/Closed, with a severity split.
@@ -1516,11 +1566,11 @@ export async function buildSummaryPdf(rows, includeBudget) {
       const out = rows.filter(f => f.status !== 'Repaired' && f.status !== 'Closed');
       const sum = arr => arr.reduce((s, f) => s + (Number(f.estimated_cost) || 0), 0);
       const sev = s => thb(sum(out.filter(f => f.severity === s)));
-      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_SUMMARY); doc.setTextColor(PDF_NAVY);
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_SUMMARY); doc.setTextColor(PDF_INK);
       doc.text(`Outstanding repair budget: ${thb(sum(out))}`, M, y);
-      doc.setFont('GoogleSans', 'normal'); doc.setTextColor(PDF_MUTED);
+      doc.setFont('GoogleSans', 'normal'); doc.setTextColor(PDF_GRAY);
       doc.text(`High ${sev('High')}  ·  Medium ${sev('Medium')}  ·  Low ${sev('Low')}`, M + 90, y);
-      doc.setTextColor(PDF_TEXT);
+      doc.setTextColor(PDF_INK_SOFT);
       y += 6;
     }
 
@@ -1554,9 +1604,9 @@ export async function buildSummaryPdf(rows, includeBudget) {
       try { doc.addImage(dataUrl, format, x, y2, w, h); } catch (_) {}
     }
     function drawEmptyNote(text, cell) {
-      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_META); doc.setTextColor('#94a3b8');
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_META); doc.setTextColor(PDF_GRAY_LIGHT);
       doc.text(text, cell.x + cell.width / 2, cell.y + cell.height / 2, { align: 'center', baseline: 'middle' });
-      doc.setTextColor(PDF_TEXT);
+      doc.setTextColor(PDF_INK_SOFT);
     }
 
     // With the opt-in Est. Cost column, Map/Photo shift right by one; index everything off that.
@@ -1585,15 +1635,17 @@ export async function buildSummaryPdf(rows, includeBudget) {
       head: [head],
       body,
       theme: 'grid',
-      styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.6, lineColor: '#e2e8f0', lineWidth: 0.1, textColor: '#0f172a', overflow: 'linebreak', minCellHeight: 26, valign: 'top' },
-      headStyles: { fillColor: PDF_NAVY, textColor: '#ffffff', fontStyle: 'bold', fontSize: FS_BODY, valign: 'middle', cellPadding: { top: 2.2, right: 1.6, bottom: 2.2, left: 1.6 }, minCellHeight: 0 },
-      alternateRowStyles: { fillColor: '#f8fafc' },
+      styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.6, lineColor: PDF_HAIRLINE, lineWidth: 0.1, textColor: PDF_INK_SOFT, overflow: 'linebreak', minCellHeight: 26, valign: 'top' },
+      headStyles: { fillColor: PDF_FILL_MID, textColor: PDF_INK, fontStyle: 'bold', fontSize: FS_BODY, valign: 'middle', cellPadding: { top: 2.2, right: 1.6, bottom: 2.2, left: 1.6 }, minCellHeight: 0, lineColor: PDF_INK, lineWidth: { top: 0, right: 0, bottom: 0.4, left: 0 } },
+      alternateRowStyles: { fillColor: PDF_FILL },
       columnStyles: colStyles,
       margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
       didParseCell: (data) => {
         if (data.section !== 'body') return;
         const f = rows[data.row.index];
-        if (data.column.index === 4) { data.cell.styles.textColor = STATUS_COLORS[f.status] || '#334155'; data.cell.styles.fontStyle = 'bold'; }
+        // Workflow status reads as plain bold ink, not a hue — same rule as the finding report's
+        // identity grid (see PDF_STATUS_DOT). Overdue below is the only colored mark in the table.
+        if (data.column.index === 4) { data.cell.styles.textColor = PDF_INK; data.cell.styles.fontStyle = 'bold'; }
         if (data.column.index === 6 && isOverdue(f)) { data.cell.styles.textColor = DANGER; data.cell.styles.fontStyle = 'bold'; }
       },
       didDrawCell: (data) => {
@@ -1627,12 +1679,12 @@ export async function buildSummaryPdf(rows, includeBudget) {
           doc.rect(data.cell.x + inset, data.cell.y + inset, data.cell.width - inset * 2, data.cell.height - inset * 2, 'F');
           let ty = data.cell.y + 3.6;
           const tx = data.cell.x + data.cell.styles.cellPadding;
-          doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_TEXT);
+          doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_INK_SOFT);
           doc.text(f.finding_type, tx, ty);
           ty += 3.6;
-          doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_META); doc.setTextColor('#64748b');
+          doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_META); doc.setTextColor(PDF_GRAY);
           lines.slice(1).forEach(line => { doc.text(line, tx, ty); ty += 3.2; });
-          doc.setTextColor(PDF_TEXT);
+          doc.setTextColor(PDF_INK_SOFT);
         }
       },
       didDrawPage: () => chrome()
