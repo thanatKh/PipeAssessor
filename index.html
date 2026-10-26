@@ -1193,7 +1193,24 @@
           <button class="btn" data-variant="outline" id="btnCopyQuickSummary" type="button" title="Copy calculation summary to clipboard"><span aria-hidden="true" data-ui-icon="copy"></span><span class="t-text-swap">Copy Summary</span></button>
           <button class="btn" data-variant="outline" id="btnQuickPdf" type="button" title="Export this calculation as a PDF report">Export PDF</button>
           <button class="btn" data-variant="outline" id="btnQuickReset" type="button">Reset</button>
+          <!-- Laptop/projector only (hidden below 1024px). F toggles, Esc exits. -->
+          <button class="btn" data-variant="outline" id="btnQuickPresent" type="button" title="Full-screen presentation mode (press F)"><span aria-hidden="true" data-ui-icon="present"></span>Present</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Presentation mode (#viewCalc.calc-pres): the SAME inputs and workbench, re-laid out full
+         screen. These .cp-only blocks are hidden otherwise; initQuickCalc fills them from the
+         last result. -->
+    <div class="cp-only cp-head">
+      <div class="cp-title">
+        <b>Quick ASME B31.3 Calculator</b>
+        <span>What-if calculation · nothing is saved</span>
+      </div>
+      <div class="cp-head-btns">
+        <button class="btn" data-variant="outline" id="btnCpInputs" type="button" aria-pressed="true"><span aria-hidden="true" data-ui-icon="panelLeft"></span><span class="t-text-swap">Hide inputs</span> <kbd>H</kbd></button>
+        <button class="btn" data-variant="outline" id="btnCpReset" type="button"><span aria-hidden="true" data-ui-icon="reset"></span>Reset</button>
+        <button class="btn btn-primary" id="btnCpExit" type="button"><span aria-hidden="true" data-ui-icon="minimize"></span>Exit <kbd>Esc</kbd></button>
       </div>
     </div>
 
@@ -1304,9 +1321,13 @@
           </div>
         </div>
 
+        <div class="cp-only cp-banner hb-pending" id="cpBanner" role="status" aria-live="polite"></div>
         <div id="awQuick"></div>
+        <div class="cp-only cp-tiles" id="cpTiles"></div>
       </div>
     </div>
+
+    <div class="cp-only cp-foot" id="cpFoot"></div>
   </section>
 
   <!-- ================= DETAIL ================= -->

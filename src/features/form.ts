@@ -8,7 +8,7 @@
    the form CRUD (open/collect/save/delete). Extracted from the app monolith.
    ============================================================================ */
 import L from 'leaflet';
-import { paPressureUsePct } from '../workbench/labels';
+import { paPressureUsePct, paLimitGap, PA_LABELS } from '../workbench/labels';
 import { icon } from '../core/icons';
 import { syncSectionNav } from '../core/section-nav';
 import { $, val, esc, notify, setBusy, positionSegPill, pillHtml, isOverdue, todayISO, inspectionDateIssue } from '../core/dom';
@@ -951,6 +951,11 @@ let applyQuickLinkImpl = null;
 export function applyQuickCalcLink(search) {
   if (applyQuickLinkImpl) applyQuickLinkImpl(search);
 }
+// Same pattern: show() leaves presentation mode when the router switches away from #/calc.
+let setQuickPresentImpl = null;
+export function exitQuickPresent() {
+  if (setQuickPresentImpl) setQuickPresentImpl(false);
+}
 
 export function initQuickCalc() {
   $('qNps').innerHTML = Object.keys(PA_PIPE_DATABASE).map(n => `<option>${n}</option>`).join('');
@@ -1009,7 +1014,7 @@ export function initQuickCalc() {
     }
   };
 
-  const recalcQuick = () => {
+  const recalcQuickCore = () => {
     const hint = $('qCalcHint');
     // blank reading = "not entered yet", not 0 mm lost (see aReadingEmpty)
     if ((qMode() === 'tmeas' ? $('qTmeas').value : $('qDepth').value).trim() === '') {
@@ -1040,6 +1045,70 @@ export function initQuickCalc() {
     hint.style.display = 'none';
     awQuickView.render(res, { nps: $('qNps').value });
     updateSpecBar();
+  };
+
+  /* ---- Presentation mode: verdict banner, four result tiles and the scenario line ----
+     Filled on every recalculation (cheap), so entering the mode needs no separate refresh. The
+     banner reuses the health-banner colours (.hb-ok/-monitor/-repair/-pending); every label comes
+     from PA_LABELS, like the workbench and the PDFs. */
+  const PRES_HB = { OK: 'hb-ok', MONITOR: 'hb-monitor', REPAIR: 'hb-repair' };
+  const renderPresentation = () => {
+    const res = lastQuickRes;
+    const banner = $('cpBanner');
+    banner.className = 'cp-only cp-banner ' + (res ? (PRES_HB[res.status] || 'hb-pending') : 'hb-pending');
+    banner.innerHTML = res
+      ? `<div class="cp-word"><span>Integrity</span><b>${esc(res.status)}</b></div><div class="cp-line">${esc(res.desc || '')}</div>`
+      : `<div class="cp-word"><span>Integrity</span><b>—</b></div><div class="cp-line">${esc($('qCalcHint').style.display !== 'none' && $('qCalcHint').textContent ? $('qCalcHint').textContent : 'Enter the wall-loss reading and design pressure to see the result.')}</div>`;
+
+    const n2 = (v) => (v == null || !isFinite(v) ? '—' : Number(v).toFixed(2));
+    let tiles;
+    if (!res) {
+      tiles = [['erfNo', '—', '', '', ''], ['mawpNo', '—', '', '', ''], ['tMeas', '—', '', '', ''], ['pct', '—', '', '', '']]
+        .map(([k, v]) => ({ k, value: v, unit: '', sym: PA_LABELS[k].sym, note: '', tone: '' }));
+    } else {
+      const unit = res.pUnit;
+      const erf = res.mawp_no > 0 ? res.P_input / res.mawp_no : null;
+      // The limit that decides the verdict (same rule as the cross-section's bracket).
+      const structDecides = res.t_struct > res.t_req_total;
+      const limit = Math.max(res.t_struct, res.t_req_total);
+      const tone = { OK: 'ok', MONITOR: 'warn', REPAIR: 'bad' }[res.status] || '';
+      let wallNote = `${n2(res.depth)} of ${n2(res.t_nom)} mm lost`;
+      if (res.CR > 0 && res.remainingLife != null) wallNote += ` · ~${Math.max(0, res.remainingLife).toFixed(1)} yr left`;
+      tiles = [
+        { k: 'erfNo', value: paPressureUsePct(erf).replace('%', ''), unit: erf == null ? '' : '%',
+          sym: erf == null ? 'ERF' : `ERF ${erf.toFixed(2)}`, note: `of the safe limit at ${res.P_input} ${unit}`,
+          tone: erf == null ? '' : erf > 1 ? 'bad' : erf >= 0.8 ? 'warn' : 'ok' },
+        { k: 'mawpNo', value: res.mawp_no == null ? '—' : res.mawp_no.toFixed(1), unit, sym: PA_LABELS.mawpNo.sym,
+          note: `design is ${res.P_input} ${unit}`, tone: res.mawp_no >= res.P_input ? 'ok' : 'bad' },
+        { k: 'tMeas', value: n2(res.t_meas), unit: 'mm', sym: PA_LABELS.tMeas.sym,
+          note: paLimitGap(res.t_meas - limit, 2, structDecides ? 'the API 574 minimum' : 'min. + corrosion allowance'), tone },
+        { k: 'pct', value: res.pctRemainNom == null ? '—' : res.pctRemainNom.toFixed(0), unit: '%', sym: PA_LABELS.pct.sym,
+          note: wallNote, tone: '' },
+      ];
+    }
+    $('cpTiles').innerHTML = tiles.map(t => `
+      <div class="cp-tile${t.tone ? ' t-' + t.tone : ''}">
+        <div class="cp-tile-h"><span>${esc(PA_LABELS[t.k].short)}</span><span class="lbl-sym">${esc(t.sym)}</span></div>
+        <div class="cp-tile-v">${esc(t.value)}${t.unit ? ` <small>${esc(t.unit)}</small>` : ''}</div>
+        <div class="cp-tile-n">${esc(t.note)}</div>
+      </div>`).join('');
+
+    const pipe = PA_PIPE_DATABASE[$('qNps').value];
+    const reading = qMode() === 'depth'
+      ? ($('qDepth').value ? `${$('qCorrType').value === 'internal' ? 'internal' : 'external'} loss ${$('qDepth').value} mm` : 'no reading yet')
+      : ($('qTmeas').value ? `measured wall ${$('qTmeas').value} mm` : 'no reading yet');
+    const parts = [
+      `${$('qNps').value} ${schLabelOf()}`, materialName($('qMat').value),
+      pipe ? `OD ${pipe.od.toFixed(1)} mm` : '', reading,
+      $('qP').value ? `${$('qP').value} ${$('qPUnit').value}` : 'no design pressure',
+      `CA ${$('qCa').value || 0} mm`,
+    ].filter(Boolean);
+    $('cpFoot').innerHTML = `<span><b>Scenario</b> ${esc(parts.join(' · '))}</span><span>Not a recorded finding</span>`;
+  };
+
+  const recalcQuick = () => {
+    recalcQuickCore();
+    renderPresentation();
   };
 
   const applyPreset = (key) => {
@@ -1253,7 +1322,69 @@ export function initQuickCalc() {
     $('qCalcHint').style.display = 'none';
     awQuickView.render(null, { neutral: true });
     updateSpecBar();
+    renderPresentation();
   };
+
+  /* ---- Full-screen presentation mode (laptop + projector) ----
+     #viewCalc itself becomes the full-screen surface (.calc-pres), so the presenter keeps editing
+     the real inputs and dragging the real cross-section handle — nothing to copy back on exit.
+     Also asks the browser for true full screen (hides tabs/address bar on the projector); if the
+     browser leaves full screen on its own (its own Esc handling), presentation mode ends with it. */
+  const view = $('viewCalc');
+  const isPresenting = () => view.classList.contains('calc-pres');
+  const setInputsShown = (shown) => {
+    view.classList.toggle('cp-no-inputs', !shown);
+    const b = $('btnCpInputs');
+    b.setAttribute('aria-pressed', shown ? 'true' : 'false');
+    b.querySelector('.t-text-swap').textContent = shown ? 'Hide inputs' : 'Show inputs';
+  };
+  const setPresenting = (on) => {
+    if (on === isPresenting()) return;
+    view.classList.toggle('calc-pres', on);
+    // The app header/footer sit under the overlay; keep Tab from wandering onto them.
+    document.querySelectorAll('body > header, body > footer').forEach(el => {
+      if (on) el.setAttribute('inert', ''); else el.removeAttribute('inert');
+    });
+    document.body.style.overflow = on ? 'hidden' : '';
+    if (on) {
+      setInputsShown(true);
+      renderPresentation();
+      if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => { /* overlay still fills the window */ });
+      }
+      $('btnCpExit').focus();
+    } else {
+      view.classList.remove('cp-no-inputs');
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      $('btnQuickPresent').focus({ preventScroll: true });
+    }
+    positionSegPill($('qModeSeg'), false); // the panel changed width
+  };
+  setQuickPresentImpl = setPresenting;
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && isPresenting()) setPresenting(false);
+  });
+  $('btnQuickPresent').addEventListener('click', () => setPresenting(true));
+  $('btnCpExit').addEventListener('click', () => setPresenting(false));
+  $('btnCpReset').addEventListener('click', reset);
+  $('btnCpInputs').addEventListener('click', () => setInputsShown(view.classList.contains('cp-no-inputs')));
+  window.addEventListener('keydown', (e) => {
+    if (!view.classList.contains('active') || e.ctrlKey || e.metaKey || e.altKey) return;
+    const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName || '');
+    if (e.key === 'Escape' && isPresenting()) {
+      setPresenting(false);
+    } else if (typing) {
+      return;
+    } else if (e.key === 'f' || e.key === 'F') {
+      // laptop only — same breakpoint that hides the Present button
+      if (!isPresenting() && window.innerWidth < 1024) return;
+      e.preventDefault();
+      setPresenting(!isPresenting());
+    } else if ((e.key === 'h' || e.key === 'H') && isPresenting()) {
+      e.preventDefault();
+      setInputsShown(view.classList.contains('cp-no-inputs'));
+    }
+  });
 
   $('qNps').addEventListener('change', () => { updateSchedules(false); recalcQuick(); });
   $('qSch').addEventListener('change', () => { autofillTnom(); recalcQuick(); });

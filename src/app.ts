@@ -198,6 +198,7 @@ export function show(viewId) {
   if (viewId !== 'viewList') {
     toggleMapPresentation(false);
   }
+  if (viewId !== 'viewCalc') exitQuickPresent();
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === viewId));
   syncTopNav();
   window.scrollTo(0, 0);
@@ -347,7 +348,7 @@ import {
 } from './features/import-export';
 
 import {
-  clearValidation, setPin, clearPin, ensurePickMap, renderPendingGrid, addPendingFiles, imageFilesFromClipboard, onPastePhoto, WALL_LOSS_TYPES, AUTO_ASSESS_TYPES, CORR_TYPE_BY_FINDING, syncCorrTypeFromFinding, syncLeakAndAssessRules, SEVERITY_BY_FINDING, suggestSeverityFromType, aMode, setAssessOn, updateAschedules, autofillAtnom, applyMaterialStress, gatherAssessParams, recalcAssessment, loadAssessmentInto, resetAssessment, initAssessment, initRepairAdvisor, initTempRepair, applyTagMemory, TAG_COMBO_MAX, initTagCombo, initQuickCalc, applyQuickCalcLink, openForm, collectForm, collectAssessment, uploadPhoto, saveForm, deleteFinding,
+  clearValidation, setPin, clearPin, ensurePickMap, renderPendingGrid, addPendingFiles, imageFilesFromClipboard, onPastePhoto, WALL_LOSS_TYPES, AUTO_ASSESS_TYPES, CORR_TYPE_BY_FINDING, syncCorrTypeFromFinding, syncLeakAndAssessRules, SEVERITY_BY_FINDING, suggestSeverityFromType, aMode, setAssessOn, updateAschedules, autofillAtnom, applyMaterialStress, gatherAssessParams, recalcAssessment, loadAssessmentInto, resetAssessment, initAssessment, initRepairAdvisor, initTempRepair, applyTagMemory, TAG_COMBO_MAX, initTagCombo, initQuickCalc, applyQuickCalcLink, exitQuickPresent, openForm, collectForm, collectAssessment, uploadPhoto, saveForm, deleteFinding,
 } from './features/form';
 
 import {

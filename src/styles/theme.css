@@ -79,6 +79,7 @@
   --fs-4xl: 22px;   /* enlarged heading (presentation-mode panel title, header h1 desktop, dialog close glyph) */
   --fs-5xl: 24px;   /* KPI card headline number */
   --fs-hero: 30px;  /* largest numeric hero (Risk Ranking KPI band) */
+  --fs-display: 40px; /* projected screens only (Quick Calc presentation verdict + result numbers) */
 
   /* Shared motion-token scale (transitions.dev) — only the handful of roles referenced by
      already-existing app.css/theme.css animations (presentation-mode expand/collapse, sidebar
