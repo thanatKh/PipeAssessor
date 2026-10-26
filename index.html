@@ -18,7 +18,7 @@
   <div class="wrap">
     <div class="header-brand">
       <a class="hdr-logo-chip" href="#/list" title="Go to dashboard">
-        <img class="hdr-logo" src="/RGB_OR_Full%20color.png" alt="OR Logo" width="80" height="42"/>
+        <img class="hdr-logo" src="/RGB_OR_Full%20color.png" alt="OR Logo" width="84" height="44"/>
       </a>
       <div class="header-info">
         <h1>Pipe Assessor</h1>
@@ -198,7 +198,7 @@
       <article class="dcard" id="statusCard">
         <div class="dcard-h">
           <h2>Status</h2>
-          <button type="button" class="dcard-link" id="kpiRingCard" title="Show Repaired + Closed findings"><b id="kpiRingPct">0%</b> complete · <span id="kpiRingFraction">0 of 0</span></button>
+          <button type="button" class="dcard-link" id="kpiRingCard" title="Show repaired and closed findings"><b id="kpiRingPct">0%</b> complete · <span id="kpiRingFraction">0 of 0</span></button>
         </div>
         <div class="status-bar" id="statusBar" role="group" aria-label="Findings by status"></div>
         <ul class="status-legend" id="statusLegend"></ul>
@@ -245,22 +245,22 @@
             </select>
             <select id="mapColorBy" class="select"><option value="status" selected>Color by: Status</option><option value="type">Color by: Type</option><option value="severity">Color by: Severity</option></select>
             <!-- 2. Map display toggles -->
-            <button type="button" class="map-layer-toggle" id="btnRiskRadius" role="switch" aria-checked="false" title="Show a translucent risk-zone radius circle around each finding">
+            <button type="button" class="map-layer-toggle" id="btnRiskRadius" role="switch" aria-checked="false" title="Show a 40 m zone around each finding (visual aid only)">
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" opacity="0.4"/><circle cx="12" cy="12" r="3"/></svg>
               <span>Risk Zones</span>
               <span class="map-layer-toggle-track" aria-hidden="true"><span class="map-layer-toggle-thumb"></span></span>
             </button>
             <!-- 3. Viewport actions -->
-            <button type="button" class="btn btn-sm btn-subtle pres-only" id="btnPresReset" title="Reset map view to fit all markers" hidden>
+            <button type="button" class="btn btn-sm btn-subtle pres-only" id="btnPresReset" title="Zoom to fit all findings" hidden>
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
               <span>Reset View</span><span class="pres-key-hint">R</span>
             </button>
-            <button type="button" class="btn btn-sm btn-subtle pres-only" id="btnPresToggleSidebar" title="Toggle interactive findings list panel" hidden>
+            <button type="button" class="btn btn-sm btn-subtle pres-only" id="btnPresToggleSidebar" title="Show or hide the findings list" hidden>
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
               <span>Findings List</span><span class="pres-key-hint">L</span>
             </button>
             <!-- 4. Mode control (always last) -->
-            <button type="button" class="btn btn-sm btn-subtle" id="btnMapExpand" title="Toggle full-screen presentation mode (press F)" aria-label="Toggle full-screen presentation mode">
+            <button type="button" class="btn btn-sm btn-subtle" id="btnMapExpand" title="Full-screen presentation (F)" aria-label="Full-screen presentation">
               <span class="t-icon-swap" data-state="a">
                 <span class="t-icon" data-icon="a"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg></span>
                 <span class="t-icon" data-icon="b"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="10" y1="14" x2="3" y2="21"></line></svg></span>
@@ -304,7 +304,7 @@
             <select id="filStatus" class="select"><option value="" selected>All statuses</option><option>Open</option><option>Monitoring</option><option>Repair Planned</option><option>Repaired</option><option>Closed</option><option value="__leaking">Leaking now</option><option value="__repair">Repair required</option><option value="__overdue">Overdue only</option><option value="__needs_eng">Needs engineer input</option><option value="__outstanding">Outstanding (not resolved)</option><option value="__complete">Complete (Repaired + Closed)</option></select>
             <select id="filType" class="select"><option value="" selected>All types</option></select>
             <div class="search-input-wrap">
-              <input id="filSearch" class="input" type="search" placeholder="Search tag, description, SAP… (press / to focus)">
+              <input id="filSearch" class="input" type="search" placeholder="Search tag, description or SAP number" title="Press / to jump to search">
             </div>
             <button class="btn" data-variant="outline" id="btnResetFilters" type="button">Reset filters <span id="filActiveBadgeWrap" class="t-badge" data-open="false"><span id="filActiveBadge" class="filter-active-badge t-badge-dot">0</span></span></button>
           </div>
@@ -427,7 +427,7 @@
             <button class="btn" data-variant="outline" id="btnClearLoc" type="button" style="height: 36px;">Clear</button>
           </div>
         </div>
-        <div class="hint">Click the map to drop the pin, use GPS, or paste "lat, lng" (e.g. copied from Google Maps) into either box. Optional — used for the dashboard map.</div>
+        <div class="hint">Click the map, use GPS, or paste coordinates copied from Google Maps (for example 13.0977, 100.8872) into either box. Optional — shown on the dashboard map.</div>
       </div>
       <div class="loc-map"><div id="fMap"></div></div>
       </div>
@@ -478,7 +478,7 @@
               <span>Actively Leaking</span>
             </label>
             <span class="hint" style="margin:0;">Pressure boundary breached — product escaping now.</span>
-            <div class="hint" id="leakHint" style="display:none; color:#dc2626; margin:0; font-weight:600;">Disabled for coating or support defects</div>
+            <div class="hint" id="leakHint" style="display:none; color:#dc2626; margin:0; font-weight:600;">Not applicable to coating or support defects</div>
           </div>
           <div class="full">
             <label class="f-label" for="fDescription">Anomaly Description</label>
@@ -504,7 +504,7 @@
     <div class="panel" id="editPhotoPanel" style="display:none;">
       <div class="panel-h">
         <h2>Photographic Record</h2>
-        <span class="hint" style="margin:0;">Tip: paste a screenshot with <kbd>Ctrl</kbd>+<kbd>V</kbd> (uses the last "+ Add" you clicked)</span>
+        <span class="hint" style="margin:0;">Tip: press <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste a screenshot into the group whose "+ Add" you used last</span>
       </div>
       <div class="panel-b">
         <div class="photo-group">
@@ -752,7 +752,7 @@
         <div class="fgrid">
           <div class="full">
             <label class="f-label" for="fReportLink">Source Inspection Report (SharePoint link)</label>
-            <input id="fReportLink" class="input" type="url" placeholder="https://…  paste the SharePoint link to the source report">
+            <input id="fReportLink" class="input" type="url" placeholder="https://… (SharePoint link to the source report)">
           </div>
           <div class="maintenance-only">
             <label class="f-label" for="fTargetDate">Target Repair Date</label>
@@ -798,8 +798,8 @@
         <div class="assess-inputs">
         <p class="hint" id="aIntro" style="margin-top:0;">
           Pipe size, schedule and design pressure turn the wall-loss depth into the ASME B31.3 result.
-          <b>Don't know them?</b> Save anyway — the finding and its depth are kept, and an engineer completes
-          this later (choosing the Line No. fills it from the line list).
+          <b>Not known yet?</b> Save the finding anyway — the depth is kept, and an engineer can complete
+          the assessment later (selecting the Line No. fills these values from the line list).
         </p>
         <div class="fgrid">
           <div>
@@ -916,33 +916,33 @@
     </div>
 
     <div class="risk-head">
-      <p class="risk-sub">Piping lines ranked by worst-case ASME B31.3 status across their findings — a qualitative screening tool, not API 581 quantitative POF.</p>
+      <p class="risk-sub">Piping lines ranked by the most severe ASME B31.3 status among their findings. This is a qualitative screening, not an API 581 quantitative risk assessment.</p>
     </div>
 
     <div class="risk-kpi-band">
-      <div class="risk-kpi rk-total" id="rkCardTotal" data-band="" title="Click to show all lines">
-        <div class="rk-label">Lines w/ Findings</div>
+      <div class="risk-kpi rk-total" id="rkCardTotal" data-band="" title="Show all lines">
+        <div class="rk-label">Lines with findings</div>
         <div class="rk-num" id="riskKpiTotal">0</div>
       </div>
-      <div class="risk-kpi rk-high" id="rkCardHigh" data-band="high" title="Click to filter High Risk lines">
+      <div class="risk-kpi rk-high" id="rkCardHigh" data-band="high" title="Show only high-risk lines">
         <div class="rk-label">High Risk</div>
         <div class="rk-num" id="riskKpiHigh">0</div>
-        <div class="rk-sub">≥ 1 REPAIR-status finding</div>
+        <div class="rk-sub">At least one finding at REPAIR</div>
       </div>
-      <div class="risk-kpi rk-med" id="rkCardMed" data-band="medium" title="Click to filter Medium Risk lines">
+      <div class="risk-kpi rk-med" id="rkCardMed" data-band="medium" title="Show only medium-risk lines">
         <div class="rk-label">Medium Risk</div>
         <div class="rk-num" id="riskKpiMed">0</div>
-        <div class="rk-sub">MONITOR, no repair yet</div>
+        <div class="rk-sub">Most severe finding at MONITOR</div>
       </div>
-      <div class="risk-kpi rk-low" id="rkCardLow" data-band="low" title="Click to filter Low Risk lines">
+      <div class="risk-kpi rk-low" id="rkCardLow" data-band="low" title="Show only low-risk lines">
         <div class="rk-label">Low Risk</div>
         <div class="rk-num" id="riskKpiLow">0</div>
-        <div class="rk-sub">within allowable limits</div>
+        <div class="rk-sub">All findings within limits</div>
       </div>
-      <div class="risk-kpi rk-na" id="rkCardNa" data-band="na" title="Click to filter Not Assessed lines">
+      <div class="risk-kpi rk-na" id="rkCardNa" data-band="na" title="Show only lines not yet assessed">
         <div class="rk-label">Not Assessed</div>
         <div class="rk-num" id="riskKpiNa">0</div>
-        <div class="rk-sub">findings, no B31.3 yet</div>
+        <div class="rk-sub">No ASME B31.3 assessment yet</div>
       </div>
     </div>
 
@@ -950,14 +950,14 @@
       <div class="panel">
         <div class="panel-h">
           <h2>Risk band by terminal</h2>
-          <span class="h-note">lines, worst-status per line</span>
+          <span class="h-note">Lines by their most severe status</span>
         </div>
         <div class="panel-b" id="riskTerminalChart"></div>
       </div>
       <div class="panel">
         <div class="panel-h">
           <h2>High-risk lines by damage mechanism</h2>
-          <span class="h-note">what's driving the risk</span>
+          <span class="h-note">Damage mechanisms behind high-risk lines</span>
         </div>
         <div class="panel-b" id="riskMechanismChart"></div>
       </div>
@@ -966,7 +966,7 @@
     <div class="panel">
       <div class="panel-h">
         <h2>Lines ranked by risk</h2>
-        <span class="h-note">worst-first · click a multi-finding line to expand it</span>
+        <span class="h-note">Highest risk first · select a line with several findings to expand it</span>
       </div>
       <div class="tbl-scroll">
         <table class="list risk-table">
@@ -1012,7 +1012,7 @@
             <option value="">All pipe types</option>
             <option>Underground</option><option>Sub Sea</option><option>Piping</option>
           </select>
-          <select id="planShowFilter" class="select" title="Which layers the timeline draws">
+          <select id="planShowFilter" class="select" title="Choose what the timeline shows">
             <option value="both">Inspection + Maintenance</option>
             <option value="inspection">Inspection only</option>
             <option value="maintenance">Maintenance only</option>
@@ -1024,7 +1024,7 @@
     </div>
 
     <div class="risk-head">
-      <p class="risk-sub">Inspection programme by pipe type and terminal, with planned vs. actual months. Maintenance bars are derived from findings' own due dates — they are not editable here.</p>
+      <p class="risk-sub">Inspection programme by pipe type and terminal, showing planned and actual months. Maintenance markers come from the findings' due dates and are changed on each finding, not here.</p>
     </div>
 
     <div class="risk-kpi-band">
@@ -1035,7 +1035,7 @@
       <div class="risk-kpi rk-low" id="pkCardDone">
         <div class="rk-label">Complete</div>
         <div class="rk-num" id="planKpiDone">0</div>
-        <div class="rk-sub">actual end recorded</div>
+        <div class="rk-sub">Actual end date recorded</div>
       </div>
       <div class="risk-kpi rk-med" id="pkCardProg">
         <div class="rk-label">In Progress</div>
@@ -1044,19 +1044,19 @@
       <div class="risk-kpi rk-high" id="pkCardLate">
         <div class="rk-label">Delayed</div>
         <div class="rk-num" id="planKpiLate">0</div>
-        <div class="rk-sub">past planned end, not done</div>
+        <div class="rk-sub">Past the planned end, not complete</div>
       </div>
       <div class="risk-kpi rk-na" id="pkCardDue">
         <div class="rk-label">Findings Due</div>
         <div class="rk-num" id="planKpiDue">0</div>
-        <div class="rk-sub">maintenance overlay</div>
+        <div class="rk-sub">From finding due dates</div>
       </div>
     </div>
 
     <div class="panel">
       <div class="panel-h">
         <h2>Programme Timeline</h2>
-        <span class="h-note" id="planGanttNote">planned vs. actual, by month</span>
+        <span class="h-note" id="planGanttNote">Planned and actual, by month</span>
       </div>
       <div class="panel-b">
         <div class="gantt-scroll" id="planGantt"></div>
@@ -1066,7 +1066,7 @@
     <div class="panel">
       <div class="panel-h">
         <h2>Plans &amp; Tasks</h2>
-        <span class="h-note">click a plan to expand its tasks</span>
+        <span class="h-note">Select a plan to show its tasks</span>
       </div>
       <div class="tbl-scroll">
         <table class="list plan-table">
@@ -1120,7 +1120,7 @@
               <thead>
                 <tr>
                   <th>Pipe Tag</th><th>Terminal</th><th>NPS</th><th>Schedule</th><th>Material</th>
-                  <th>P design</th><th>P&amp;ID</th><th>Service</th><th></th>
+                  <th>Design P</th><th>P&amp;ID</th><th>Service</th><th></th>
                 </tr>
               </thead>
               <tbody id="lineListTableBody"></tbody>
@@ -1129,8 +1129,8 @@
         </div>
         <div id="lineListUnlistedTab" style="display:none;">
           <p class="hint" style="margin:0 0 6px;">
-            Pipe tags used on findings but not yet in the master list — their NPS/Schedule/Material
-            can't auto-fill on new findings until an engineer adds them here (via Import).
+            Pipe tags used on findings that are not in the master list yet. Their NPS, schedule and
+            material cannot be filled in automatically until they are added through Import.
           </p>
           <div class="tbl-scroll">
             <table class="list">
@@ -1223,7 +1223,7 @@
           <div class="panel-h"><h2>Parameters & Readings</h2></div>
           <div class="panel-b">
             <p class="hint" style="margin-top:0;">
-              Scratch what-if calculation — nothing here is saved.
+              What-if calculation — nothing on this page is saved.
             </p>
 
             <div class="quick-spec-bar" id="qSpecBar">
@@ -1249,7 +1249,7 @@
               <div>
                 <label class="f-label" for="qTnom">Nominal Thickness (mm)</label>
                 <input id="qTnom" class="input" type="number" step="0.01" placeholder="auto from schedule">
-                <div class="hint">Auto-filled from schedule; edit for as-built.</div>
+                <div class="hint">Auto-filled from the schedule; edit for an as-built value.</div>
               </div>
             </div>
 
@@ -1397,7 +1397,7 @@
         <div class="panel" id="detailPanelPhotos">
           <div class="panel-h">
             <h2>Photographic Record</h2>
-            <span class="hint" style="margin:0;">Tip: paste a screenshot with <kbd>Ctrl</kbd>+<kbd>V</kbd> (uses the last “+ Add” you clicked)</span>
+            <span class="hint" style="margin:0;">Tip: press <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste a screenshot into the group whose “+ Add” you used last</span>
           </div>
           <div class="panel-b">
             <div class="photo-group">

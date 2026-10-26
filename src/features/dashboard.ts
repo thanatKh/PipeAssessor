@@ -7,7 +7,7 @@
    CSV export helpers shared with import-export. Extracted from the app monolith.
    ============================================================================ */
 import L from 'leaflet';
-import { $, esc, notify, fmtDate, isOverdue, dueDateOf, pillHtml, inspectionDateIssue } from '../core/dom';
+import { $, esc, notify, fmtDate, isOverdue, dueDateOf, pillHtml, inspectionDateIssue, friendlyError } from '../core/dom';
 import { FINDING_TYPE_SHORT, STATUS_COLORS, TYPE_COLORS, SEVERITY_COLORS, DEFAULT_MAP_VIEW, SAT_TILES, R2_PUBLIC_BASE, WALL_LOSS_TYPES } from '../core/constants';
 import { paFmtBahtShort } from '../engine/format';
 import { sb } from '../core/supabase';
@@ -99,7 +99,7 @@ export async function loadFindings() {
   latestAssessByFinding = new Map();
   usable.forEach(a => { if (!latestAssessByFinding.has(a.finding_id)) latestAssessByFinding.set(a.finding_id, a); });
   integrityCache = new Map();
-  if (fq.error) { notify('Load failed: ' + fq.error.message, true); return; }
+  if (fq.error) { notify('Could not load the findings. ' + friendlyError(fq.error), true); return; }
   setFindings(fq.data || []);
   // DEV ONLY (break-ui): ?data=worst|empty|one|huge swaps in a worst-case fixture at the data
   // boundary, plus a small toggle to flip between them. The production build drops this branch.
@@ -284,9 +284,9 @@ export function renderKpis() {
   // ---- Needs attention: the four lists to act on today, with their first findings by name
   const groups = [
     { key: 'leak', label: 'Leaking now', filter: '__leaking', icon: 'alert', rows: findings.filter(isLeakingNow),
-      note: 'Pressure boundary breached — containment first.', none: 'No finding is actively leaking.' },
+      note: 'Pressure boundary breached — contain the leak first.', none: 'No finding is actively leaking.' },
     { key: 'repair', label: 'Repair required', filter: '__repair', icon: 'wrench', rows: findings.filter(isRepairRequired),
-      note: 'Integrity: REPAIR — the wall or the defect needs repair.', none: 'No finding needs repair right now.' },
+      note: 'The wall or the defect needs repair.', none: 'No finding needs repair right now.' },
     { key: 'eng', label: 'Needs engineer', filter: '__needs_eng', icon: 'ruler', rows: findings.filter(needsEngineer),
       note: 'No Line No. or no assessment yet.', none: 'Every open finding has a Line No. and an assessment.' },
     { key: 'due', label: 'Overdue', filter: '__overdue', icon: 'clock', rows: findings.filter(isOverdue),
@@ -384,18 +384,30 @@ function renderTrend() {
   const cols = months.map((x, i) => {
     const label = `${MONTHS[x.m]} ${x.y}: ${x.n} new finding${x.n === 1 ? '' : 's'}`;
     const h = x.n ? Math.max(4, Math.round((x.n / max) * 100)) : 0;
-    return `<div class="tr-col" title="${label}">
-      <div class="tr-plot">${i === peakIdx ? `<span class="tr-peak">${x.n}</span>` : ''}<span class="tr-bar" style="height:${h}%;"></span></div>
-      <span class="tr-m">${MONTHS[x.m][0]}</span>
-    </div>`;
+    return `<button type="button" class="tr-col" title="${label}" aria-label="${label}" data-read="${label}">
+      <span class="tr-plot">${i === peakIdx ? `<span class="tr-peak">${x.n}</span>` : ''}<span class="tr-bar" style="height:${h}%;"></span></span>
+      <span class="tr-m"><span class="tr-m-s">${MONTHS[x.m][0]}</span><span class="tr-m-l">${MONTHS[x.m]}</span></span>
+    </button>`;
   }).join('');
   const aria = 'New findings per month, ' + months.map(x => `${MONTHS[x.m]} ${x.y} ${x.n}`).join(', ');
-  $('trendChart').innerHTML = `<div class="trend" role="img" aria-label="${aria}">${cols}</div>`;
+  $('trendChart').innerHTML = `<div class="trend" role="group" aria-label="${aria}">${cols}</div>`;
   const first = months[0], last = months[11];
   $('trendRange').textContent = `${MONTHS[first.m]} ${first.y} – ${MONTHS[last.m]} ${last.y}`;
   const total12 = months.reduce((s, x) => s + x.n, 0);
   const resolved = findings.filter(isResolved).length;
-  $('trendNote').textContent = `${total12} new in 12 months · ${resolved} resolved so far`;
+  const note = $('trendNote');
+  const defaultNote = `${total12} new in 12 months · ${resolved} resolved so far`;
+  note.textContent = defaultNote;
+  // A bar's value is readable by hover, keyboard focus or a tap — not only a native tooltip.
+  const cols$ = [...$('trendChart').querySelectorAll('.tr-col')];
+  const show = (c) => { cols$.forEach(x => x.classList.toggle('is-read', x === c)); note.textContent = c ? c.dataset.read : defaultNote; };
+  cols$.forEach(c => {
+    c.addEventListener('mouseenter', () => show(c));
+    c.addEventListener('focus', () => show(c));
+    c.addEventListener('click', () => show(c));
+    c.addEventListener('mouseleave', () => show(null));
+    c.addEventListener('blur', () => show(null));
+  });
 }
 
 // Outstanding repair budget: Σ estimated_cost over findings not yet Repaired/Closed, with a
@@ -683,7 +695,7 @@ export function renderTable(rows) {
         <header>
           <figure>${EMPTY_ICON}</figure>
           <h2>${hasAnyFindings ? 'No findings match the current filters.' : 'No findings recorded yet.'}</h2>
-          <p>${hasAnyFindings ? 'Try a different terminal, status, or search term.' : 'Use “+ New Finding” to add the first one.'}</p>
+          <p>${hasAnyFindings ? 'Try a different terminal, status, or search term.' : 'Use “New finding” to add the first one.'}</p>
         </header>
       </div>
     </td></tr>`;
@@ -878,7 +890,7 @@ export function toggleMapPresentation(forceState?: boolean) {
   // Icon-only — title carries the visible tooltip/shortcut hint; aria-label carries the same text
   // as the accessible name, since title alone isn't reliably exposed to screen readers on a button
   // with no visible text content.
-  const presLabel = isPres ? 'Exit presentation mode (ESC)' : 'Toggle full-screen presentation mode (press F)';
+  const presLabel = isPres ? 'Exit presentation (Esc)' : 'Full-screen presentation (F)';
   btn.title = presLabel;
   btn.setAttribute('aria-label', presLabel);
 
@@ -891,7 +903,7 @@ export function toggleMapPresentation(forceState?: boolean) {
     if (isPres) {
       const activePts = lastRenderedRows.filter(f => f.lat != null && f.lng != null);
       const overduePts = activePts.filter(isOverdue).length;
-      summary.textContent = `${activePts.length} Pins • ${overduePts} Overdue`;
+      summary.textContent = `${activePts.length} on the map · ${overduePts} overdue`;
     }
   }
 
@@ -972,7 +984,7 @@ export function renderPresSidebar(rows) {
   if (countEl) countEl.textContent = `${pts.length}`;
 
   if (!pts.length) {
-    container.innerHTML = `<div class="pres-sidebar-empty">No mapped findings in current view</div>`;
+    container.innerHTML = `<div class="pres-sidebar-empty">No findings with a map location in this view.</div>`;
     return;
   }
 
