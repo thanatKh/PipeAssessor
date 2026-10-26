@@ -43,12 +43,13 @@
       display: flex; align-items: center; gap: var(--sp-12);
       padding: var(--sp-12) var(--sp-14);
       background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 8px;
+      border: 0;
+      border-radius: var(--card-radius);
+      box-shadow: var(--card-shadow);
       color: var(--text-color);
       text-decoration: none;
     }
-    @media (hover: hover) and (pointer: fine) { .guest-calc-card:hover { border-color: var(--button-primary); box-shadow: 0 2px 10px rgb(15 23 42 / 0.08); } }
+    @media (hover: hover) and (pointer: fine) { .guest-calc-card:hover { box-shadow: 0 0 0 1px var(--button-primary), var(--card-shadow); } }
     .guest-calc-card:focus-visible { outline: 2px solid var(--button-primary); outline-offset: 2px; }
     .gcc-icon {
       flex: none; width: 40px; height: 40px; border-radius: 8px;
@@ -238,15 +239,15 @@
     .attn-card, .dcard, #viewList .panel {
       background: var(--card-bg);
       border: 0;
-      border-radius: 14px;
-      box-shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 2px 8px rgb(15 23 42 / 0.04);
+      border-radius: var(--card-radius);
+      box-shadow: var(--card-shadow);
     }
     #viewList .panel { margin-bottom: 0; }
 
     /* Needs attention */
     .attn-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--sp-14); }
     .attn-card { padding: var(--sp-14) var(--sp-16); display: flex; flex-direction: column; gap: var(--sp-8); min-width: 0; }
-    .attn-card.active { box-shadow: 0 0 0 2px var(--button-primary), 0 2px 8px rgb(15 23 42 / 0.06); }
+    .attn-card.active { box-shadow: 0 0 0 2px var(--button-primary), var(--card-shadow); }
     .attn-head {
       display: flex; align-items: center; gap: var(--sp-10); width: 100%;
       padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer;
@@ -859,7 +860,7 @@
       height: 100%;
       background: var(--card-bg, #ffffff);
       border: 1px solid var(--card-border, #e2e8f0);
-      border-radius: 8px;
+      border-radius: var(--card-radius);
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -1116,7 +1117,7 @@
     }
 
     .panel.is-leaking {
-      border-color: #fca5a5 !important;
+      box-shadow: 0 0 0 1px #fca5a5, var(--card-shadow) !important;
       background-color: rgba(254, 242, 242, 0.3) !important;
     }
 
@@ -1723,6 +1724,35 @@
     .sel-bar[hidden] {
       display: none;
     }
+    .sel-bar .link-btn { margin-left: 0; }
+    #btnSelExport { margin-left: auto; }
+
+    /* Pinned while the register scrolls (laptop/desktop; phones keep the plain flow — too short):
+       the selection bar under the app header, the column headers under it (--sel-bar-h, set by
+       updateSelectionUI, is 0 when no row is selected). Sticky needs no clipping scroll container
+       in between: the panel's overflow:hidden becomes overflow:clip (still clips the round
+       corners, but is not a scroll container) and the table's horizontal-scroll wrapper is not
+       needed here because the table is table-layout: fixed above 640px. */
+    @media (min-width: 641px) {
+      #viewList .dash-list-panel { overflow: clip; }
+      #viewList .dash-list-panel .tbl-scroll { overflow-x: visible; }
+      #viewList .sel-bar {
+        position: sticky;
+        top: var(--app-header-h, 64px);
+        z-index: 6;
+        margin-inline: 0;
+        border-inline: 0;
+        border-radius: 0;
+        box-shadow: 0 6px 12px -8px rgb(15 23 42 / 0.25);
+      }
+      #viewList .register-table thead th {
+        position: sticky;
+        top: calc(var(--app-header-h, 64px) + var(--sel-bar-h, 0px));
+        z-index: 5;
+        background: var(--card-bg);
+        box-shadow: inset 0 -1px 0 var(--card-border);
+      }
+    }
     .link-btn {
       background: none;
       border: none;
@@ -1876,7 +1906,7 @@
     #fMap {
       height: 260px;
       border: 1px solid var(--card-border);
-      border-radius: 8px;
+      border-radius: var(--inner-radius);
       z-index: 1;
     }
 
@@ -1917,7 +1947,7 @@
       padding: var(--sp-12);
       background: var(--bg-color);
       border: 1px solid var(--card-border);
-      border-radius: 8px;
+      border-radius: var(--inner-radius);
     }
 
     .a-advanced { margin-top: var(--sp-6); }
@@ -1967,7 +1997,7 @@
       padding: var(--sp-10) var(--sp-12);
       background: var(--bg-color);
       border: 1px solid var(--card-border);
-      border-radius: 8px;
+      border-radius: var(--inner-radius);
       font-size: var(--fs-base);
     }
     .a-depth-ref a { color: var(--button-primary); font-weight: 600; }
@@ -2144,7 +2174,7 @@
       align-items: center;
       gap: var(--sp-24);
       padding: var(--sp-16) var(--sp-24) var(--sp-16) var(--sp-32);
-      border-radius: 14px;
+      border-radius: var(--card-radius);
       background: var(--hb-fill);
       box-shadow: inset 8px 0 0 var(--hb-spine);
       color: #ffffff;
@@ -2171,9 +2201,9 @@
       gap: var(--sp-6);
       min-height: 0;
       padding: var(--sp-14) var(--sp-20);
-      border-radius: 16px;
+      border-radius: var(--card-radius);
       background: var(--card-bg);
-      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 16px rgba(15, 23, 42, 0.05);
+      box-shadow: var(--card-shadow);
       overflow: hidden;
     }
     .cp-tile-h { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-8); font-size: var(--fs-lg); font-weight: 600; color: var(--text-color); }
@@ -2215,7 +2245,7 @@
       align-items: baseline;
       gap: var(--sp-6);
       padding: var(--sp-6) var(--sp-10);
-      border-radius: 10px;
+      border-radius: var(--inner-radius);
       background: var(--bg-color);
       font-size: var(--fs-sm);
       color: var(--text-muted);
@@ -2249,7 +2279,7 @@
       padding: var(--sp-8) var(--sp-12);
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: 8px;
+      border-radius: var(--inner-radius);
     }
     .preset-label {
       font-size: var(--fs-sm);
@@ -2284,7 +2314,7 @@
       padding: var(--sp-10) var(--sp-14);
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: 8px;
+      border-radius: var(--inner-radius);
       margin-bottom: var(--sp-14);
       font-size: var(--fs-base);
     }
@@ -2425,7 +2455,7 @@
     .photo-thumb {
       position: relative;
       border: 1px solid var(--card-border);
-      border-radius: 8px;
+      border-radius: var(--inner-radius);
       overflow: hidden;
       aspect-ratio: 4 / 3;
       background: var(--bg-color);
@@ -2494,7 +2524,7 @@
       gap: var(--sp-12);
       padding: var(--sp-14) var(--sp-16);
       border: 1.5px dashed var(--card-border);
-      border-radius: 8px;
+      border-radius: var(--inner-radius);
       background: var(--bg-color);
       cursor: pointer;
     }
@@ -2513,7 +2543,7 @@
       aspect-ratio: 4 / 3;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-6);
       border: 1.5px dashed var(--card-border);
-      border-radius: 8px;
+      border-radius: var(--inner-radius);
       background: var(--bg-color);
       color: var(--text-muted);
       font: inherit; font-size: var(--fs-sm); font-weight: 600;
@@ -2725,7 +2755,7 @@
       translate: -50% -50%;
       margin: 0;
       border: 1px solid var(--card-border);
-      border-radius: 8px;
+      border-radius: var(--card-radius);
       background: var(--card-bg);
       color: var(--text-color);
       padding: 0;
@@ -2964,7 +2994,7 @@
 
     .risk-kpi-band { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--sp-12); margin-bottom: var(--sp-14); }
     .risk-kpi {
-      background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px;
+      background: var(--card-bg); border: 0; border-radius: var(--card-radius); box-shadow: var(--card-shadow);
       padding: var(--sp-14) var(--sp-16); position: relative; overflow: hidden;
     }
     .risk-kpi::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
@@ -3077,11 +3107,10 @@
     }
     @media (hover: hover) and (pointer: fine) { .risk-kpi:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+      box-shadow: var(--card-shadow), 0 8px 24px rgba(15, 23, 42, 0.08);
     } }
     .risk-kpi.active {
-      border-color: var(--button-primary, #156B95) !important;
-      box-shadow: 0 0 0 2px var(--button-primary, #156B95) !important;
+      box-shadow: 0 0 0 2px var(--button-primary, #156B95), var(--card-shadow) !important;
     }
 
     @media (max-width: 900px) {

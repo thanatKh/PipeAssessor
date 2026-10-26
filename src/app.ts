@@ -582,6 +582,7 @@ function initApp() {
     applyPhotoToggle(hidden, true);
   });
   $('btnExport').addEventListener('click', openExportDialog);
+  $('btnSelExport').addEventListener('click', openExportDialog); // same dialog; it exports the selection
   $('exportCancel').addEventListener('click', () => closeDialog($('exportDlg')));
   $('exportRun').addEventListener('click', runExport);
   $('btnImport').addEventListener('click', openImportDialog);

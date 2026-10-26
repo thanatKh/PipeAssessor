@@ -797,6 +797,8 @@ export function updateSelectionUI() {
     bar.hidden = true;
     swapText(btn, 'Export');
   }
+  // The pinned column headers sit just below the pinned selection bar (app.css) — tell them its height.
+  bar.closest('.dash-list-panel')?.style.setProperty('--sel-bar-h', bar.hidden ? '0px' : `${bar.offsetHeight}px`);
 }
 
 // Tag combobox options: union of findings' own history and the master line list, each paired

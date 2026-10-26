@@ -31,6 +31,13 @@
   --destructive: var(--danger-color);
   --destructive-foreground: #ffffff;
   --radius: 0.5rem;
+  /* One card style for the whole app (from the Quick Calc presentation tiles): no border - the
+     first shadow layer is a faint 1px ring that draws the edge, then a tight contact shadow and a
+     wide soft one. Page-level cards use --card-radius; blocks nested inside a card use
+     --inner-radius; controls keep Basecoat's --radius (6-8px), so corners still tell what is clickable. */
+  --card-radius: 16px;
+  --inner-radius: 10px;
+  --card-shadow: 0 0 0 1px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 16px rgba(15, 23, 42, 0.05);
 }
 
 :root {
@@ -520,8 +527,9 @@ body.is-loading .page-loading-bar {
    ============================================================================ */
 .panel {
   background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 8px;
+  border: 0;
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
   margin-bottom: var(--sp-14);
   overflow: hidden;
 }
@@ -565,7 +573,7 @@ body.is-loading .page-loading-bar {
   gap: var(--sp-16);
   padding: var(--sp-12) var(--sp-16);
   border-left: 5px solid var(--hb-spine);
-  border-radius: var(--radius);
+  border-radius: var(--card-radius);
   background: var(--hb-fill);
   color: #fff;
   margin-bottom: var(--sp-14);
@@ -772,7 +780,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   color: var(--text-muted);
   background: var(--warn-bg);
   border: 1px solid var(--warn-border);
-  border-radius: 8px;
+  border-radius: var(--inner-radius);
   padding: var(--sp-10) var(--sp-12);
 }
 
@@ -868,7 +876,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   padding: var(--sp-16);
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  border-radius: 8px;
+  border-radius: var(--inner-radius);
 }
 
 .pressure-gauge-labels {
@@ -1051,7 +1059,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 .advisor-container {
   display: flex;
   flex-direction: column;
-  border-radius: 8px;
+  border-radius: var(--inner-radius);
   background: var(--card-bg, #ffffff);
   border: 1px solid var(--card-border, #e2e8f0);
   /* Clips .advisor-header-card's square corners to match the container's rounded ones, now that
@@ -1273,7 +1281,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 .eq-sub-container {
   background: var(--svg-bg);
   border: 1px solid var(--card-border);
-  border-radius: 8px;
+  border-radius: var(--inner-radius);
   padding: var(--sp-12);
   margin-top: var(--sp-10);
   margin-bottom: var(--sp-14);
