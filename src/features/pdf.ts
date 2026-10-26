@@ -15,7 +15,8 @@ import { paFmtDate, paFmtDateTime } from '../engine/format';
 import { OR_LOGO_DATAURL } from '../engine/branding';
 import { registerGoogleSansFonts } from '../engine/fonts';
 import { PA_SCOPE_TEXT, paCrossSectionPng, resolveIntegrityBanner } from '../workbench/assess-view';
-import { resolveAdvisor } from '../workbench/repair-advisor';
+import { resolveAdvisor, advisorBanner } from '../workbench/repair-advisor';
+import { PA_LABELS, paLabelText, paPressureUsePct, paLimitGap } from '../workbench/labels';
 import { tempRepairRows, tempRepairHeadline, tempRepairResultColor } from '../workbench/temp-repair';
 import {
   findings, filters, selectedIds, current, currentPhotos, currentHistory, currentAssessments,
@@ -23,6 +24,7 @@ import {
 } from '../core/state';
 import { applyFilters, sortFindings, ageDays, photoUrl } from './dashboard';
 import { resFromSnapshot, erfNo, materialName, fmtN } from './detail';
+import { snapshotHasReading } from '../workbench/assess-view';
 import { exportCsv } from './import-export';
 import { sb } from '../core/supabase';
 
@@ -43,7 +45,7 @@ export const PDF_PANEL = '#f1f5f9';     // neutral panel fill (title-block heade
 
 /* ---------------------------------------------------------------------------------------------
    Monochrome ink ramp — the document chrome of the ENGINEERING REPORTS (buildFindingPdf,
-   buildQuickCalcPdf, buildSummaryPdf). Those three are black/gray/white documents: color in them
+   buildQuickCalcPdf, buildSummaryPdf, buildPlanPdf). Those four are black/gray/white documents: color in them
    carries meaning and nothing else, so structure (titles, section headers, rules, table heads,
    label columns, equation headings) is drawn in ink, and the only colored marks left are the
    semantic ones — the integrity health banner, the ASME B31.3 status band, PASS/CHECK verdicts,
@@ -55,11 +57,11 @@ export const PDF_PANEL = '#f1f5f9';     // neutral panel fill (title-block heade
    #e2e8f0 / #f8fafc) are blue-tinted, so a page built from them still felt faintly blue even with
    every navy element removed.
 
-   The two PRESENTATION outputs keep the app's own web palette on purpose and must not be
-   converted: buildSlidesPdf deliberately mirrors the web UI (theme.css tokens, the teal->sky
-   header gradient) because it is a projected meeting deck, not a document, and buildPlanPdf's
-   Gantt needs categorical hues to separate task states. Both still read PDF_NAVY / PDF_TEXT /
-   PDF_MUTED / PDF_BORDER, which is why those four keep their original slate values.
+   buildPlanPdf is a document too (A4, shared chrome): its CHROME is ink like the others, and only
+   its Gantt bars keep categorical hues (task / finding status). The one PRESENTATION output,
+   buildSlidesPdf, keeps the app's web palette on purpose (theme.css tokens, the teal->sky header
+   gradient) because it is a projected meeting deck, not a document — it still reads PDF_NAVY /
+   PDF_TEXT / PDF_MUTED / PDF_BORDER, which is why those four keep their original slate values.
    --------------------------------------------------------------------------------------------- */
 export const PDF_INK = '#000000';        // section headers, titles, rules, table-head text
 export const PDF_INK_SOFT = '#1a1a1a';   // body copy
@@ -283,11 +285,19 @@ export function buildEquationRows(r) {
       label: 'ERF (no CA, current) = P / MAWP', ref: '',
       segs: ['ERF = ', { num: `${fmtN(r.P_input, 2)}`, den: `${fmtN(r.mawp_no, 2)}` }, ` = ${fmtN(erf_no, 3)}`],
     },
-    {
+    // With the wall already at/below CA there is no "with CA reserved" MAWP — say so in words
+    // (same "n/a — wall below CA" as the results table) instead of a fraction over "—".
+    r.mawp_with == null ? {
+      label: 'MAWP (with CA reserved) = 2 · S · E · W · t / (D - 2 · Y · t),  t = max(0, t_meas - CA)', ref: '',
+      segs: [`t = max(0, ${fmtN(r.t_meas, 2)} - ${fmtN(r.ca, 2)}) = 0.00 mm  ->  MAWP n/a — wall below CA`],
+    } : {
       label: 'MAWP (with CA reserved) = 2 · S · E · W · t / (D - 2 · Y · t),  t = max(0, t_meas - CA)', ref: '',
       segs: [`t = ${fmtN(t_use_with, 2)} mm,  MAWP = `, { num: `2 · ${fmtN(r.S, 1)}·${fmtN(r.E, 2)}·${fmtN(r.W, 2)}·${fmtN(t_use_with, 2)}`, den: `${fmtN(r.D, 2)} - 2·${fmtN(r.Y, 2)}·${fmtN(t_use_with, 2)}` }, ` = ${fmtN(r.mawp_with, 2)} ${r.pUnit}`],
     },
-    {
+    erf_with == null ? {
+      label: 'ERF (with CA reserved) = P / MAWP', ref: '',
+      segs: ['ERF n/a — wall below CA'],
+    } : {
       label: 'ERF (with CA reserved) = P / MAWP', ref: '',
       segs: ['ERF = ', { num: `${fmtN(r.P_input, 2)}`, den: `${fmtN(r.mawp_with, 2)}` }, ` = ${fmtN(erf_with, 3)}`],
     },
@@ -309,22 +319,22 @@ export function buildResultsTableBody(r) {
   const life = r.remainingLife !== null ? (r.remainingLife >= 0 ? `${fmtN(r.remainingLife, 2)} years` : '0.00 years (exceeded)') : '—';
   return [
     [{ content: 'THICKNESS', colSpan: 4, styles: { fillColor: PDF_FILL_MID, fontStyle: 'bold', fontSize: 7, textColor: PDF_INK } }],
-    ['Nominal wall thickness t_nom', `${fmtN(r.t_nom, 2)} mm`, '—', ''],
-    ['Remaining wall percentage', `${fmtN(r.pctRemainNom, 1)} %`, '>= 50 %', r.pctRemainNom >= 50 ? 'PASS' : 'CHECK'],
-    ['Required thickness t_req', `${fmtN(r.t_req_noCA, 3)} mm`, '—', ''],
-    ['Required incl. CA (t_req + CA)', `${fmtN(r.t_req_total, 3)} mm`, 't_meas >= t_req + CA', r.margin >= 0 ? 'PASS' : 'CHECK'],
-    [`API 574 structural min t_struct${r.isCsRef ? ' *' : ''}`, `${fmtN(r.t_struct, 2)} mm`, 't_meas >= t_struct', r.t_meas >= r.t_struct ? 'PASS' : 'CHECK'],
-    ['Remaining margin', `${fmtN(r.margin, 3)} mm`, '>= 0', r.margin >= 0 ? 'PASS' : 'CHECK'],
-    [{ content: 'PRESSURE & ERF', colSpan: 4, styles: { fillColor: PDF_FILL_MID, fontStyle: 'bold', fontSize: 7, textColor: PDF_INK } }],
-    ['Design pressure P', `${fmtN(r.P_input, 2)} ${r.pUnit}`, '—', ''],
-    ['MAWP (no CA — current)', `${fmtN(r.mawp_no, 2)} ${r.pUnit}`, '>= P', r.mawp_no >= r.P_input ? 'PASS' : 'CHECK'],
-    ['ERF (no CA — current)', fmtN(erf_no, 3), '<= 1.0', erf_no <= 1.0 ? 'PASS' : 'CHECK'],
-    ['MAWP (with CA reserved)', r.mawp_with == null ? 'n/a — wall below CA' : `${fmtN(r.mawp_with, 2)} ${r.pUnit}`, '>= P', r.mawp_with == null ? '—' : (r.mawp_with >= r.P_input ? 'PASS' : 'CHECK')],
-    ['ERF (with CA reserved)', erf_with == null ? 'n/a' : fmtN(erf_with, 3), '<= 1.0', erf_with == null ? '—' : (erf_with <= 1.0 ? 'PASS' : 'CHECK')],
+    [paLabelText('tNom'), `${fmtN(r.t_nom, 2)} mm`, '—', ''],
+    [paLabelText('pct'), `${fmtN(r.pctRemainNom, 1)} %`, '>= 50 %', r.pctRemainNom >= 50 ? 'PASS' : 'CHECK'],
+    [paLabelText('tReq'), `${fmtN(r.t_req_noCA, 3)} mm`, '—', ''],
+    [paLabelText('tReqCa'), `${fmtN(r.t_req_total, 3)} mm`, 'thinnest wall >= this', r.margin >= 0 ? 'PASS' : 'CHECK'],
+    [`${paLabelText('tStruct')}${r.isCsRef ? ' *' : ''}`, `${fmtN(r.t_struct, 2)} mm`, 'thinnest wall >= this', r.t_meas >= r.t_struct ? 'PASS' : 'CHECK'],
+    [paLabelText('margin'), paLimitGap(r.margin, 3), 'above limit', r.margin >= 0 ? 'PASS' : 'CHECK'],
+    [{ content: 'PRESSURE', colSpan: 4, styles: { fillColor: PDF_FILL_MID, fontStyle: 'bold', fontSize: 7, textColor: PDF_INK } }],
+    [paLabelText('p'), `${fmtN(r.P_input, 2)} ${r.pUnit}`, '—', ''],
+    [paLabelText('mawpNo'), `${fmtN(r.mawp_no, 2)} ${r.pUnit}`, '>= design pressure', r.mawp_no >= r.P_input ? 'PASS' : 'CHECK'],
+    [paLabelText('erfNo'), `${paPressureUsePct(erf_no)} (${fmtN(erf_no, 3)})`, '<= 100% (1.0)', erf_no <= 1.0 ? 'PASS' : 'CHECK'],
+    [paLabelText('mawpCa'), r.mawp_with == null ? 'n/a — wall below CA' : `${fmtN(r.mawp_with, 2)} ${r.pUnit}`, '>= design pressure', r.mawp_with == null ? '—' : (r.mawp_with >= r.P_input ? 'PASS' : 'CHECK')],
+    [paLabelText('erfCa'), erf_with == null ? 'n/a' : `${paPressureUsePct(erf_with)} (${fmtN(erf_with, 3)})`, '<= 100% (1.0)', erf_with == null ? '—' : (erf_with <= 1.0 ? 'PASS' : 'CHECK')],
     [{ content: 'REMAINING LIFE', colSpan: 4, styles: { fillColor: PDF_FILL_MID, fontStyle: 'bold', fontSize: 7, textColor: PDF_INK } }],
-    ['Corrosion allowance CA', `${fmtN(r.ca, 2)} mm`, '—', ''],
-    ['Corrosion rate CR', r.CR > 0 ? `${fmtN(r.CR, 3)} mm/yr` : '—', '—', ''],
-    ['Estimated remaining life', life, '—', ''],
+    [paLabelText('ca'), `${fmtN(r.ca, 2)} mm`, '—', ''],
+    [paLabelText('cr'), r.CR > 0 ? `${fmtN(r.CR, 3)} mm/yr` : '—', '—', ''],
+    [paLabelText('life'), life, '—', ''],
   ];
 }
 
@@ -364,35 +374,133 @@ export function drawSectionHeader(doc, num, title, x, y, right) {
   return chip + 5.6; // total header block height (caller advances y by this)
 }
 
+/* ---------------- shared document chrome (Finding / Quick Calc / Summary / Plan) ----------------
+   The four DOCUMENT PDFs (A4 portrait or landscape) share one type scale, one header/footer, one
+   closing footnote and one integrity band, so they read as one family and none can drift. Each
+   builder used to carry its own copy of all of this (and they had drifted: three header heights,
+   two rule weights, navy vs ink chrome, 5.7 vs 6.5 pt micro text, Summary had no closing).
+   The 16:9 slide deck (buildSlidesPdf) deliberately keeps its own projected-screen scale and web
+   look; it shares the banner wording (resolveIntegrityBanner), DOC REF scheme and footer text. */
+export const DOC_FS = {
+  MICRO: 6.5,    // eyebrow labels, footer attribution, record footnote
+  CAPTION: 7,    // figure captions, muted notes, header sublines in tight spots
+  LABEL: 7.5,    // header DOC REF line, footer primary line, italic notes, equation labels
+  BODY: 8,       // body + table text
+  VALUE: 8.5,    // emphasized values, banner titles, sub-section headings
+  SUMMARY: 9,    // summary counts line (register summary)
+  TITLE: 11,     // header report title, health-banner ERF metric
+  SUB: 13,       // integrity band headline
+  HERO: 13.5,    // top-of-report health banner word
+  LOGO: 15,      // logo-fallback "OR" lettering
+};
+export const DOC_HEADER_H = 18;
+export const DOC_FOOTER_H = 16;
+const DOC_ATTRIBUTION = ['Central and Eastern Engineering and Maintenance Division', 'PTT Oil and Retail Business Public Company Limited'];
+
+// o: { PW, PH, M, title, subline, footerLeft, logo, logoIm, now }. Draws header + footer on the
+// current page; page numbers use the {tp} placeholder resolved by putTotalPages at the end.
+// Idempotent per page: builders call chrome() both after addPage() and from autoTable's
+// didDrawPage, so the same page is often asked twice — drawing twice over-prints the text and
+// makes the header/footer look bold. Each page is drawn once.
+const chromedPages = new WeakMap();
+export function drawDocChrome(doc, o) {
+  const page = doc.internal.getCurrentPageInfo().pageNumber;
+  let seen = chromedPages.get(doc);
+  if (!seen) { seen = new Set(); chromedPages.set(doc, seen); }
+  if (seen.has(page)) return;
+  seen.add(page);
+  const { PW, PH, M } = o;
+  const textOR = () => { doc.setFont('GoogleSans', 'bold'); doc.setFontSize(DOC_FS.LOGO); doc.setTextColor(PDF_INK); doc.text('OR', M, 12); };
+  if (o.logoIm) {
+    const lh = 11, lw = lh * o.logoIm.naturalWidth / o.logoIm.naturalHeight;
+    try { doc.addImage(o.logo, 'PNG', M, 3, lw, lh); } catch (_) { textOR(); }
+  } else textOR();
+  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(DOC_FS.TITLE); doc.setTextColor(PDF_INK);
+  doc.text(o.title, PW - M, 8.5, { align: 'right' });
+  doc.setFont('GoogleSans', 'normal'); doc.setFontSize(DOC_FS.LABEL); doc.setTextColor(PDF_GRAY);
+  doc.text(o.subline, PW - M, 13.5, { align: 'right' });
+  doc.setDrawColor(PDF_INK); doc.setLineWidth(0.8);
+  doc.line(M, DOC_HEADER_H - 1, PW - M, DOC_HEADER_H - 1);
+
+  doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
+  doc.line(M, PH - DOC_FOOTER_H, PW - M, PH - DOC_FOOTER_H);
+  doc.setFont('GoogleSans', 'normal'); doc.setFontSize(DOC_FS.LABEL); doc.setTextColor(PDF_GRAY);
+  doc.text(o.footerLeft, M, PH - DOC_FOOTER_H + 4);
+  doc.text(`Page ${doc.internal.getNumberOfPages()} of {tp}`, PW / 2, PH - DOC_FOOTER_H + 4, { align: 'center' });
+  doc.text(`Generated ${paFmtDateTime(o.now)}`, PW - M, PH - DOC_FOOTER_H + 4, { align: 'right' });
+  doc.setFontSize(DOC_FS.MICRO); doc.setTextColor(PDF_GRAY_LIGHT);
+  doc.text(DOC_ATTRIBUTION, PW / 2, PH - DOC_FOOTER_H + 9, { align: 'center', lineHeightFactor: 1.35 });
+  doc.setTextColor(PDF_INK_SOFT);
+}
+
+// Paperless record footnote + end marker — the same close on every document PDF (no signature
+// block: this is a paperless system). Caller reserves ~24 mm first. Returns the new y.
+export const DOC_CLOSING_H = 24;
+export function drawDocClosing(doc, M, PW, y, detailLine) {
+  y += 4;
+  doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
+  doc.line(M, y, PW - M, y);
+  y += 4;
+  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(DOC_FS.MICRO); doc.setTextColor(PDF_GRAY);
+  doc.text('System-generated record via Pipe Assessor — paperless piping-integrity system. No physical signature required.', M, y);
+  y += 3.6;
+  doc.text(detailLine, M, y);
+  y += 9;
+  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(DOC_FS.LABEL); doc.setTextColor(PDF_GRAY_LIGHT);
+  doc.text('— End of Report —', PW / 2, y, { align: 'center' });
+  doc.setTextColor(PDF_INK_SOFT);
+  return y + 4;
+}
+
+// Numbered sub-heading inside a section ("7.2  Wall Thickness Cross-Section") — one level below
+// drawSectionHeader, so a multi-part block (the assessment) reads as ONE section with parts
+// instead of six peers of "Site Location". Returns the vertical space used.
+export function drawSubHeader(doc, num, title, x, y, right) {
+  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(DOC_FS.VALUE); doc.setTextColor(PDF_INK);
+  doc.text(`${num}   ${title}`, x, y + 3.6);
+  doc.setDrawColor(PDF_HAIRLINE); doc.setLineWidth(0.2);
+  doc.line(x, y + 5.4, right, y + 5.4);
+  doc.setTextColor(PDF_INK_SOFT);
+  return 8.5;
+}
+
+// ASME B31.3 integrity band (light tint + colored spine + "INTEGRITY: <status>" + ERF/MAWP/MARGIN),
+// shared by the finding report's assessment section and the Quick Calc result. Returns height used.
+export function drawIntegrityBand(doc, r, M, y, CW, PW) {
+  const erf = r.mawp_no > 0 ? (r.P_input / r.mawp_no) : 9.99;
+  const iColor = r.status === 'OK' ? PDF_OK : r.status === 'MONITOR' ? PDF_WARN : PDF_DANGER;
+  const iTint = r.status === 'OK' ? '#ecfdf5' : r.status === 'MONITOR' ? '#fffbeb' : '#fef2f2';
+  const iText = r.status === 'OK' ? '#15803d' : r.status === 'MONITOR' ? PDF_WARN_MID : '#b91c1c';
+  doc.setFillColor(iTint); doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
+  doc.rect(M, y, CW, 12, 'FD');
+  doc.setFillColor(iColor); doc.rect(M, y, 2, 12, 'F');
+  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(DOC_FS.SUB); doc.setTextColor(iText);
+  doc.text(`INTEGRITY: ${r.status}`, M + 5, y + 7.8);
+  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(DOC_FS.BODY); doc.setTextColor(PDF_INK_SOFT);
+  doc.text(`Pressure use ${paPressureUsePct(erf)}   ·   Max. safe ${fmtN(r.mawp_no, 1)} ${r.pUnit}   ·   ${paLimitGap(r.margin, 2, 'min. + CA')}`, PW - M - 4, y + 7.8, { align: 'right' });
+  return 16;
+}
+
 export async function buildFindingPdf() {
   const f = current;
   const { jsPDF } = await import('jspdf'); const { default: autoTable } = await import('jspdf-autotable');
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   await registerGoogleSansFonts(doc); // loads Sarabun (Latin + Thai in one face) under the 'GoogleSans' jsPDF font name — use doc.setFont('GoogleSans', ...) below
   const PW = 210, PH = 297, M = 14, CW = PW - 2 * M;
-  const HEADER_H = 18, FOOTER_H = 16;
-  let y = 0, secNum = 0, figNum = 0;
+  const HEADER_H = DOC_HEADER_H, FOOTER_H = DOC_FOOTER_H;
+  let y = 0, secNum = 0, subNum = 0, figNum = 0;
 
-  // Type scale — consolidated from 11 ad hoc literals (5.7/6.5/6.8/7/7.5/8/8.5/11/13/13.5/15) down
-  // to named roles. tbCell's per-cell `opts.fs` overrides (8.5/8/9.5/9/7.5) are left as-is — they're
-  // deliberately tuned per grid cell to fit that cell's own content width (short "Severity" gets a
-  // bigger size, longer "Finding Type" gets a smaller one), not meaningless near-duplicates.
-  const FS_MICRO = 5.7;    // smallest — tbCell uppercase eyebrow labels, OVERDUE tag
-  const FS_FOOTER_MICRO = 6.5; // footer division-attribution line, record footnote
-  const FS_CAPTION = 7;    // italic footnote captions — figure captions, standards-note footer
-  const FS_LABEL = 7.5;    // header/footer meta text, muted italic footnotes, bold caveats, eq. row labels
-  const FS_BODY = 8;       // body text — row() labels, table text, descriptions, banner-callout copy
-  const FS_VALUE = 8.5;    // emphasized body — row() values, banner titles, equation fraction digits
-  const FS_TITLE = 11;     // header report title, health-banner ERF metric
-  const FS_SUB = 13;       // assessment "INTEGRITY STATUS:" headline
-  const FS_HERO = 13.5;    // top-of-report health banner hero word
-  const FS_LOGO = 15;      // logo-fallback "OR" lettering
+  // Shared document type scale (DOC_FS). tbCell's per-cell `opts.fs` overrides (8.5/8/9.5/9/7.5)
+  // are left as-is — tuned per grid cell to fit that cell's own content width.
+  const { MICRO: FS_MICRO, CAPTION: FS_CAPTION, LABEL: FS_LABEL, BODY: FS_BODY, VALUE: FS_VALUE,
+    TITLE: FS_TITLE, HERO: FS_HERO } = DOC_FS;
 
   // preload images (each degrades independently). Logo is the embedded base64 from shared.js
   // (offline-safe — same source as the calculator report), with a file fetch as a fallback.
   const logo = (typeof OR_LOGO_DATAURL !== 'undefined' && OR_LOGO_DATAURL) || await fetchAsDataUrl('/RGB_OR_Full color.png', 3000);
   const logoIm = logo ? await loadImg(logo) : null;
-  const mapImg = (f.lat != null && f.lng != null) ? await composeMapPng(f.lat, f.lng, 17, 1000, 500) : null;
+  const hasXY = f.lat != null && f.lng != null;
+  const mapImg = hasXY ? await composeMapPng(f.lat, f.lng, 17, 1000, 500) : null;
   // latest assessment re-computed from its saved inputs (single engine source) + its cross-section
   const assess = currentAssessments.length ? currentAssessments[0] : null;
   const assessRes = assess ? resFromSnapshot(assess) : null;
@@ -444,35 +552,14 @@ export async function buildFindingPdf() {
 
   const now = new Date();
 
-  // Header/footer chrome mirrors calculator.html's buildPdfReport so both reports read as one
-  // family: full-color OR logo left, navy title right, navy rule beneath; hairline footer with
-  // page x/y, generation stamp, and the division attribution.
+  const tagRef = docRefSlug(f.pipe_tag || f.location_desc || f.id.slice(0, 8));
   function chrome() {
-    if (logoIm) {
-      const lw = 26, lh = 26 * logoIm.naturalHeight / logoIm.naturalWidth;
-      try { doc.addImage(logo, 'PNG', M, 3, lw, lh); }
-      catch (_) { doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LOGO); doc.setTextColor(PDF_INK); doc.text('OR', M, 12); }
-    } else {
-      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LOGO); doc.setTextColor(PDF_INK);
-      doc.text('OR', M, 12);
-    }
-    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_TITLE); doc.setTextColor(PDF_INK);
-    doc.text('PIPING ABNORMAL FINDING REPORT', PW - M, 8.5, { align: 'right' });
-    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
-    const tagRef = docRefSlug(f.pipe_tag || f.location_desc || f.id.slice(0, 8));
-    doc.text(`DOC REF: PA-RPT-${tagRef}-${paFmtDate(now).replace(/\s+/g, '')}`, PW - M, 13.5, { align: 'right' });
-    doc.setDrawColor(PDF_INK); doc.setLineWidth(0.8);
-    doc.line(M, HEADER_H - 1, PW - M, HEADER_H - 1);
-
-    doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
-    doc.line(M, PH - FOOTER_H, PW - M, PH - FOOTER_H);
-    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
-    doc.text('Piping integrity — abnormal finding record', M, PH - FOOTER_H + 4);
-    doc.text(`Page ${doc.internal.getNumberOfPages()} of {tp}`, PW / 2, PH - FOOTER_H + 4, { align: 'center' });
-    doc.text(`Generated ${paFmtDateTime(now)}`, PW - M, PH - FOOTER_H + 4, { align: 'right' });
-    doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor(PDF_GRAY_LIGHT);
-    doc.text(['Central and Eastern Engineering and Maintenance Division', 'PTT Oil and Retail Business Public Company Limited'], PW / 2, PH - FOOTER_H + 9, { align: 'center', lineHeightFactor: 1.35 });
-    doc.setTextColor(PDF_INK_SOFT);
+    drawDocChrome(doc, {
+      PW, PH, M, logo, logoIm, now,
+      title: 'PIPING ABNORMAL FINDING REPORT',
+      subline: `DOC REF: PA-RPT-${tagRef}-${paFmtDate(now).replace(/\s+/g, '')}`,
+      footerLeft: 'Piping integrity — abnormal finding record',
+    });
     y = HEADER_H + 4;
   }
 
@@ -484,8 +571,47 @@ export async function buildFindingPdf() {
   // alone at a page foot with its content pushed to the next page.
   function section(t, minBodyHeight = 20) {
     ensure(11.2 + minBodyHeight);
-    secNum++;
+    secNum++; subNum = 0;
     y += drawSectionHeader(doc, secNum, t, M, y, PW - M);
+  }
+  function subsection(t, minBodyHeight = 20) {
+    ensure(8.5 + minBodyHeight);
+    subNum++;
+    y += drawSubHeader(doc, `${secNum}.${subNum}`, t, M, y, PW - M);
+  }
+
+  // Label/value grid shared by the Location / Anomaly / Line sections (two pairs per row). A pair
+  // with full:true takes a whole row so narrative text is never squeezed into half a row, and an
+  // odd trailing pair spans the rest of its row instead of leaving an empty cell pair. `emph` bolds
+  // + colors a value; `url` lays a click-through link over the value cell.
+  function kvTable(pairs) {
+    const cell = (p, span) => ({ content: (p.value == null || p.value === '') ? '—' : String(p.value), colSpan: span,
+      styles: p.emph ? { textColor: p.emph, fontStyle: 'bold' } : {}, url: p.url });
+    const body = [];
+    let pend = null;
+    const flush = () => { if (pend) { body.push([pend.label, cell(pend, 3)]); pend = null; } };
+    pairs.forEach(p => {
+      if (p.full) { flush(); body.push([p.label, cell(p, 3)]); return; }
+      if (pend) { body.push([pend.label, cell(pend, 1), p.label, cell(p, 1)]); pend = null; }
+      else pend = p;
+    });
+    flush();
+    autoTable(doc, {
+      margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
+      startY: y,
+      theme: 'grid',
+      styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.6, lineColor: PDF_RULE, lineWidth: 0.15, textColor: PDF_INK_SOFT },
+      columnStyles: {
+        0: { fontStyle: 'bold', textColor: PDF_GRAY, cellWidth: 32, fillColor: PDF_FILL },
+        1: { cellWidth: 59 },
+        2: { fontStyle: 'bold', textColor: PDF_GRAY, cellWidth: 32, fillColor: PDF_FILL },
+        3: { cellWidth: 59 },
+      },
+      body,
+      didDrawCell: (d) => { if (d.section === 'body' && d.cell.raw && d.cell.raw.url) doc.link(d.cell.x, d.cell.y, d.cell.width, d.cell.height, { url: d.cell.raw.url }); },
+      didDrawPage: () => { if (doc.internal.getNumberOfPages() > 1) chrome(); }
+    });
+    y = doc.lastAutoTable.finalY + 5;
   }
 
   function row(label, value) {
@@ -529,9 +655,9 @@ export async function buildFindingPdf() {
   doc.text(doc.splitTextToSize(hb.line, CW - 62)[0], M + 6, y + 12);
   if (hb.metrics) {
     doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_TITLE); doc.setTextColor('#ffffff');
-    doc.text(`ERF ${hb.metrics.erf}`, PW - M - 5, y + 6.8, { align: 'right' });
+    doc.text(`Pressure use ${hb.metrics.usage}`, PW - M - 5, y + 6.8, { align: 'right' });
     doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_ON_DARK);
-    doc.text(`MAWP ${hb.metrics.mawp}  ·  ${hb.metrics.pct}% wall`, PW - M - 5, y + 11.5, { align: 'right' });
+    doc.text(`Max. safe ${hb.metrics.mawp}  ·  ${hb.metrics.pct}% wall left`, PW - M - 5, y + 11.5, { align: 'right' });
   }
   y += bandH + 3;
 
@@ -592,145 +718,94 @@ export async function buildFindingPdf() {
   }
   y += tbRowH * 2 + 5;
 
-  // (No separate "ACTIVELY LEAKING" bar here — the health banner above already reads
-  // "SEVERITY: CRITICAL" with the same emergency-containment line, so a second red bar was a
-  // duplicate. Leaking is still surfaced in detail by the Repair Advisor's leaking overlay and the
-  // ASME B31.3 Integrity Evaluation Note below.)
+  // Section order = the finding form + detail page order (index.html, .detail-flow comment):
+  // Location -> Anomaly -> Photos -> Temporary Repair -> Line Identification -> Reference & Planning
+  // -> ASME B31.3 Assessment -> Repair Advisor -> Status History. Fields already in the identity grid
+  // above (tag, terminal, type, severity, status, inspection date, recorded by) are NOT repeated.
+  section('Location', mapImg ? 90 : 14);
+  kvTable([
+    { label: 'Location', value: f.location_desc, full: true },
+    { label: 'Coordinates', value: hasXY ? `${Number(f.lat).toFixed(6)}, ${Number(f.lng).toFixed(6)}` : null,
+      url: hasXY ? `https://www.google.com/maps?q=${f.lat},${f.lng}` : null },
+  ]);
+  if (mapImg) {
+    const w = 140, h = w / 2; // satellite canvas is 2:1; 140 mm keeps site context without eating a page
+    ensure(h + 8);
+    const mx = (PW - w) / 2;
+    doc.addImage(mapImg, 'JPEG', mx, y, w, h);
+    doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
+    doc.rect(mx, y, w, h);
+    y += h + 3.5;
+    figNum++;
+    doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_GRAY);
+    doc.text(`Figure ${figNum}: Satellite location pin (${Number(f.lat).toFixed(6)}, ${Number(f.lng).toFixed(6)})`, PW / 2, y, { align: 'center' });
+    doc.setTextColor(PDF_INK_SOFT);
+    y += 6;
+  }
 
-  section('Piping Metadata & Source Inspection', 30);
-  const infoRows = [
-    ['Terminal', f.terminal || '—', 'Inspection Date', paFmtDate(f.inspection_date)],
-    ['Pipe Tag / Line', f.pipe_tag || '—', 'Recorded By', f.created_by_email || '—'],
-    ['P&ID No.', f.pid_no || '—', 'Recorded At', fmtDateTime(f.created_at)],
-    ['Service / Fluid', f.service || '—', 'Source Report', f.report_link ? 'Link Available' : '—'],
-    ['Location', f.location_desc || '—', '', ''],
-  ];
+  section('Anomaly', 26);
+  kvTable([
+    // depth and defect size share a row (kvTable pairs two non-full items)
+    { label: 'Wall-loss depth', value: f.depth_mm != null ? `${f.depth_mm} mm` : null },
+    { label: 'Defect L x W', value: (f.defect_length_mm != null || f.defect_width_mm != null) ? `${f.defect_length_mm ?? '—'} x ${f.defect_width_mm ?? '—'} mm` : null },
+    { label: 'Actively Leaking', value: f.is_leaking ? 'Yes (Boundary Breached)' : 'No', emph: f.is_leaking ? PDF_DANGER : null, full: true },
+    { label: 'Description', value: f.description, full: true },
+  ]);
 
-  autoTable(doc, {
-    margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
-    startY: y,
-    theme: 'grid',
-    styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.6, lineColor: PDF_RULE, lineWidth: 0.15, textColor: PDF_INK_SOFT },
-    columnStyles: {
-      0: { fontStyle: 'bold', textColor: PDF_GRAY, cellWidth: 32, fillColor: PDF_FILL },
-      1: { textColor: PDF_INK_SOFT, cellWidth: 59 },
-      2: { fontStyle: 'bold', textColor: PDF_GRAY, cellWidth: 32, fillColor: PDF_FILL },
-      3: { textColor: PDF_INK_SOFT, cellWidth: 59 },
-    },
-    body: infoRows,
-    didParseCell: (data) => {
-      if (data.section === 'body' && data.row.index === 3 && data.column.index === 3 && f.report_link) {
-        data.cell.styles.textColor = PDF_INK;
-        data.cell.styles.fontStyle = 'bold';
+  // --- Photographic Record ---
+  if (photoData.length) {
+    // reserve = group title (5.5) + one 3-up photo row (~43) + its caption (5): the heading can never
+    // be left alone at a page foot, and the section starts on any page with ~65mm left.
+    section('Photographic Record', 54);
+    // The two temporary-repair groups only ever have items when a stop-leak was recorded, so no
+    // extra guard is needed — `continue` on an empty slice already skips them.
+    for (const [kind, title] of [
+      ['found', 'As Found'],
+      ['temp_before', 'Before Temporary Repair / ก่อนติดตั้ง'],
+      ['temp_after', 'After Temporary Repair / หลังติดตั้ง'],
+      ['repaired', 'After Repair'],
+    ]) {
+      const items = photoData.filter(p => p.kind === kind);
+      if (!items.length) continue;
+      const PER_ROW = 3, gap = 4, cellW = (CW - gap * (PER_ROW - 1)) / PER_ROW;
+      const firstRowRh = Math.max.apply(null, items.slice(0, PER_ROW).map(p => (cellW / p.w) * p.h));
+      ensure(5.5 + firstRowRh + 5);
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_GRAY);
+      doc.text(title.toUpperCase(), M, y + 2.5);
+      y += 5.5;
+      doc.setTextColor(PDF_INK_SOFT);
+      for (let i = 0; i < items.length; i += PER_ROW) {
+        const rowItems = items.slice(i, i + PER_ROW).map(p => {
+          const s = cellW / p.w; // 100% unconstrained true aspect ratio
+          return { src: p.src, w: cellW, h: p.h * s };
+        });
+        const rh = Math.max.apply(null, rowItems.map(d => d.h));
+        ensure(rh + 5); // photo + its 3.5mm caption line
+        rowItems.forEach((d, j) => {
+          const ix = M + j * (cellW + gap) + (cellW - d.w) / 2;
+          doc.addImage(d.src, 'JPEG', ix, y, d.w, d.h);
+          doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
+          doc.rect(ix, y, d.w, d.h);
+          figNum++;
+          doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_GRAY);
+          // Short caption: the group heading above the row already names the group, and at three
+          // photos per row the old "Inspection Photo (Before Temporary Repair / ..., #1)" ran into the
+          // next photo's caption.
+          doc.text(`Figure ${figNum}: photo ${i + j + 1}`, ix + d.w / 2, y + d.h + 3.5, { align: 'center' });
+        });
+        y += rh + 7;
       }
-    }
-  });
-  y = doc.lastAutoTable.finalY + 5;
-
-  section('Anomaly & Damage Mechanics', 26);
-  const anomalyRows = [
-    ['Finding Type', f.finding_type || '—', 'Severity Rating', f.severity || '—'],
-    ['Active Leak State', f.is_leaking ? 'Yes (Boundary Breached)' : 'No (Non-leaking)', 'Defect L x W', (f.defect_length_mm != null || f.defect_width_mm != null) ? `${f.defect_length_mm ?? '—'} x ${f.defect_width_mm ?? '—'} mm` : '—'],
-    ['Nominal Wall t_nom', f.t_nominal != null ? `${fmtN(f.t_nominal, 2)} mm` : '—', 'Measured Min t_meas', f.t_measured != null ? `${fmtN(f.t_measured, 2)} mm` : '—'],
-    ['Description', f.description || '—', '', ''],
-  ];
-
-  autoTable(doc, {
-    margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
-    startY: y,
-    theme: 'grid',
-    styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.6, lineColor: PDF_RULE, lineWidth: 0.15, textColor: PDF_INK_SOFT },
-    columnStyles: {
-      0: { fontStyle: 'bold', textColor: PDF_GRAY, cellWidth: 32, fillColor: PDF_FILL },
-      1: { textColor: PDF_INK_SOFT, cellWidth: 59 },
-      2: { fontStyle: 'bold', textColor: PDF_GRAY, cellWidth: 32, fillColor: PDF_FILL },
-      3: { textColor: PDF_INK_SOFT, cellWidth: 59 },
-    },
-    body: anomalyRows,
-    didParseCell: (data) => {
-      if (data.section === 'body' && data.row.index === 1 && data.column.index === 1 && f.is_leaking) {
-        data.cell.styles.textColor = PDF_DANGER;
-        data.cell.styles.fontStyle = 'bold';
-      }
-    }
-  });
-  y = doc.lastAutoTable.finalY + 5;
-
-  // --- Repair Advisor (always rendered, mirroring the web detail page's independent panel: it is
-  // NOT gated on an assessment existing) — placed after Anomaly so the "recommended action" reads
-  // right after the problem, with the numeric verdict already shown in the page-1 title block. It's
-  // status-aware (OK/MONITOR/REPAIR) and mechanism-aware, and prepends the leaking-overlay safety
-  // block when the finding is actively leaking. ---
-  {
-    const adv = resolveAdvisor(f.finding_type, assessRes, f.is_leaking);
-    if (adv) {
-      // Theme + banner title, mirroring paRenderRepairAdvisor's status/leaking precedence.
-      let aC, aTint, aTxt, aBanner;
-      if (f.is_leaking) { aC = PDF_DANGER; aTint = '#fef2f2'; aTxt = '#b91c1c'; aBanner = 'ACTIVELY LEAKING — EMERGENCY CONTAINMENT (ASME PCC-2)'; }
-      else if (assessRes && assessRes.status === 'REPAIR') { aC = PDF_DANGER; aTint = '#fef2f2'; aTxt = '#b91c1c'; aBanner = 'CRITICAL REPAIR REQUIRED (ASME PCC-2)'; }
-      else if (assessRes && assessRes.status === 'MONITOR') { aC = PDF_WARN; aTint = '#fffbeb'; aTxt = PDF_WARN_MID; aBanner = 'INTEGRITY MONITORING STRATEGY'; }
-      else if (assessRes && assessRes.status === 'OK') { aC = PDF_OK; aTint = '#ecfdf5'; aTxt = '#15803d'; aBanner = 'OPERATIONAL INTEGRITY COMPLIANT'; }
-      else { aC = PDF_INK; aTint = PDF_FILL; aTxt = PDF_INK; aBanner = 'ASME PCC-2 / API 570 GUIDANCE'; }
-
-      section('Repair Advisor', 38);
-
-      // banner callout (light tint + colored spine + banner title + summary), same visual language
-      // as the integrity-status band.
-      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY);
-      const sumLines = doc.splitTextToSize(adv.summary, CW - 8);
-      const bH = 6.5 + sumLines.length * 3.7 + 2.5;
-      ensure(bH + 8);
-      doc.setFillColor(aTint); doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
-      doc.rect(M, y, CW, bH, 'FD');
-      doc.setFillColor(aC); doc.rect(M, y, 2, bH, 'F');
-      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_VALUE); doc.setTextColor(aTxt);
-      doc.text(aBanner, M + 5, y + 5);
-      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_INK_SOFT);
-      doc.text(sumLines, M + 5, y + 9.5);
-      y += bH + 3.5;
-
-      // recommendation items — a title/body table (label column tinted like the metadata tables);
-      // sub-points become their own bulleted lines inside the body cell.
-      const advBody = adv.items.map(it => {
-        const title = it.title || 'คำแนะนำทางวิศวกรรม:';
-        const bodyText = [it.body, ...(it.sub || []).map(s => '•  ' + s)].filter(Boolean).join('\n');
-        return [title, bodyText];
-      });
-      autoTable(doc, {
-        margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
-        startY: y,
-        theme: 'grid',
-        styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.8, lineColor: PDF_HAIRLINE, lineWidth: 0.12, valign: 'top', textColor: PDF_INK_SOFT, overflow: 'linebreak' },
-        columnStyles: {
-          0: { fontStyle: 'bold', textColor: PDF_INK, cellWidth: 50, fillColor: PDF_FILL },
-          1: { textColor: PDF_INK_SOFT },
-        },
-        body: advBody,
-        didDrawPage: () => { if (doc.internal.getNumberOfPages() > 1) chrome(); }
-      });
-      y = doc.lastAutoTable.finalY + 4;
-
-      if (adv.standardsNote) {
-        const noteText = '[Standard Reference] ' + adv.standardsNote
-          + (adv.needsReview ? ' (คำแนะนำทั่วไป — โปรดตรวจสอบกับมาตรฐานทางวิศวกรรมของโครงการ)' : '');
-        const nLines = doc.splitTextToSize(noteText, CW);
-        ensure(nLines.length * 3.4 + 4);
-        doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_GRAY);
-        doc.text(nLines, M, y + 2);
-        doc.setTextColor(PDF_INK_SOFT);
-        y += nLines.length * 3.4 + 5;
-      }
+      y += 2;
     }
   }
 
   // --- Temporary Repair Record (emergency stop-leak) ---
-  // Conditional: with no temp_repair row the whole block is skipped, so a finding without one
-  // produces exactly the report it produced before this section existed (same section numbering,
-  // since secNum only advances inside section()). Placed after the Repair Advisor so the document
-  // reads problem -> advice -> what was actually done -> evidence.
+  // Conditional: with no temp_repair row the whole block is skipped (secNum only advances inside
+  // section()). Placed BEFORE the Repair Advisor — the detail page's order — so a reader knows a
+  // clamp is already on before reading the repair advice.
   //
-  // Sections 1-4 come from the SAME tempRepairRows array the detail page renders, and section 1's
-  // rows are read from the finding + the assessment inputs already loaded above — the legacy Excel
+  // Rows come from the SAME tempRepairRows array the detail page renders, and its section-1 rows
+  // are read from the finding + the assessment inputs already loaded above — the legacy Excel
   // form's section 1 is deliberately not stored on temp_repair.
   if (tempRepair) {
     const trRows = tempRepairRows(tempRepair, f, assess ? assess.inputs : null);
@@ -758,7 +833,9 @@ export async function buildFindingPdf() {
       y += trH + 3.5;
 
       // Label/value table with a full-width section header row wherever the bilingual section
-      // changes, so the printed record maps 1:1 onto the legacy Excel form's numbering.
+      // changes, so the printed record maps 1:1 onto the legacy Excel form's numbering. A row with
+      // an empty label is a continuation line (e.g. the result note) and spans the full width.
+      // The provenance note is the table's last row, so it can never be orphaned onto a new page.
       const trBody = [];
       let trSec = null;
       trRows.forEach(r => {
@@ -766,8 +843,11 @@ export async function buildFindingPdf() {
           trSec = r.section;
           trBody.push([{ content: r.section, colSpan: 2, styles: { fillColor: PDF_HAIRLINE, fontStyle: 'bold', textColor: PDF_INK } }]);
         }
-        trBody.push([r.label, r.value]);
+        trBody.push(r.label ? [r.label, r.value] : [{ content: r.value, colSpan: 2 }]);
       });
+      trBody.push([{ content: 'บันทึกนี้จัดทำขึ้นเพื่ออ้างอิงและประเมินความสมบูรณ์ของท่อ (Piping Integrity Management) ตามสภาวะการติดตั้งและการใช้งานที่ระบุไว้เท่านั้น '
+        + '(This record is maintained for piping integrity management reference under the documented installation and operating conditions.)',
+        colSpan: 2, styles: { fontStyle: 'italic', fontSize: FS_CAPTION, textColor: PDF_GRAY, fillColor: '#ffffff' } }]);
       autoTable(doc, {
         margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
         startY: y,
@@ -780,98 +860,55 @@ export async function buildFindingPdf() {
         body: trBody,
         didDrawPage: () => { if (doc.internal.getNumberOfPages() > 1) chrome(); }
       });
-      y = doc.lastAutoTable.finalY + 4;
-
-      const trNote = 'บันทึกนี้จัดทำขึ้นเพื่ออ้างอิงและประเมินความสมบูรณ์ของท่อ (Piping Integrity Management) ตามสภาวะการติดตั้งและการใช้งานที่ระบุไว้เท่านั้น '
-        + '(This record is maintained for piping integrity management reference under the documented installation and operating conditions.)';
-      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_GRAY);
-      const trNoteLines = doc.splitTextToSize(trNote, CW);
-      ensure(trNoteLines.length * 3.4 + 4);
-      doc.text(trNoteLines, M, y + 2);
-      doc.setTextColor(PDF_INK_SOFT);
-      y += trNoteLines.length * 3.4 + 5;
+      y = doc.lastAutoTable.finalY + 5;
     }
   }
 
-  // --- Site Location (Map) ---
-  if (f.lat != null && f.lng != null) {
-    section('Site Location & Geographical Pin', mapImg ? 98 : 16);
-    if (mapImg) {
-      const w = CW, h = w / 2; // 100% natural 2:1 aspect ratio of satellite canvas
-      ensure(h + 10);
-      doc.addImage(mapImg, 'JPEG', M, y, w, h);
-      doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
-      doc.rect(M, y, w, h);
-      y += h + 3.5;
-      figNum++;
-      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_GRAY);
-      doc.text(`Figure ${figNum}: Satellite location pin (${Number(f.lat).toFixed(6)}, ${Number(f.lng).toFixed(6)})`, PW / 2, y, { align: 'center' });
-      doc.setTextColor(PDF_INK_SOFT);
-      y += 5;
-    } else {
-      row('Coordinates', `${Number(f.lat).toFixed(6)}, ${Number(f.lng).toFixed(6)}`);
-    }
+  // --- Line Identification and Reference & Planning — the two form panels of those names, in the
+  // form's field order. Reference & Planning also carries the lifecycle fields the detail page's panel
+  // of the same name shows (re-inspect / repair method / repaired date / closing note). Workflow
+  // status and Recorded By are in the identity grid at the top; estimated cost is deliberately left
+  // out (budget is opt-in in exports, never by default).
+  section('Line Identification', 16);
+  kvTable([
+    { label: 'Pipe Tag / Line', value: f.pipe_tag },
+    { label: 'P&ID No.', value: f.pid_no },
+    { label: 'Service / Fluid', value: f.service },
+  ]);
+  {
+    const opt = (label, v) => (v == null || v === '') ? [] : [{ label, value: v }];
+    section('Reference & Planning', 20);
+    kvTable([
+      { label: 'Source Report', value: f.report_link, full: true, url: f.report_link || null },
+      { label: 'SAP Notification', value: f.sap_notification },
+      { label: 'SAP Order', value: f.sap_order },
+      ...opt('Target Repair Date', f.target_date ? paFmtDate(f.target_date) : null),
+      ...opt('Re-inspect By', f.next_check_date ? paFmtDate(f.next_check_date) : null),
+      ...opt('Repair Method', f.repair_method),
+      ...opt('Repaired Date', f.repaired_date ? paFmtDate(f.repaired_date) : null),
+      ...(f.closing_note ? [{ label: 'Closing Note', value: f.closing_note, full: true }] : []),
+      { label: 'Recorded At', value: fmtDateTime(f.created_at) },
+    ]);
   }
 
-  // --- Photographic Record ---
-  if (photoData.length) {
-    section('Photographic Record', 75);
-    // The two temporary-repair groups only ever have items when a stop-leak was recorded, so no
-    // extra guard is needed — `continue` on an empty slice already skips them.
-    for (const [kind, title] of [
-      ['found', 'As Found'],
-      ['temp_before', 'Before Temporary Repair / ก่อนติดตั้ง'],
-      ['temp_after', 'After Temporary Repair / หลังติดตั้ง'],
-      ['repaired', 'After Repair'],
-    ]) {
-      const items = photoData.filter(p => p.kind === kind);
-      if (!items.length) continue;
-      const gap = 5, cellW = (CW - gap) / 2;
-      const firstRowRh = Math.max.apply(null, items.slice(0, 2).map(p => (cellW / p.w) * p.h));
-      ensure(5.5 + firstRowRh + 10);
-      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_GRAY);
-      doc.text(title.toUpperCase(), M, y + 2.5);
-      y += 5.5;
-      doc.setTextColor(PDF_INK_SOFT);
-      for (let i = 0; i < items.length; i += 2) {
-        const rowItems = items.slice(i, i + 2).map(p => {
-          const s = cellW / p.w; // 100% unconstrained true aspect ratio
-          return { src: p.src, w: cellW, h: p.h * s };
-        });
-        const rh = Math.max.apply(null, rowItems.map(d => d.h));
-        ensure(rh + 10);
-        rowItems.forEach((d, j) => {
-          const ix = M + j * (cellW + gap) + (cellW - d.w) / 2;
-          doc.addImage(d.src, 'JPEG', ix, y, d.w, d.h);
-          doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
-          doc.rect(ix, y, d.w, d.h);
-          figNum++;
-          doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_GRAY);
-          doc.text(`Figure ${figNum}: Inspection Photo (${title}, #${i + j + 1})`, ix + d.w / 2, y + d.h + 3.5, { align: 'center' });
-        });
-        y += rh + 7;
-      }
-      y += 2;
-    }
-  }
-
-  // --- ASME B31.3 Fitness-for-Service Assessment ---
+  // --- ASME B31.3 Wall-Thickness Assessment — ONE numbered section with sub-parts (status, then
+  // N.1 inputs, N.2 cross-section, N.3 results, N.4 equations, N.5 scope). Deliberately not called
+  // "Fitness-for-Service": the Scope text itself says this is NOT an API 579 FFS evaluation. ---
+  const ASSESS_TITLE = 'ASME B31.3 Wall-Thickness Assessment';
 
   if (f.is_leaking) {
-    section('ASME B31.3 Integrity Evaluation Note', 25);
+    section(ASSESS_TITLE, 20);
     doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_VALUE); doc.setTextColor(PDF_DANGER);
     doc.text('Notice: ASME B31.3 wall-loss calculation is disabled for actively leaking piping.', M, y + 3);
     y += 5;
     doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_INK_SOFT);
-    const leakNote = 'Pressure boundary integrity is already breached. Per ASME PCC-2 Article 201 / Article 304, immediate mechanical clamping, engineered enclosure, or line isolation is required prior to Fitness-for-Service wall evaluation.';
+    const leakNote = 'Pressure boundary integrity is already breached. Per ASME PCC-2 Article 201 / Article 304, immediate mechanical clamping, engineered enclosure, or line isolation is required before any wall-thickness evaluation.';
     const leakLines = doc.splitTextToSize(leakNote, CW);
     doc.text(leakLines, M, y + 3);
-    y += leakLines.length * 3.6 + 4;
+    y += leakLines.length * 3.6 + 6;
   } else if (assess && assessRes) {
     const inp = assess.inputs || {};
     const r = assessRes;
-    const erf_no = r.mawp_no > 0 ? (r.P_input / r.mawp_no) : 9.99;
-    const erf_with = r.mawp_with == null ? null : (r.mawp_with > 0 ? (r.P_input / r.mawp_with) : 9.99);
     const schLabel = (PA_PIPE_DATABASE[inp.nps] && PA_PIPE_DATABASE[inp.nps].schedules[inp.schedule])
       ? PA_PIPE_DATABASE[inp.nps].schedules[inp.schedule].label : (inp.schedule || '—');
 
@@ -882,36 +919,22 @@ export async function buildFindingPdf() {
       didDrawPage: () => { if (doc.internal.getNumberOfPages() > 1) chrome(); }
     };
 
-    // --- integrity status band: a flat light-tint callout with a solid colored spine + dark
-    // semantic text (an engineering callout, not a saturated web card) ---
-    section('ASME B31.3 Fitness-for-Service Assessment', 24);
-    ensure(24);
-    const iColor = r.status === 'OK' ? PDF_OK : r.status === 'MONITOR' ? PDF_WARN : PDF_DANGER;
-    const iTint = r.status === 'OK' ? '#ecfdf5' : r.status === 'MONITOR' ? '#fffbeb' : '#fef2f2';
-    const iText = r.status === 'OK' ? '#15803d' : r.status === 'MONITOR' ? PDF_WARN_MID : '#b91c1c';
-    doc.setFillColor(iTint);
-    doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
-    doc.rect(M, y, CW, 12, 'FD');
-    doc.setFillColor(iColor);
-    doc.rect(M, y, 2, 12, 'F'); // colored spine
-    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_SUB); doc.setTextColor(iText);
-    doc.text(`INTEGRITY STATUS: ${r.status}`, M + 5, y + 7.8);
-    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_INK_SOFT);
-    doc.text(`ERF ${fmtN(erf_no, 3)}   MAWP ${fmtN(r.mawp_no, 1)} ${r.pUnit} (no CA)   MARGIN ${fmtN(r.margin, 3)} mm`, PW - M - 4, y + 7.8, { align: 'right' });
-    y += 16;
+    // status band + verdict sentence + provenance line, directly under the section heading
+    section(ASSESS_TITLE, 30);
+    y += drawIntegrityBand(doc, r, M, y, CW, PW);
     doc.setTextColor(PDF_INK_SOFT); doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY);
     const descLines = doc.splitTextToSize(r.desc, CW);
     ensure(descLines.length * 3.6 + 4);
     doc.text(descLines, M, y);
     y += descLines.length * 3.6 + 2;
     doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
-    doc.text(`Assessed ${fmtDateTime(assess.created_at)} by ${assess.created_by_email || '—'}`
-      + (currentAssessments.length > 1 ? `  •  ${currentAssessments.length} assessments recorded — latest shown` : ''), M, y);
+    doc.text(`Assessed ${fmtDateTime(assess.created_at)}`
+      + (assess.created_by_email ? ` by ${assess.created_by_email}` : '')
+      + (currentAssessments.length > 1 ? `  ·  ${currentAssessments.length} assessments recorded — latest shown` : ''), M, y);
     doc.setTextColor(PDF_INK_SOFT);
     y += 7;
 
-    // --- input parameters ---
-    section('Assessment Input Parameters', 35);
+    subsection('Input Parameters', 35);
     const modeIsDepth = inp.mode === 'depth';
     autoTable(doc, {
       ...tableBase,
@@ -921,12 +944,12 @@ export async function buildFindingPdf() {
       body: [
         ['Nominal pipe size / schedule', 'NPS', `${inp.nps} / ${schLabel}`, '—', 'ASME B36.10M'],
         ['Outside diameter', 'D', fmtN(r.D, 2), 'mm', 'B36.10M table'],
-        ['Nominal wall thickness', 't_nom', fmtN(r.t_nom, 2), 'mm', 'B36.10M / as-built'],
+        [PA_LABELS.tNom.plain, 't_nom', fmtN(r.t_nom, 2), 'mm', 'B36.10M / as-built'],
         ['Measurement mode', '—', modeIsDepth ? 'Wall-loss depth' : 'Measured minimum', '—', 'Field input'],
-        ['Wall loss depth', 'd', fmtN(r.depth, 2), 'mm', modeIsDepth ? 'Measured' : 'Derived'],
-        ['Measured minimum thickness', 't_meas', fmtN(r.t_meas, 2), 'mm', modeIsDepth ? 'Derived' : 'UT measurement'],
+        [PA_LABELS.depth.plain, 'd', fmtN(r.depth, 2), 'mm', modeIsDepth ? 'Measured' : 'Derived'],
+        [PA_LABELS.tMeas.plain, 't_meas', fmtN(r.t_meas, 2), 'mm', modeIsDepth ? 'Derived' : 'UT measurement'],
         ['Corrosion type', '—', r.isInternal ? 'Internal wall loss' : 'External wall loss', '—', 'Field input'],
-        ['Corrosion allowance', 'CA', fmtN(r.ca, 2), 'mm', 'Design'],
+        [PA_LABELS.ca.plain, 'CA', fmtN(r.ca, 2), 'mm', 'Design'],
         ['Corrosion rate (optional)', 'CR', r.CR > 0 ? fmtN(r.CR, 3) : '—', 'mm/yr', 'Historical/estimated'],
         ['Design pressure', 'P', fmtN(r.P_input, 2), r.pUnit, 'Design'],
         ['Material', '—', materialName(inp.material), '—', 'Specification'],
@@ -941,24 +964,21 @@ export async function buildFindingPdf() {
         3: { halign: 'center', cellWidth: 16 },
       },
     });
-    y = doc.lastAutoTable.finalY + 7;
+    y = doc.lastAutoTable.finalY + 6;
 
-    // --- cross-section figure ---
     if (xsecPng) {
-      const figW = 150, figH = figW * 270 / 500;
-      ensure(26 + figH + 14);
-      section('Wall Thickness Cross-Section', 65);
+      const figW = 130, figH = figW * 270 / 500;
+      subsection('Wall Thickness Cross-Section', figH + 8);
       doc.addImage(xsecPng, 'PNG', (PW - figW) / 2, y, figW, figH);
       y += figH + 4;
       figNum++;
-      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
-      doc.text(`Figure ${figNum} — Wall thickness cross-section (localized loss pocket; boundaries: t_req, t_req + CA, API 574 structural minimum)`, PW / 2, y, { align: 'center' });
+      doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_GRAY);
+      doc.text(`Figure ${figNum}: Wall thickness cross-section (lines: minimum wall for pressure, minimum + corrosion allowance, API 574 strength minimum)`, PW / 2, y, { align: 'center' });
       doc.setTextColor(PDF_INK_SOFT);
-      y += 8;
+      y += 7;
     }
 
-    // --- results with verdicts ---
-    section('Calculation Results', 40);
+    subsection('Calculation Results', 40);
     autoTable(doc, {
       ...tableBase,
       startY: y,
@@ -992,24 +1012,15 @@ export async function buildFindingPdf() {
       y += ffsLines.length * 3.4 + 4;
     }
 
-    // --- substituted equations (real stacked fractions, mirroring the on-screen .eq-box) ---
+    /* Governing equations: the symbolic formula as a bold heading (standard reference right-
+       aligned), then the substituted computation in monospace, lightly indented beneath it. */
     const eqRows = buildEquationRows(r);
-    const totalEqH = eqRows.reduce((sum, rw) => sum + fractionRowHeight(rw), 0);
-    ensure(26 + Math.min(totalEqH, 120)); // keep the title with at least the first equations
-    section('Governing Equations (Substituted)', 45);
-    y += 2.5;
-    /* Two-level layout so the *formula* (symbolic rule) and the *worked substitution* (numbers) read
-       as distinct roles instead of two near-identical `var = expr` lines: the navy-bold formula
-       heading (with the standard reference right-aligned) on top, then the substituted monospace
-       calculation on its own line, lightly indented beneath it. Navy-bold sans = the formula/label,
-       dark monospace = the computed numbers — the indent + typeface contrast carry the hierarchy
-       (an earlier version added a numbered step chip and a tinted computation band with a navy left
-       accent; the chip, band, and accent were all removed at the user's request for a plainer look). */
+    subsection('Governing Equations (Substituted)', 30);
+    y += 1.5;
     eqRows.forEach(rw => {
       const isFrac = rw.segs.some(s => typeof s !== 'string');
-      const workedH = isFrac ? 11 : 6;     // vertical space the substituted line occupies
+      const workedH = isFrac ? 11 : 6;
       ensure(7 + workedH + 4);
-      // formula (symbolic rule) — navy-bold heading + right-aligned standard reference
       doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_INK);
       doc.text(rw.label, M, y + 2.7);
       if (rw.ref) {
@@ -1017,17 +1028,14 @@ export async function buildFindingPdf() {
         doc.text(rw.ref, PW - M, y + 2.7, { align: 'right' });
       }
       y += 6.5;
-      // substituted computation — plain monospace, lightly indented under the formula heading
       drawFractionRow(doc, rw.segs, M + 4, y + (isFrac ? 0.5 : 0.2), { fontSize: FS_VALUE, font: 'courier' });
       y += workedH + 3;
     });
-    y += 3;
+    y += 2;
 
-    // --- scope & limitations (assessment-scoped disclaimer) ---
     doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL);
     const scopeLines = doc.splitTextToSize(PA_SCOPE_TEXT, CW);
-    ensure(14 + scopeLines.length * 3.3 + 4);
-    section('Scope & Limitations', 30);
+    subsection('Scope & Limitations', scopeLines.length * 3.3 + 4);
     doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
     doc.text(scopeLines, M, y + 2);
     doc.setTextColor(PDF_INK_SOFT);
@@ -1035,17 +1043,77 @@ export async function buildFindingPdf() {
   } else if (assess) {
     // legacy snapshot whose inputs can't re-compute: fall back to its saved results
     const r = assess.results || {};
-    section('ASME B31.3 Assessment (Latest)', 35);
-    row('Result', r.status);
-    row('ERF (no CA — current)', fmtN(erfNo(r), 3));
-    row('Required Thk. incl. CA', r.t_req_total != null ? `${fmtN(r.t_req_total, 3)} mm` : null);
-    row('Measured Thickness', r.t_meas != null ? `${fmtN(r.t_meas, 2)} mm` : null);
-    row('Remaining Margin', r.margin != null ? `${fmtN(r.margin, 3)} mm` : null);
-    row('MAWP (no CA — current)', r.mawp_no != null ? `${fmtN(r.mawp_no, 2)} ${r.pUnit || ''}` : null);
-    if (r.remainingLife != null) row('Est. Remaining Life', `${fmtN(r.remainingLife, 1)} years`);
-    row('Assessed By', assess.created_by_email);
+    section(ASSESS_TITLE, 35);
+    row('Result', r.status ? `INTEGRITY: ${r.status}` : null);
+    row(paLabelText('erfNo'), `${paPressureUsePct(erfNo(r))} (${fmtN(erfNo(r), 3)})`);
+    row(paLabelText('tReqCa'), r.t_req_total != null ? `${fmtN(r.t_req_total, 3)} mm` : null);
+    row(paLabelText('tMeas'), r.t_meas != null ? `${fmtN(r.t_meas, 2)} mm` : null);
+    row(paLabelText('margin'), r.margin != null ? paLimitGap(r.margin, 3) : null);
+    row(paLabelText('mawpNo'), r.mawp_no != null ? `${fmtN(r.mawp_no, 2)} ${r.pUnit || ''}` : null);
+    if (r.remainingLife != null) row(paLabelText('life'), `${fmtN(r.remainingLife, 1)} years`);
+    if (assess.created_by_email) row('Assessed By', assess.created_by_email);
     row('Assessed At', fmtDateTime(assess.created_at));
     y += 4;
+  }
+
+  // --- Repair Advisor (always rendered, mirroring the web detail page's independent panel: it is
+  // NOT gated on an assessment existing). Status-aware (OK/MONITOR/REPAIR) and mechanism-aware,
+  // with the leaking-overlay safety block prepended when the finding is actively leaking. The
+  // callout title comes from advisorBanner() — the same function the web panel uses. ---
+  {
+    const adv = resolveAdvisor(f.finding_type, assessRes, f.is_leaking);
+    if (adv) {
+      const ab = advisorBanner(assessRes, f.is_leaking);
+      const AB_THEME = {
+        danger:  { c: PDF_DANGER, tint: '#fef2f2', txt: '#b91c1c' },
+        warning: { c: PDF_WARN, tint: '#fffbeb', txt: PDF_WARN_MID },
+        success: { c: PDF_OK, tint: '#ecfdf5', txt: '#15803d' },
+        info:    { c: PDF_INK, tint: PDF_FILL, txt: PDF_INK },
+      }[ab.theme];
+
+      section('Repair Advisor', 38);
+
+      // banner callout (light tint + colored spine + title + summary), same visual language as
+      // the integrity band.
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY);
+      const sumLines = doc.splitTextToSize(adv.summary, CW - 8);
+      const bH = 6.5 + sumLines.length * 3.7 + 2.5;
+      ensure(bH + 8);
+      doc.setFillColor(AB_THEME.tint); doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
+      doc.rect(M, y, CW, bH, 'FD');
+      doc.setFillColor(AB_THEME.c); doc.rect(M, y, 2, bH, 'F');
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_VALUE); doc.setTextColor(AB_THEME.txt);
+      doc.text(ab.title, M + 5, y + 5);
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_INK_SOFT);
+      doc.text(sumLines, M + 5, y + 9.5);
+      y += bH + 3.5;
+
+      // recommendation items — title/body table; sub-points become bulleted lines in the body
+      // cell. The standards note is the table's last row so it stays attached to the advice.
+      const advBody = adv.items.map(it => {
+        const title = it.title || 'คำแนะนำทางวิศวกรรม:';
+        const bodyText = [it.body, ...(it.sub || []).map(s => '•  ' + s)].filter(Boolean).join('\n');
+        return [title, bodyText];
+      });
+      if (adv.standardsNote) {
+        advBody.push([{ content: '[Standard Reference] ' + adv.standardsNote
+          + (adv.needsReview ? ' (คำแนะนำทั่วไป — โปรดตรวจสอบกับมาตรฐานทางวิศวกรรมของโครงการ)' : ''),
+          colSpan: 2, styles: { fontStyle: 'italic', fontSize: FS_CAPTION, textColor: PDF_GRAY, fillColor: '#ffffff' } }]);
+      }
+      autoTable(doc, {
+        margin: { left: M, right: M, top: HEADER_H + 6, bottom: FOOTER_H + 4 },
+        startY: y,
+        theme: 'grid',
+        styles: { font: 'GoogleSans', fontSize: FS_BODY, cellPadding: 1.8, lineColor: PDF_HAIRLINE, lineWidth: 0.12, valign: 'top', textColor: PDF_INK_SOFT, overflow: 'linebreak' },
+        columnStyles: {
+          0: { fontStyle: 'bold', textColor: PDF_INK, cellWidth: 50, fillColor: PDF_FILL },
+          1: { textColor: PDF_INK_SOFT },
+        },
+        body: advBody,
+        didDrawPage: () => { if (doc.internal.getNumberOfPages() > 1) chrome(); }
+      });
+      y = doc.lastAutoTable.finalY + 5;
+    }
   }
 
   if (currentHistory.length) {
@@ -1067,25 +1135,11 @@ export async function buildFindingPdf() {
     });
   }
 
-  // --- System-generated record footnote (no wet-signature approval block — this is a paperless
-  // system). A single restrained attribution line keeps traceability: prepared-by, Record ID, and
-  // the generation timestamp. ---
-  ensure(14);
-  y += 4;
-  doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
-  doc.line(M, y, PW - M, y);
-  y += 4;
-  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor(PDF_GRAY);
-  doc.text(`System-generated record via Pipe Assessor — paperless piping-integrity system. No physical signature required.`, M, y);
-  y += 3.6;
-  doc.text(`Recorded by ${f.created_by_email || 'System User'}  ·  ASME B31.3-2022 / API 574 assessment engine  ·  Record ID: PA-${f.id}  ·  Generated ${paFmtDateTime(now)}`, M, y);
-  doc.setTextColor(PDF_INK_SOFT);
-  y += 6;
-
-  ensure(12);
-  y += 4;
-  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY_LIGHT);
-  doc.text('— End of Report —', PW / 2, y, { align: 'center' });
+  // --- Paperless record footnote + end marker (shared drawDocClosing — same close on every
+  // document PDF; no wet-signature block). ---
+  ensure(DOC_CLOSING_H);
+  y = drawDocClosing(doc, M, PW, y,
+    `Recorded by ${f.created_by_email || 'System User'}  ·  ASME B31.3-2022 / API 574 assessment engine  ·  Record ID: PA-${f.id}  ·  Generated ${paFmtDateTime(now)}`);
 
   if (doc.putTotalPages) doc.putTotalPages('{tp}');
   return doc.output('blob');
@@ -1129,54 +1183,29 @@ export async function buildQuickCalcPdf(inputs, res) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   await registerGoogleSansFonts(doc);
   const PW = 210, PH = 297, M = 14, CW = PW - 2 * M;
-  const HEADER_H = 18, FOOTER_H = 16;
+  const HEADER_H = DOC_HEADER_H, FOOTER_H = DOC_FOOTER_H;
   let y = 0, secNum = 0, figNum = 0;
+  // Document title = the share file name, so a viewer/save dialog shows a real name, not a blob id.
+  if (inputs.fileTitle) doc.setProperties({ title: inputs.fileTitle });
   const now = new Date();
 
-  // Type scale — consolidated from 8 ad hoc literals (6.5/6.8/7/7.5/8/11/13/15) down to named
-  // roles, mirroring buildFindingPdf's scale (same report family, kept function-local on purpose).
-  const FS_FOOTER_MICRO = 6.5; // footer division-attribution line, record footnote
-  const FS_DISCLAIMER = 7;     // scratch-calculation disclaimer body text
-  const FS_LABEL = 7.5;        // header/footer meta, italic footnotes/captions, bold caveats, eq. row labels
-  const FS_BODY = 8;           // body text — status-band ERF/MAWP/MARGIN line, description
-  const FS_VALUE = 8.5;        // equation fraction digits (drawFractionRow)
-  const FS_TITLE = 11;         // header report title
-  const FS_SUB = 13;           // "INTEGRITY STATUS:" headline
-  const FS_LOGO = 15;          // logo-fallback "OR" lettering
+  // Shared document type scale (DOC_FS) — same family as the finding report.
+  const { CAPTION: FS_CAPTION, LABEL: FS_LABEL, BODY: FS_BODY, VALUE: FS_VALUE } = DOC_FS;
 
   const logo = (typeof OR_LOGO_DATAURL !== 'undefined' && OR_LOGO_DATAURL) || await fetchAsDataUrl('/RGB_OR_Full color.png', 3000);
   const logoIm = logo ? await loadImg(logo) : null;
   const xsecPng = await paCrossSectionPng(r, 2).catch(() => null);
 
-  // Same header/footer chrome family as buildFindingPdf (logo left, navy title right, navy rule,
-  // hairline footer) but its own title/DOC REF — "QUICK CALCULATION" never reads as a finding
-  // report, and the DOC REF is keyed off the pipe size + timestamp since there's no finding id.
+  // Shared chrome with its own title/DOC REF — "QUICK CALCULATION" never reads as a finding
+  // report, and the DOC REF is keyed off the pipe size + date since there's no finding id.
+  const npsRef = String(inputs.nps || '').replace(/[^a-zA-Z0-9-]/g, '');
   function chrome() {
-    if (logoIm) {
-      const lw = 26, lh = 26 * logoIm.naturalHeight / logoIm.naturalWidth;
-      try { doc.addImage(logo, 'PNG', M, 3, lw, lh); }
-      catch (_) { doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LOGO); doc.setTextColor(PDF_INK); doc.text('OR', M, 12); }
-    } else {
-      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LOGO); doc.setTextColor(PDF_INK);
-      doc.text('OR', M, 12);
-    }
-    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_TITLE); doc.setTextColor(PDF_INK);
-    doc.text('ASME B31.3 QUICK CALCULATION REPORT', PW - M, 8.5, { align: 'right' });
-    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
-    const npsRef = String(inputs.nps || '').replace(/[^a-zA-Z0-9-]/g, '');
-    doc.text(`DOC REF: PA-QCALC-${npsRef}-${paFmtDate(now).replace(/\s+/g, '')}`, PW - M, 13.5, { align: 'right' });
-    doc.setDrawColor(PDF_INK); doc.setLineWidth(0.8);
-    doc.line(M, HEADER_H - 1, PW - M, HEADER_H - 1);
-
-    doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
-    doc.line(M, PH - FOOTER_H, PW - M, PH - FOOTER_H);
-    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
-    doc.text('Piping integrity — what-if calculation (not a recorded finding)', M, PH - FOOTER_H + 4);
-    doc.text(`Page ${doc.internal.getNumberOfPages()} of {tp}`, PW / 2, PH - FOOTER_H + 4, { align: 'center' });
-    doc.text(`Generated ${paFmtDateTime(now)}`, PW - M, PH - FOOTER_H + 4, { align: 'right' });
-    doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor(PDF_GRAY_LIGHT);
-    doc.text(['Central and Eastern Engineering and Maintenance Division', 'PTT Oil and Retail Business Public Company Limited'], PW / 2, PH - FOOTER_H + 9, { align: 'center', lineHeightFactor: 1.35 });
-    doc.setTextColor(PDF_INK_SOFT);
+    drawDocChrome(doc, {
+      PW, PH, M, logo, logoIm, now,
+      title: 'ASME B31.3 QUICK CALCULATION REPORT',
+      subline: `DOC REF: PA-QCALC-${npsRef}-${paFmtDate(now).replace(/\s+/g, '')}`,
+      footerLeft: 'Piping integrity — what-if calculation (not a recorded finding)',
+    });
     y = HEADER_H + 4;
   }
 
@@ -1203,28 +1232,14 @@ export async function buildQuickCalcPdf(inputs, res) {
   doc.rect(M, y, CW, 13, 'FD');
   doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_INK);
   doc.text('SCRATCH WHAT-IF CALCULATION — NOT A RECORDED FINDING', M + 4, y + 5);
-  doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_DISCLAIMER); doc.setTextColor(PDF_INK_SOFT);
+  doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_INK_SOFT);
   doc.text('Produced by the standalone Quick Calculator. No finding record or assessment snapshot was created or saved.', M + 4, y + 9.5);
   doc.setTextColor(PDF_INK_SOFT);
   y += 17;
 
-  // --- integrity status band (same visual language as the finding report's assessment band) ---
-  const erf_no = r.mawp_no > 0 ? (r.P_input / r.mawp_no) : 9.99;
+  // --- integrity band (shared drawIntegrityBand — identical to the finding report's) ---
   section('Calculation Result', 24);
-  ensure(24);
-  const iColor = r.status === 'OK' ? PDF_OK : r.status === 'MONITOR' ? PDF_WARN : PDF_DANGER;
-  const iTint = r.status === 'OK' ? '#ecfdf5' : r.status === 'MONITOR' ? '#fffbeb' : '#fef2f2';
-  const iText = r.status === 'OK' ? '#15803d' : r.status === 'MONITOR' ? PDF_WARN_MID : '#b91c1c';
-  doc.setFillColor(iTint);
-  doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
-  doc.rect(M, y, CW, 12, 'FD');
-  doc.setFillColor(iColor);
-  doc.rect(M, y, 2, 12, 'F'); // colored spine
-  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_SUB); doc.setTextColor(iText);
-  doc.text(`INTEGRITY STATUS: ${r.status}`, M + 5, y + 7.8);
-  doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_INK_SOFT);
-  doc.text(`ERF ${fmtN(erf_no, 3)}   MAWP ${fmtN(r.mawp_no, 1)} ${r.pUnit} (no CA)   MARGIN ${fmtN(r.margin, 3)} mm`, PW - M - 4, y + 7.8, { align: 'right' });
-  y += 16;
+  y += drawIntegrityBand(doc, r, M, y, CW, PW);
   doc.setTextColor(PDF_INK_SOFT); doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY);
   const descLines = doc.splitTextToSize(r.desc, CW);
   ensure(descLines.length * 3.6 + 4);
@@ -1236,17 +1251,17 @@ export async function buildQuickCalcPdf(inputs, res) {
   y += 7;
 
   // --- input parameters ---
-  section('Calculation Input Parameters', 35);
+  section('Input Parameters', 35);
   const modeIsDepth = inputs.mode === 'depth';
   const inputRows = [
     ['Nominal pipe size / schedule', 'NPS', `${inputs.nps} / ${inputs.schLabel}`, '—', 'ASME B36.10M'],
     ['Outside diameter', 'D', fmtN(r.D, 2), 'mm', 'B36.10M table'],
-    ['Nominal wall thickness', 't_nom', fmtN(r.t_nom, 2), 'mm', 'B36.10M / as-built'],
+    [PA_LABELS.tNom.plain, 't_nom', fmtN(r.t_nom, 2), 'mm', 'B36.10M / as-built'],
     ['Measurement mode', '—', modeIsDepth ? 'Wall-loss depth' : 'Measured minimum', '—', 'Field input'],
-    ['Wall loss depth', 'd', fmtN(r.depth, 2), 'mm', modeIsDepth ? 'Measured' : 'Derived'],
-    ['Measured minimum thickness', 't_meas', fmtN(r.t_meas, 2), 'mm', modeIsDepth ? 'Derived' : 'UT measurement'],
+    [PA_LABELS.depth.plain, 'd', fmtN(r.depth, 2), 'mm', modeIsDepth ? 'Measured' : 'Derived'],
+    [PA_LABELS.tMeas.plain, 't_meas', fmtN(r.t_meas, 2), 'mm', modeIsDepth ? 'Derived' : 'UT measurement'],
     ['Corrosion type', '—', r.isInternal ? 'Internal wall loss' : 'External wall loss', '—', 'Field input'],
-    ['Corrosion allowance', 'CA', fmtN(r.ca, 2), 'mm', 'Design'],
+    [PA_LABELS.ca.plain, 'CA', fmtN(r.ca, 2), 'mm', 'Design'],
     ['Corrosion rate (optional)', 'CR', r.CR > 0 ? fmtN(r.CR, 3) : '—', 'mm/yr', 'Historical/estimated'],
     ['Design pressure', 'P', fmtN(r.P_input, 2), r.pUnit, 'Design'],
     ['Material', '—', materialName(inputs.matCode), '—', 'Specification'],
@@ -1282,16 +1297,15 @@ export async function buildQuickCalcPdf(inputs, res) {
 
   // --- cross-section figure ---
   if (xsecPng) {
-    const figW = 150, figH = figW * 270 / 500;
-    ensure(26 + figH + 14);
-    section('Wall Thickness Cross-Section', 65);
+    const figW = 130, figH = figW * 270 / 500;
+    section('Wall Thickness Cross-Section', figH + 8);
     doc.addImage(xsecPng, 'PNG', (PW - figW) / 2, y, figW, figH);
     y += figH + 4;
     figNum++;
-    doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
-    doc.text(`Figure ${figNum} — Wall thickness cross-section (localized loss pocket; boundaries: t_req, t_req + CA, API 574 structural minimum)`, PW / 2, y, { align: 'center' });
+    doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_GRAY);
+    doc.text(`Figure ${figNum}: Wall thickness cross-section (lines: minimum wall for pressure, minimum + corrosion allowance, API 574 strength minimum)`, PW / 2, y, { align: 'center' });
     doc.setTextColor(PDF_INK_SOFT);
-    y += 8;
+    y += 7;
   }
 
   // --- results with verdicts ---
@@ -1335,10 +1349,8 @@ export async function buildQuickCalcPdf(inputs, res) {
   ensure(26 + Math.min(totalEqH, 120));
   section('Governing Equations (Substituted)', 45);
   y += 2.5;
-  /* Two-level layout mirroring buildFindingPdf's equation section (same report family): navy-bold
-     formula heading (with the standard reference right-aligned) on top, then the substituted
-     monospace calculation lightly indented beneath it — no chip, band, or accent (all removed at
-     the user's request). Scales are function-local, so the ref uses this function's FS_DISCLAIMER. */
+  /* Same two-level layout as buildFindingPdf's equations: bold formula heading (standard reference
+     right-aligned), then the substituted monospace calculation lightly indented beneath it. */
   eqRows.forEach(rw => {
     const isFrac = rw.segs.some(s => typeof s !== 'string');
     const workedH = isFrac ? 11 : 6;
@@ -1346,7 +1358,7 @@ export async function buildQuickCalcPdf(inputs, res) {
     doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_INK);
     doc.text(rw.label, M, y + 2.7);
     if (rw.ref) {
-      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_DISCLAIMER); doc.setTextColor(PDF_GRAY);
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_CAPTION); doc.setTextColor(PDF_GRAY);
       doc.text(rw.ref, PW - M, y + 2.7, { align: 'right' });
     }
     y += 6.5;
@@ -1365,24 +1377,10 @@ export async function buildQuickCalcPdf(inputs, res) {
   doc.setTextColor(PDF_INK_SOFT);
   y += scopeLines.length * 3.3 + 6;
 
-  // --- System-generated record footnote (matches the finding report's paperless closing; adapted
-  // for the scratch what-if — no finding Record ID, and it re-states this is not a recorded finding). ---
-  ensure(14);
-  y += 2;
-  doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
-  doc.line(M, y, PW - M, y);
-  y += 4;
-  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor(PDF_GRAY);
-  doc.text('System-generated what-if calculation via Pipe Assessor — paperless piping-integrity system. No physical signature required.', M, y);
-  y += 3.6;
-  doc.text(`ASME B31.3-2022 / API 574 assessment engine  ·  Not a recorded finding  ·  Generated ${paFmtDateTime(now)}`, M, y);
-  doc.setTextColor(PDF_INK_SOFT);
-  y += 6;
-
-  ensure(12);
-  y += 2;
-  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY_LIGHT);
-  doc.text('— End of Report —', PW / 2, y, { align: 'center' });
+  // --- paperless footnote + end marker (shared drawDocClosing; no Record ID — not a finding) ---
+  ensure(DOC_CLOSING_H);
+  y = drawDocClosing(doc, M, PW, y,
+    `ASME B31.3-2022 / API 574 assessment engine  ·  Not a recorded finding  ·  Generated ${paFmtDateTime(now)}`);
 
   if (doc.putTotalPages) doc.putTotalPages('{tp}');
   return doc.output('blob');
@@ -1462,18 +1460,13 @@ export async function buildSummaryPdf(rows, includeBudget) {
     const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
     await registerGoogleSansFonts(doc); // loads Sarabun (Latin + Thai in one face) under the 'GoogleSans' jsPDF font name — use doc.setFont('GoogleSans', ...) below
     const PW = 297, PH = 210, M = 12; // landscape A4 — extra width for the Map + Photo columns
-    const HEADER_H = 13, FOOTER_H = 14;
+    const HEADER_H = DOC_HEADER_H, FOOTER_H = DOC_FOOTER_H;
     const DANGER = '#dc2626';
     const now = new Date();
 
-    // Type scale — consolidated from 7 ad hoc literals (6.5/7/7.5/8/9/10/11) down to named roles.
-    const FS_FOOTER_MICRO = 6.5; // footer division-attribution line
-    const FS_META = 7;           // small muted text — header subline, empty map/photo notes, Type-column sub-lines
-    const FS_LABEL = 7.5;        // footer primary line
-    const FS_BODY = 8;           // table body/head text, Type-column finding-type line
-    const FS_SUMMARY = 9;        // summary counts line, budget headline
-    const FS_TITLE = 10;         // header report title
-    const FS_LOGO = 11;          // logo-fallback "OR" lettering
+    // Shared document type scale (DOC_FS). FS_META = the CAPTION role (empty map/photo notes,
+    // Type-column sub-lines).
+    const { CAPTION: FS_META, BODY: FS_BODY, SUMMARY: FS_SUMMARY } = DOC_FS;
     // Baht for the PDF: the ฿ glyph (U+0E3F) isn't WinAnsi-safe and jsPDF drops it, so use "THB".
     const thb = n => (n == null || !isFinite(n)) ? '—' : 'THB ' + Math.round(n).toLocaleString('en-US');
     const thbNum = n => (n == null || !isFinite(n)) ? '—' : Math.round(n).toLocaleString('en-US');
@@ -1531,27 +1524,14 @@ export async function buildSummaryPdf(rows, includeBudget) {
       }))
     ]);
 
-    // Same header/footer chrome as the finding & calculator reports, compressed to a shorter
-    // band (HEADER_H=13 vs the portrait reports' 18 — this report has no title/date subline
-    // worth the extra height, so logo + title share one compact row instead of two).
+    // Shared document chrome (same header/footer as every document PDF), landscape page.
     function chrome() {
-      const textOR = () => { doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LOGO); doc.setTextColor(PDF_INK); doc.text('OR', M, 8.5); };
-      if (logoIm) { const lh = 7.5, lw = lh * logoIm.naturalWidth / logoIm.naturalHeight; try { doc.addImage(logo, 'PNG', M, 2.5, lw, lh); } catch (_) { textOR(); } }
-      else textOR();
-      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_TITLE); doc.setTextColor(PDF_INK);
-      doc.text('PIPING FINDINGS SUMMARY', PW - M, 6.5, { align: 'right' });
-      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_META); doc.setTextColor(PDF_GRAY);
-      doc.text(`${term}  ·  ${stat}  ·  ${paFmtDate(now)}`, PW - M, 10.5, { align: 'right' });
-      doc.setDrawColor(PDF_INK); doc.setLineWidth(0.6); doc.line(M, HEADER_H - 1, PW - M, HEADER_H - 1);
-
-      doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2); doc.line(M, PH - FOOTER_H, PW - M, PH - FOOTER_H);
-      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_GRAY);
-      doc.text('Piping integrity — findings summary', M, PH - FOOTER_H + 4);
-      doc.text(`Page ${doc.internal.getNumberOfPages()} of {tp}`, PW / 2, PH - FOOTER_H + 4, { align: 'center' });
-      doc.text(`Generated ${paFmtDateTime(now)}`, PW - M, PH - FOOTER_H + 4, { align: 'right' });
-      doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor(PDF_GRAY_LIGHT);
-      doc.text(['Central and Eastern Engineering and Maintenance Division', 'PTT Oil and Retail Business Public Company Limited'], PW / 2, PH - FOOTER_H + 8, { align: 'center', lineHeightFactor: 1.3 });
-      doc.setTextColor(PDF_INK_SOFT);
+      drawDocChrome(doc, {
+        PW, PH, M, logo, logoIm, now,
+        title: 'PIPING FINDINGS SUMMARY',
+        subline: `DOC REF: PA-SUM-${paFmtDate(now).replace(/\s+/g, '')}  ·  ${term}  ·  ${stat}`,
+        footerLeft: 'Piping integrity — findings summary',
+      });
     }
 
     chrome();
@@ -1690,6 +1670,12 @@ export async function buildSummaryPdf(rows, includeBudget) {
       didDrawPage: () => chrome()
     });
 
+    // paperless footnote + end marker (shared drawDocClosing — Summary used to end without one)
+    let yEnd = doc.lastAutoTable.finalY + 2;
+    if (yEnd + DOC_CLOSING_H > PH - FOOTER_H - 4) { doc.addPage(); chrome(); yEnd = HEADER_H + 4; }
+    drawDocClosing(doc, M, PW, yEnd,
+      `${rows.length} finding${rows.length === 1 ? '' : 's'}  ·  ${term}  ·  ${stat}${includeBudget ? '  ·  incl. estimated repair budget' : ''}  ·  Generated ${paFmtDateTime(now)}`);
+
     if (doc.putTotalPages) doc.putTotalPages('{tp}');
     return doc.output('blob');
   }
@@ -1716,18 +1702,12 @@ export async function buildPlanPdf(opts) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
   await registerGoogleSansFonts(doc); // Sarabun (Latin + Thai in one face) under the 'GoogleSans' name
   const PW = 297, PH = 210, M = 12;
-  const HEADER_H = 13, FOOTER_H = 14;
+  const HEADER_H = DOC_HEADER_H, FOOTER_H = DOC_FOOTER_H;
   const now = new Date();
 
-  // Type scale — named roles only; no bare setFontSize() literal appears below (house rule across
-  // all PDF builders).
-  const FS_FOOTER_MICRO = 6.5; // footer division attribution
-  const FS_MICRO = 6.5;        // month ruler labels
-  const FS_META = 7;           // header subline, muted notes
-  const FS_LABEL = 7.5;        // footer primary line, row labels
-  const FS_BODY = 8;           // section headings within the chart
-  const FS_TITLE = 10;         // header report title
-  const FS_LOGO = 11;          // logo-fallback lettering
+  // Shared document type scale (DOC_FS): MICRO = month ruler labels, CAPTION (FS_META) = muted
+  // notes + legend, LABEL = row labels, BODY = group headings within the chart.
+  const { MICRO: FS_MICRO, CAPTION: FS_META, LABEL: FS_LABEL, BODY: FS_BODY } = DOC_FS;
 
   const { plans: planRows, tasksOf, maintenance, startIdx, months, year, filters: pf } = opts;
 
@@ -1736,24 +1716,16 @@ export async function buildPlanPdf(opts) {
 
   const scopeBits = [pf && pf.terminal ? pf.terminal : 'All terminals', pf && pf.category ? pf.category : 'All pipe types'];
 
+  // Shared document chrome — black ink like every other document PDF. Colour on this page is
+  // reserved for the Gantt bars themselves (task status / finding status), which is the only
+  // place categorical hues carry meaning.
   function chrome() {
-    const textOR = () => { doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_LOGO); doc.setTextColor(PDF_NAVY); doc.text('OR', M, 8.5); };
-    if (logoIm) { const lh = 7.5, lw = lh * logoIm.naturalWidth / logoIm.naturalHeight; try { doc.addImage(logo, 'PNG', M, 2.5, lw, lh); } catch (_) { textOR(); } }
-    else textOR();
-    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_TITLE); doc.setTextColor(PDF_NAVY);
-    doc.text('INSPECTION PLAN — PROGRAMME TIMELINE', PW - M, 6.5, { align: 'right' });
-    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_META); doc.setTextColor(PDF_MUTED);
-    doc.text(`${year}  ·  ${scopeBits.join('  ·  ')}  ·  ${paFmtDate(now)}`, PW - M, 10.5, { align: 'right' });
-    doc.setDrawColor(PDF_NAVY); doc.setLineWidth(0.6); doc.line(M, HEADER_H - 1, PW - M, HEADER_H - 1);
-
-    doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2); doc.line(M, PH - FOOTER_H, PW - M, PH - FOOTER_H);
-    doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_MUTED);
-    doc.text('Piping integrity — inspection programme', M, PH - FOOTER_H + 4);
-    doc.text(`Page ${doc.internal.getNumberOfPages()} of {tp}`, PW / 2, PH - FOOTER_H + 4, { align: 'center' });
-    doc.text(`Generated ${paFmtDateTime(now)}`, PW - M, PH - FOOTER_H + 4, { align: 'right' });
-    doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor('#94a3b8');
-    doc.text(['Central and Eastern Engineering and Maintenance Division', 'PTT Oil and Retail Business Public Company Limited'], PW / 2, PH - FOOTER_H + 8, { align: 'center', lineHeightFactor: 1.3 });
-    doc.setTextColor(PDF_TEXT);
+    drawDocChrome(doc, {
+      PW, PH, M, logo, logoIm, now,
+      title: 'INSPECTION PLAN — PROGRAMME TIMELINE',
+      subline: `DOC REF: PA-PLAN-${year}-${paFmtDate(now).replace(/\s+/g, '')}  ·  ${scopeBits.join('  ·  ')}`,
+      footerLeft: 'Piping integrity — inspection programme',
+    });
   }
 
   // Chart geometry. The label gutter is fixed so every row's bars start at the same x, exactly
@@ -1778,20 +1750,20 @@ export async function buildPlanPdf(opts) {
   // Month ruler + vertical month gridlines behind every row. Redrawn per page so a continued
   // chart still reads.
   function drawMonthRuler() {
-    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_MICRO); doc.setTextColor(PDF_MUTED);
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_MICRO); doc.setTextColor(PDF_GRAY);
     for (let i = 0; i < months; i++) {
       const cx = trackX + (i + 0.5) * (trackW / months);
       doc.text(monthIndexToLabel(startIdx + i).replace(' 20', " '"), cx, y, { align: 'center' });
     }
     y += 2;
-    doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.15);
+    doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.15);
     doc.line(trackX, y, trackX + trackW, y);
     y += 3;
-    doc.setTextColor(PDF_TEXT);
+    doc.setTextColor(PDF_INK_SOFT);
   }
 
   function gridlines(rowTop, rowH) {
-    doc.setDrawColor('#e2e8f0'); doc.setLineWidth(0.1);
+    doc.setDrawColor(PDF_HAIRLINE); doc.setLineWidth(0.1);
     for (let i = 0; i <= months; i++) {
       const gx = trackX + i * (trackW / months);
       doc.line(gx, rowTop, gx, rowTop + rowH);
@@ -1802,7 +1774,7 @@ export async function buildPlanPdf(opts) {
     const nowIdx = monthIndex(todayISO());
     if (nowIdx == null || nowIdx < startIdx || nowIdx > startIdx + months - 1) return;
     const nx = trackX + ((nowIdx - startIdx + 0.5) / months) * trackW;
-    doc.setDrawColor(PDF_NAVY); doc.setLineWidth(0.3);
+    doc.setDrawColor(PDF_INK); doc.setLineWidth(0.3);
     doc.line(nx, rowTop, nx, rowTop + rowH);
   }
 
@@ -1830,11 +1802,11 @@ export async function buildPlanPdf(opts) {
       const tasks = tasksOf(p.id) || [];
       if (!tasks.length) return;
       ensure(ROW_H * 2);
-      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_NAVY);
+      doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_INK);
       const head = [p.name, p.terminal, p.pipe_category].filter(Boolean).join('  ·  ');
       doc.text(head, M, y + 3);
       y += 5.5;
-      doc.setTextColor(PDF_TEXT);
+      doc.setTextColor(PDF_INK_SOFT);
 
       tasks.forEach(t => {
         ensure(ROW_H);
@@ -1842,7 +1814,7 @@ export async function buildPlanPdf(opts) {
         gridlines(rowTop, ROW_H - 1);
         todayLine(rowTop, ROW_H - 1);
 
-        doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_TEXT);
+        doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_INK_SOFT);
         // splitTextToSize measures against the ACTIVE font — set it first, or Thai task names
         // mis-measure and can render blank (a real bug this project has hit before).
         const label = doc.splitTextToSize(String(t.task_name || ''), LABEL_W - 3)[0] || '';
@@ -1858,10 +1830,10 @@ export async function buildPlanPdf(opts) {
 
   if (maintenance && maintenance.length) {
     ensure(ROW_H * 2);
-    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_NAVY);
+    doc.setFont('GoogleSans', 'bold'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_INK);
     doc.text("Maintenance — from findings' due dates", M, y + 3);
     y += 5.5;
-    doc.setTextColor(PDF_TEXT);
+    doc.setTextColor(PDF_INK_SOFT);
 
     maintenance.forEach(({ f, due }) => {
       ensure(ROW_H);
@@ -1869,7 +1841,7 @@ export async function buildPlanPdf(opts) {
       gridlines(rowTop, ROW_H - 1);
       todayLine(rowTop, ROW_H - 1);
 
-      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_TEXT);
+      doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_INK_SOFT);
       const name = f.pipe_tag || f.location_desc || '—';
       const label = doc.splitTextToSize(String(name), LABEL_W - 3)[0] || '';
       doc.text(label, M, rowTop + 3.6);
@@ -1895,7 +1867,7 @@ export async function buildPlanPdf(opts) {
   // Legend — mirrors the web panel's, so the two read the same way.
   ensure(12);
   y += 3;
-  doc.setDrawColor(PDF_BORDER); doc.setLineWidth(0.2);
+  doc.setDrawColor(PDF_RULE); doc.setLineWidth(0.2);
   doc.line(M, y, PW - M, y);
   y += 4;
   const legend = [
@@ -1904,27 +1876,21 @@ export async function buildPlanPdf(opts) {
     { label: 'Maintenance due', color: PDF_DANGER, filled: true },
   ];
   let lx = M;
-  doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_META); doc.setTextColor(PDF_MUTED);
+  doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_META); doc.setTextColor(PDF_GRAY);
   legend.forEach(item => {
     if (item.filled) { doc.setFillColor(item.color); doc.roundedRect(lx, y - 1.8, 6, 2.2, 0.5, 0.5, 'F'); }
     else { doc.setDrawColor(item.color); doc.setLineWidth(0.3); doc.roundedRect(lx, y - 1.8, 6, 2.2, 0.5, 0.5, 'S'); }
     doc.text(item.label, lx + 7.5, y);
     lx += 7.5 + doc.getTextWidth(item.label) + 8;
   });
-  doc.setTextColor(PDF_TEXT);
-  y += 7;
+  doc.setTextColor(PDF_INK_SOFT);
+  y += 3;
 
-  ensure(10);
-  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_FOOTER_MICRO); doc.setTextColor(PDF_MUTED);
-  doc.text('System-generated record via Pipe Assessor — paperless piping-integrity system. No physical signature required.', M, y);
-  y += 3.6;
-  doc.text(`Maintenance bars are derived from findings' due dates and are not editable in the plan  ·  Generated ${paFmtDateTime(now)}`, M, y);
-  doc.setTextColor(PDF_TEXT);
-  y += 6;
-
-  ensure(10);
-  doc.setFont('GoogleSans', 'italic'); doc.setFontSize(FS_LABEL); doc.setTextColor('#94a3b8');
-  doc.text('— End of Report —', PW / 2, y, { align: 'center' });
+  // paperless footnote + end marker (shared drawDocClosing). Plain addPage + chrome here, not
+  // ensure(): ensure() would also redraw the month ruler on a page that holds no chart rows.
+  if (y + DOC_CLOSING_H > PH - FOOTER_H - 4) { doc.addPage(); chrome(); y = HEADER_H + 4; }
+  y = drawDocClosing(doc, M, PW, y,
+    `Maintenance bars are derived from findings' due dates and are not editable in the plan  ·  Generated ${paFmtDateTime(now)}`);
 
   if (doc.putTotalPages) doc.putTotalPages('{tp}');
 
@@ -1999,7 +1965,7 @@ export async function buildSlidesPdf(rows, includeBudget) {
       .select('finding_id, inputs, results, created_at')
       .in('finding_id', ids)
       .order('created_at', { ascending: false });
-    (aData || []).forEach(a => { if (!assessByFinding[a.finding_id]) assessByFinding[a.finding_id] = a; });
+    (aData || []).filter(snapshotHasReading).forEach(a => { if (!assessByFinding[a.finding_id]) assessByFinding[a.finding_id] = a; });
   } catch (_) {}
   // earliest as-found photo per finding (prefer kind 'found', else whatever exists)
   const photoByFinding = {};
@@ -2190,7 +2156,7 @@ export async function buildSlidesPdf(rows, includeBudget) {
     doc.text(doc.splitTextToSize(bandLabel, 100)[0], PW - M - 7, bandY + 8.5, { align: 'right' });
     if (hb.metrics) {
       doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_VALUE); doc.setTextColor('#f1f5f9');
-      doc.text(`ERF ${hb.metrics.erf}  ·  MAWP ${hb.metrics.mawp}  ·  ${hb.metrics.pct}% wall`, PW - M - 7, bandY + 15.5, { align: 'right' });
+      doc.text(`Pressure use ${hb.metrics.usage}  ·  Max. safe ${hb.metrics.mawp}  ·  ${hb.metrics.pct}% wall left`, PW - M - 7, bandY + 15.5, { align: 'right' });
     } else {
       doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_VALUE); doc.setTextColor('#f1f5f9');
       doc.text(`${f.finding_type || 'Uncategorised'}  ·  ${f.severity || '—'} severity`, PW - M - 7, bandY + 15.5, { align: 'right' });
@@ -2345,25 +2311,25 @@ export async function buildSlidesPdf(rows, includeBudget) {
         // 3. headline metric tiles
         const tileW = (innerW - 3) / 2, tileH = 14.5, tGap = 2;
         const life = res.remainingLife != null ? (res.remainingLife >= 0 ? `${fmt2(res.remainingLife)}y` : '0y') : '—';
-        tile(x3 + padX, cy, tileW, tileH, 'ERF (no CA)', fmt3(erf), erf <= 1 ? 'PASS  (<= 1.0)' : 'CHECK  (> 1.0)', erf <= 1 ? PDF_OK : PDF_DANGER);
-        tile(x3 + padX + tileW + tGap, cy, tileW, tileH, 'MAWP (no CA)', `${fmt2(res.mawp_no)}`, `${res.pUnit} · P ${fmt2(res.P_input)}`, res.mawp_no >= res.P_input ? PDF_OK : PDF_DANGER);
+        tile(x3 + padX, cy, tileW, tileH, 'Pressure use', paPressureUsePct(erf), erf <= 1 ? `PASS  (ERF ${fmt3(erf)})` : `CHECK  (ERF ${fmt3(erf)})`, erf <= 1 ? PDF_OK : PDF_DANGER);
+        tile(x3 + padX + tileW + tGap, cy, tileW, tileH, 'Max. safe pressure', `${fmt2(res.mawp_no)}`, `${res.pUnit} · design ${fmt2(res.P_input)}`, res.mawp_no >= res.P_input ? PDF_OK : PDF_DANGER);
         cy += tileH + tGap;
-        tile(x3 + padX, cy, tileW, tileH, '% Wall Remaining', `${(res.pctRemainNom == null ? '—' : res.pctRemainNom.toFixed(0))}%`, res.pctRemainNom >= 50 ? 'PASS  (>= 50%)' : 'CHECK  (< 50%)', res.pctRemainNom >= 50 ? PDF_OK : PDF_WARN);
+        tile(x3 + padX, cy, tileW, tileH, 'Wall remaining', `${(res.pctRemainNom == null ? '—' : res.pctRemainNom.toFixed(0))}%`, res.pctRemainNom >= 50 ? 'PASS  (>= 50%)' : 'CHECK  (< 50%)', res.pctRemainNom >= 50 ? PDF_OK : PDF_WARN);
         tile(x3 + padX + tileW + tGap, cy, tileW, tileH, 'Remaining Life', life, res.CR > 0 ? `at ${fmt3(res.CR)} mm/yr` : 'no CR trend', (res.remainingLife != null && res.remainingLife <= 0) ? PDF_DANGER : PDF_TEXT);
         cy += tileH + tGap + 0.6;
 
         // 4. wall thickness & flaw geometry (two columns, mm)
-        eyebrow('WALL THICKNESS & FLAW (mm)');
-        kv2(cy, 0, 'Nominal t_nom', fmt2(res.t_nom)); kv2(cy, 1, 'Required t_req', fmt2(res.t_req_noCA)); cy += 4;
-        kv2(cy, 0, 'Measured t_meas', fmt2(res.t_meas)); kv2(cy, 1, 'Req + CA', fmt2(res.t_req_total), res.margin >= 0 ? PDF_OK : PDF_DANGER); cy += 4;
-        kv2(cy, 0, 'Wall loss', fmt2(res.depth)); kv2(cy, 1, 'Struct min', fmt2(res.t_struct), res.t_meas >= res.t_struct ? PDF_OK : PDF_DANGER); cy += 4;
-        kv2(cy, 0, 'Flaw L x W', defect); kv2(cy, 1, 'Margin', `${fmt2(res.margin)}`, res.margin >= 0 ? PDF_OK : PDF_DANGER); cy += 4.6;
+        eyebrow('WALL THICKNESS & DEFECT (mm)');
+        kv2(cy, 0, 'Original wall', fmt2(res.t_nom)); kv2(cy, 1, 'Min. (pressure)', fmt2(res.t_req_noCA)); cy += 4;
+        kv2(cy, 0, 'Thinnest wall', fmt2(res.t_meas)); kv2(cy, 1, 'Min. + allowance', fmt2(res.t_req_total), res.margin >= 0 ? PDF_OK : PDF_DANGER); cy += 4;
+        kv2(cy, 0, 'Wall lost', fmt2(res.depth)); kv2(cy, 1, 'Min. (strength)', fmt2(res.t_struct), res.t_meas >= res.t_struct ? PDF_OK : PDF_DANGER); cy += 4;
+        kv2(cy, 0, 'Defect L x W', defect); kv2(cy, 1, 'Vs. min. + CA', `${fmt2(Math.abs(res.margin))} ${res.margin >= 0 ? 'above' : 'below'}`, res.margin >= 0 ? PDF_OK : PDF_DANGER); cy += 4.6;
 
         // 5. design basis (pressure / corrosion inputs)
         eyebrow('DESIGN BASIS');
-        kv2(cy, 0, 'Design P', `${fmt2(res.P_input)} ${res.pUnit}`); kv2(cy, 1, 'Allow. S', `${fmt2(res.S)} MPa`); cy += 4;
-        kv2(cy, 0, 'Corr. allow CA', `${fmt2(res.ca)} mm`); kv2(cy, 1, 'Corr. rate', res.CR > 0 ? `${fmt3(res.CR)} mm/yr` : '—'); cy += 4;
-        kv2(cy, 0, 'MAWP w/ CA', res.mawp_with == null ? 'n/a' : `${fmt2(res.mawp_with)} ${res.pUnit}`); kv2(cy, 1, 'ERF w/ CA', erfCa == null ? 'n/a' : fmt3(erfCa), erfCa == null ? PDF_TEXT : (erfCa <= 1 ? PDF_OK : PDF_DANGER)); cy += 4;
+        kv2(cy, 0, 'Design pressure', `${fmt2(res.P_input)} ${res.pUnit}`); kv2(cy, 1, 'Allow. stress', `${fmt2(res.S)} MPa`); cy += 4;
+        kv2(cy, 0, 'Corr. allowance', `${fmt2(res.ca)} mm`); kv2(cy, 1, 'Corr. rate', res.CR > 0 ? `${fmt3(res.CR)} mm/yr` : '—'); cy += 4;
+        kv2(cy, 0, 'Safe P, CA kept', res.mawp_with == null ? 'n/a' : `${fmt2(res.mawp_with)} ${res.pUnit}`); kv2(cy, 1, 'Use, CA kept', erfCa == null ? 'n/a' : paPressureUsePct(erfCa), erfCa == null ? PDF_TEXT : (erfCa <= 1 ? PDF_OK : PDF_DANGER)); cy += 4;
       } else {
         // no numeric assessment — say why (from the shared banner state), don't fake a verdict
         doc.setFillColor(theme.tint); doc.setDrawColor(theme.spine); doc.setLineWidth(0.2);
@@ -2374,8 +2340,8 @@ export async function buildSlidesPdf(rows, includeBudget) {
         doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY); doc.setTextColor(PDF_TEXT);
         doc.splitTextToSize(hb.line, innerW - 7).slice(0, 2).forEach((line, i) => doc.text(line, x3 + padX + 4, cy + 11 + i * 3.8));
         cy += 17 + 5.5;
-        eyebrow('FLAW GEOMETRY');
-        kv2(cy, 0, 'Flaw L x W', defect); kv2(cy, 1, 'Finding type', f.finding_type || '—'); cy += 5;
+        eyebrow('DEFECT SIZE');
+        kv2(cy, 0, 'Defect L x W', defect); kv2(cy, 1, 'Finding type', f.finding_type || '—'); cy += 5;
         doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_LABEL); doc.setTextColor(PDF_MUTED);
         doc.splitTextToSize('No ASME B31.3 wall-loss calculation applies until a UT reading is recorded (or the finding type is a wall-loss mechanism).', innerW).slice(0, 3).forEach(l => { doc.text(l, x3 + padX, cy); cy += 3.9; });
         doc.setTextColor(PDF_TEXT);

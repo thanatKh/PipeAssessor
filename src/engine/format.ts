@@ -41,6 +41,7 @@ export function paFmtBaht(n: number | null | undefined): string {
 export function paFmtBahtShort(n: number | null | undefined): string {
   if (n == null || !isFinite(n)) return '฿0';
   const a = Math.abs(n);
+  if (a >= 1e9) return '฿' + (n / 1e9).toFixed(n % 1e9 === 0 ? 0 : 1) + 'B'; // "฿13.3B", not "฿13333.3M"
   if (a >= 1e6) return '฿' + (n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 1) + 'M';
   if (a >= 1e3) return '฿' + Math.round(n / 1e3) + 'K';
   return '฿' + Math.round(n).toLocaleString('en-US');

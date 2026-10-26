@@ -318,6 +318,19 @@ function escHtml(s: string): string {
  * plain render function is the right level of ceremony; unlike paCreateAssessView there's no
  * drag handle or hover-highlight to preserve across renders).
  */
+/* The advisor's callout theme + title — the ONE source for the web panel and the finding PDF's
+   Repair Advisor section. Titles lead with the same "INTEGRITY: <state>" words as the health banner
+   (resolveIntegrityBanner) and the assessment band, so one finding never shows the verdict under
+   several different names. */
+export type AdvisorTheme = 'danger' | 'warning' | 'success' | 'info';
+export function advisorBanner(res: B313Result | null | undefined, isLeaking?: boolean): { theme: AdvisorTheme; title: string } {
+  if (isLeaking) return { theme: 'danger', title: 'INTEGRITY: LEAKING — EMERGENCY CONTAINMENT (ASME PCC-2)' };
+  if (res?.status === 'REPAIR') return { theme: 'danger', title: 'INTEGRITY: REPAIR — REPAIR OPTIONS (ASME PCC-2)' };
+  if (res?.status === 'MONITOR') return { theme: 'warning', title: 'INTEGRITY: MONITOR — MONITORING STRATEGY' };
+  if (res?.status === 'OK') return { theme: 'success', title: 'INTEGRITY: OK — CONTINUE CORROSION MITIGATION' };
+  return { theme: 'info', title: 'ASME PCC-2 / API 570 GUIDANCE' };
+}
+
 export function paRenderRepairAdvisor(root: HTMLElement, findingType: string | null | undefined, res: B313Result | null | undefined, isLeaking?: boolean): void {
   const resolved = resolveAdvisor(findingType, res, isLeaking);
   if (!resolved) {
@@ -325,22 +338,7 @@ export function paRenderRepairAdvisor(root: HTMLElement, findingType: string | n
     return;
   }
 
-  // Determine card theme color
-  let themeClass = 'info';
-  let bannerTitle = 'ASME PCC-2 / API 570 GUIDANCE';
-  if (isLeaking) {
-    themeClass = 'danger';
-    bannerTitle = 'ACTIVELY LEAKING — EMERGENCY CONTAINMENT (ASME PCC-2)';
-  } else if (res?.status === 'REPAIR') {
-    themeClass = 'danger';
-    bannerTitle = 'CRITICAL REPAIR REQUIRED (ASME PCC-2)';
-  } else if (res?.status === 'MONITOR') {
-    themeClass = 'warning';
-    bannerTitle = 'INTEGRITY MONITORING STRATEGY';
-  } else if (res?.status === 'OK') {
-    themeClass = 'success';
-    bannerTitle = 'OPERATIONAL INTEGRITY COMPLIANT';
-  }
+  const { theme: themeClass, title: bannerTitle } = advisorBanner(res, isLeaking);
 
   const itemsHtml = resolved.items.map(item => {
     const titleText = item.title ? escHtml(item.title) : 'คำแนะนำทางวิศวกรรม:';

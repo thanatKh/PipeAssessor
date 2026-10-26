@@ -4,6 +4,8 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Pipe Assessor – Findings Tracker</title>
+  <meta name="theme-color" content="#ffffff"/>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
   <!-- Vite entry. Styles, fonts, Basecoat behaviours, Leaflet/Supabase and the app itself are all
        bundled from /src/main.ts — no CDN <script> tags. Google Sans is injected as an @font-face
        from embedded base64 (registerGoogleSansWebFont). -->
@@ -20,29 +22,10 @@
       </a>
       <div class="header-info">
         <h1>Pipe Assessor</h1>
-        <div class="hdr-sub">Findings Tracker — Piping abnormal findings — recorded</div>
       </div>
     </div>
     <div class="header-actions">
-      <!-- Nav trigger — opens #cmdMenu (Basecoat command palette, below). Replaced the sidebar:
-           with ~9 nav items total, a searchable ⌘K-style palette covers the same navigation need
-           without a persistent 240px rail eating page width on every view. Always-visible (not
-           keyboard-shortcut-only) since this is a field tool used on phones/tablets without a
-           physical keyboard — see the ⌘K hint span for the desktop-power-user path. Lives in
-           .header-actions, not .header-brand, so the left side reads as pure brand and every
-           interactive control (Menu, account, sign out) groups together on the right. -->
-      <button class="cmd-trigger authed-only not-public" id="btnCmdMenu" type="button"
-              onclick="document.getElementById('cmdMenu').showModal()">
-        <span class="cmd-trigger-ico" aria-hidden="true">☰</span>
-        <span>Menu</span>
-        <span class="cmd-trigger-kbd" aria-hidden="true">⌘K</span>
-      </button>
-      <!-- Read-only badge shown only on public share links (body.public-view) -->
       <span class="public-only public-badge">Read-only shared view — no sign-in required</span>
-      <!-- Account: avatar (first letter of email) + email/role, and an icon-only sign-out.
-           Was the sidebar footer's job (.sb-footer); moved here now there is no sidebar.
-           updateAuthUI() (app.ts) fills all three text/avatar fields; #btnSignOut keeps its id
-           and listener unchanged. -->
       <div class="hdr-account authed-only not-public">
         <span class="hdr-avatar" id="sbAvatar" aria-hidden="true"></span>
         <div class="hdr-user-text">
@@ -50,79 +33,29 @@
           <span class="hdr-user-role" id="sbUserRole"></span>
         </div>
         <button class="hdr-signout" id="btnSignOut" type="button" title="Sign out" aria-label="Sign out">
-          <span aria-hidden="true">⏻</span>
+          <span aria-hidden="true" data-ui-icon="power"></span>
         </button>
+      </div>
+      <!-- Main navigation: a drop-down anchored under the Menu button (top-right) at every screen
+           size — not a centred dialog. app.ts setNavOpen() toggles body.nav-open; Escape, a click
+           outside, or choosing a page closes it. The active link is set in show() from the hash.
+           Maintenance-only pages carry .maintenance-only (route() guards them too). -->
+      <div class="nav-menu authed-only not-public">
+        <button class="top-nav-toggle" id="btnNavToggle" type="button" aria-expanded="false" aria-controls="topNav" aria-label="Open menu"><span aria-hidden="true" data-ui-icon="menu"></span><span>Menu</span></button>
+        <nav class="top-nav" id="topNav" aria-label="Main">
+          <a href="#/list" data-nav="list"><span aria-hidden="true" data-ui-icon="dashboard"></span>Findings</a>
+          <a href="#/new" data-nav="new"><span aria-hidden="true" data-ui-icon="plus"></span>New finding</a>
+          <a href="#/plan" data-nav="plan"><span aria-hidden="true" data-ui-icon="gantt"></span>Inspection plan</a>
+          <a href="#/risk" data-nav="risk"><span aria-hidden="true" data-ui-icon="ranking"></span>Risk ranking</a>
+          <a href="#/calc" data-nav="calc"><span aria-hidden="true" data-ui-icon="calculator"></span>Quick calc</a>
+          <a href="#/lines" data-nav="lines" class="maintenance-only"><span aria-hidden="true" data-ui-icon="list"></span>Line list</a>
+          <a href="#/users" data-nav="users" class="maintenance-only"><span aria-hidden="true" data-ui-icon="users"></span>Users</a>
+        </nav>
       </div>
     </div>
   </div>
 </header>
 
-<!-- ================= COMMAND MENU (navigation) =================
-     Basecoat command component (basecoat-css/command.min + components/command.css, bundled via
-     basecoat.cdn.min.css — see main.ts). Replaced the sidebar nav entirely: this app has ~9 nav
-     items, few enough that a searchable palette (type to filter, arrow keys + Enter, click) beats
-     a persistent 240px rail that permanently narrows every page. Opened via the header's "Menu"
-     button (onclick, above) or Ctrl/Cmd+K (wired in app.ts). Items are plain <a href="#..."> —
-     Basecoat's command.js closes the dialog on click automatically (any role=menuitem click,
-     unless data-keep-command-open), so navigation + close happens in one native action, no extra
-     JS needed. Groups mirror the old sidebar's groupings so nothing was reorganized, only
-     re-presented. `data-keywords` adds search terms beyond each item's visible label (e.g. finding
-     the Line Risk Ranking page by typing "risk" or "pof"). -->
-<dialog id="cmdMenu" class="command-dialog" aria-label="Command menu"
-        onclick="if (event.target === this) this.close()">
-  <div class="command">
-    <header>
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-      <input type="text" id="cmdMenu-input" placeholder="Search pages..." autocomplete="off" autocorrect="off"
-             spellcheck="false" aria-autocomplete="list" role="combobox" aria-expanded="true" aria-controls="cmdMenu-list"/>
-    </header>
-    <div role="menu" id="cmdMenu-list" aria-orientation="vertical" data-empty="No pages found.">
-      <div role="group" aria-labelledby="cmd-group-dashboard">
-        <span role="heading" id="cmd-group-dashboard">Dashboard</span>
-        <a href="#/list" role="menuitem" data-filter="Overview">
-          <span class="sb-ico" aria-hidden="true">▦</span><span>Overview</span>
-        </a>
-      </div>
-
-      <div role="group" aria-labelledby="cmd-group-findings">
-        <span role="heading" id="cmd-group-findings">Findings</span>
-        <a href="#/new" role="menuitem" data-filter="New Finding" data-keywords="add create">
-          <span class="sb-ico" aria-hidden="true">＋</span><span>New Finding</span>
-        </a>
-      </div>
-
-      <div role="group" aria-labelledby="cmd-group-planning">
-        <span role="heading" id="cmd-group-planning">Planning</span>
-        <a href="#/plan" role="menuitem" data-filter="Inspection Plan" data-keywords="gantt schedule">
-          <span class="sb-ico" aria-hidden="true">▤</span><span>Inspection Plan</span>
-        </a>
-      </div>
-
-      <div role="group" aria-labelledby="cmd-group-analytics">
-        <span role="heading" id="cmd-group-analytics">Analytics</span>
-        <a href="#/risk" role="menuitem" data-filter="Line Risk Ranking" data-keywords="pof rbi">
-          <span class="sb-ico" aria-hidden="true">◈</span><span>Line Risk Ranking</span>
-        </a>
-        <a href="#/calc" role="menuitem" data-filter="Quick Calc" data-keywords="asme b31.3 wall thickness">
-          <span class="sb-ico" aria-hidden="true">∑</span><span>Quick Calc</span>
-        </a>
-      </div>
-
-      <!-- Hidden for inspectors by CSS, but that is UX only — both routes also carry an
-           isMaintenance() guard in app.ts's route(), since a hash is typeable. RLS is the real
-           boundary. -->
-      <div role="group" aria-labelledby="cmd-group-admin" class="maintenance-only">
-        <span role="heading" id="cmd-group-admin">Administration</span>
-        <a href="#/lines" role="menuitem" data-filter="Line List" data-keywords="pipe tag master">
-          <span class="sb-ico" aria-hidden="true">▧</span><span>Line List</span>
-        </a>
-        <a href="#/users" role="menuitem" data-filter="Users &amp; Roles" data-keywords="admin permissions">
-          <span class="sb-ico" aria-hidden="true">◉</span><span>Users &amp; Roles</span>
-        </a>
-      </div>
-    </div>
-  </div>
-</dialog>
 
 <main class="wrap">
 
@@ -162,6 +95,17 @@
           </p>
         </div>
       </div>
+      <!-- Guest shortcut to Quick Calc (#/calc is routed before the login gate). A card of its
+           own under the sign-in box, so it reads as a second way in rather than fine print. -->
+      <div class="login-or" aria-hidden="true"><span>or, without signing in</span></div>
+      <a class="guest-calc-card" href="#/calc">
+        <span class="gcc-icon" aria-hidden="true" data-ui-icon="calculator"></span>
+        <span class="gcc-text">
+          <span class="gcc-title">Quick ASME B31.3 Calculator</span>
+          <span class="gcc-sub">Check a wall-thickness reading — pressure limit, minimum wall, PDF. Nothing is saved.</span>
+        </span>
+        <span class="gcc-go" aria-hidden="true" data-ui-icon="chevronRight"></span>
+      </a>
     </div>
   </section>
 
@@ -229,7 +173,61 @@
 
   <!-- ================= LIST / DASHBOARD ================= -->
   <section id="viewList" class="view">
-    <div class="dash-top">
+    <!-- Dashboard (Oct 2026 redesign): page head -> "Needs attention" cards -> overview (status bar,
+         new findings per month, open by terminal / severity) -> map | register. Everything below is
+         rendered by dashboard.ts renderKpis(); integrity comes from the shared resolveIntegrityBanner,
+         so a card / stripe / badge can never disagree with the finding's own page. -->
+    <div class="dash-head">
+      <div class="dash-head-text">
+        <h1 class="dash-title">Findings</h1>
+        <div class="dash-sub" id="dashSub"></div>
+      </div>
+      <div class="dash-head-actions">
+        <button class="btn" data-variant="outline" id="btnImport" type="button">Import</button>
+        <button class="btn" data-variant="outline" id="btnExport" type="button"><span class="t-text-swap">Export</span></button>
+        <button class="btn" id="btnNew" type="button"><span aria-hidden="true" data-ui-icon="plus"></span><span>New finding</span></button>
+      </div>
+    </div>
+
+    <section class="dash-attn" aria-labelledby="attnH">
+      <h2 class="dash-sec-h" id="attnH">Needs attention</h2>
+      <div class="attn-grid" id="attnGrid"></div>
+    </section>
+
+    <section class="dash-overview" aria-label="Overview">
+      <article class="dcard" id="statusCard">
+        <div class="dcard-h">
+          <h2>Status</h2>
+          <button type="button" class="dcard-link" id="kpiRingCard" title="Show Repaired + Closed findings"><b id="kpiRingPct">0%</b> complete · <span id="kpiRingFraction">0 of 0</span></button>
+        </div>
+        <div class="status-bar" id="statusBar" role="group" aria-label="Findings by status"></div>
+        <ul class="status-legend" id="statusLegend"></ul>
+        <div class="dcard-foot">
+          <button type="button" class="kpi-budget-card" id="kpiBudgetCard" title="Show findings that are not yet resolved">
+            <span class="kb-label">Outstanding repair budget</span>
+            <span class="kb-total" id="kbTotal">฿0</span>
+            <span class="kb-sub" id="kbSub">0 findings</span>
+          </button>
+          <div class="kb-sev" id="kbSev"></div>
+        </div>
+      </article>
+      <article class="dcard" id="trendCard">
+        <div class="dcard-h">
+          <h2>New findings per month</h2>
+          <span class="dcard-meta" id="trendRange"></span>
+        </div>
+        <div id="trendChart"></div>
+        <div class="dcard-meta" id="trendNote"></div>
+      </article>
+      <article class="dcard" id="openCard">
+        <div class="dcard-h"><h2>Open findings</h2><span class="dcard-meta" id="openTotal"></span></div>
+        <div class="term-bars" id="termBars"></div>
+        <div class="dcard-foot sev-row" id="sevRow"></div>
+      </article>
+    </section>
+
+    <!-- Map left (pinned while the register scrolls), register right; stacked below 1280px. -->
+    <div class="dash-split">
       <!-- LEFT: map -->
       <div class="panel dash-map-panel" id="dashMapPanel">
         <div class="panel-h">
@@ -283,51 +281,14 @@
         </div>
       </div>
 
-      <!-- MIDDLE: KPI column, natural-height cards (no forced stretch to the map). Ring, then
-           Budget, stacked full-width (see .kpi-top-pair) — % Complete on top, Budget below —
-           then all 6 status chips in a 3-col grid. -->
-      <div class="kpi-sidebar">
-        <div class="kpi-top-pair">
-          <button type="button" class="kpi-ring-card" id="kpiRingCard" title="Repaired + Closed vs. all findings">
-            <div class="kpi-ring-wrap">
-              <svg class="kpi-ring" viewBox="0 0 100 100" aria-hidden="true">
-                <circle class="kpi-ring-track" cx="50" cy="50" r="42"></circle>
-                <circle class="kpi-ring-fill" id="kpiRingFill" cx="50" cy="50" r="42"></circle>
-              </svg>
-              <div class="kpi-ring-center">
-                <span class="kpi-ring-pct" id="kpiRingPct">0%</span>
-              </div>
-            </div>
-            <div class="kpi-ring-info">
-              <span class="kpi-ring-label">Complete</span>
-              <span class="kpi-ring-fraction" id="kpiRingFraction">0 of 0</span>
-            </div>
-          </button>
-          <button type="button" class="kpi-budget-card" id="kpiBudgetCard" title="Estimated cost to repair all unresolved findings">
-            <div class="kb-head">
-              <span class="kb-label">Outstanding Repair Budget</span>
-              <span class="kb-total" id="kbTotal">฿0</span>
-            </div>
-            <div class="kb-sub" id="kbSub">0 findings</div>
-            <div class="kb-sev" id="kbSev"></div>
-          </button>
-        </div>
-        <div class="kpi-row-bottom" id="kpiRowBottom"></div>
-      </div>
-    </div>
-
-    <div class="dash-split">
       <!-- RIGHT: register -->
       <div class="panel dash-list-panel">
-        <div class="panel-h">
-          <h2>Findings Register</h2>
-          <div class="panel-h-btns">
-            <div class="hdr-btn-group-subtle">
-              <button class="btn btn-sm" data-variant="outline" id="btnTogglePhotos" type="button" aria-pressed="true"><span class="t-text-swap">Hide photos</span></button>
-              <button class="btn btn-sm" data-variant="outline" id="btnImport" type="button">Import</button>
-              <button class="btn btn-sm" data-variant="outline" id="btnExport" type="button"><span class="t-text-swap">Export</span></button>
-            </div>
-            <button class="btn" id="btnNew" type="button">+ New Finding</button>
+        <div class="reg-head">
+          <h2 class="sr-only">Findings register</h2>
+          <div class="quick-tabs" id="quickTabs" role="group" aria-label="Quick views"></div>
+          <div class="reg-head-btns">
+            <button class="btn btn-sm show-map-btn" data-variant="outline" id="btnShowMap" type="button" aria-pressed="false"><span class="t-text-swap">Show map</span></button>
+            <button class="btn btn-sm" data-variant="outline" id="btnTogglePhotos" type="button" aria-pressed="true"><span class="t-text-swap">Hide photos</span></button>
           </div>
         </div>
         <div class="sel-bar" id="selBar" hidden>
@@ -337,7 +298,7 @@
         <div class="panel-b" style="padding-bottom: 10px;">
           <div class="filters">
             <select id="filTerminal" class="select"><option value="" selected>All terminals</option><option>KBY</option><option>SRC</option><option>BRP</option></select>
-            <select id="filStatus" class="select"><option value="" selected>All statuses</option><option>Open</option><option>Monitoring</option><option>Repair Planned</option><option>Repaired</option><option>Closed</option><option value="__overdue">Overdue only</option><option value="__outstanding">Outstanding (not resolved)</option><option value="__complete">Complete (Repaired + Closed)</option></select>
+            <select id="filStatus" class="select"><option value="" selected>All statuses</option><option>Open</option><option>Monitoring</option><option>Repair Planned</option><option>Repaired</option><option>Closed</option><option value="__leaking">Leaking now</option><option value="__repair">Repair required</option><option value="__overdue">Overdue only</option><option value="__needs_eng">Needs engineer input</option><option value="__outstanding">Outstanding (not resolved)</option><option value="__complete">Complete (Repaired + Closed)</option></select>
             <select id="filType" class="select"><option value="" selected>All types</option></select>
             <div class="search-input-wrap">
               <input id="filSearch" class="input" type="search" placeholder="Search tag, description, SAP… (press / to focus)">
@@ -370,10 +331,16 @@
                 <tbody id="listBody"></tbody>
               </table>
             </div>
+            <!-- "Show more" sits OUTSIDE the table: a full-width row spanning the phone layout's hidden
+                 Terminal column stole ~80px from Line No. under table-layout: fixed -->
+            <div class="reg-more" id="regMore" hidden></div>
           </div>
         </div>
       </div>
     </div>
+    <!-- Phones: the register's "+ New Finding" button is below the fold, so the main field action
+         also floats bottom-right (CSS shows it only at <=640px). -->
+    <a class="fab-new authed-only not-public" href="#/new" aria-label="New finding"><span aria-hidden="true" data-ui-icon="plus"></span><span>New</span></a>
   </section>
 
   <!-- ================= FORM (new / edit) ================= -->
@@ -395,21 +362,33 @@
           </div>
         </div>
       </div>
+      <!-- Section links (core/section-nav.ts) — same component as the detail page. Photos has two
+           targets because new and existing findings use different photo panels; the hidden one's
+           link hides itself. -->
+      <nav class="section-nav" id="formSectionNav" aria-label="Form sections">
+        <button type="button" data-target="panelInfo">Location</button>
+        <button type="button" data-target="panelAnomaly">Anomaly</button>
+        <button type="button" data-target="pendingPhotoPanel">Photos</button>
+        <button type="button" data-target="editPhotoPanel">Photos</button>
+        <button type="button" data-target="panelTempRepair">Temporary repair</button>
+        <button type="button" data-target="panelLine">Line</button>
+        <button type="button" data-target="panelPlanning">Reference &amp; planning</button>
+        <button type="button" data-target="assessPanel">Assessment</button>
+        <button type="button" data-target="repairAdvisorPanel">Repair advice</button>
+      </nav>
     </div>
 
-    <!-- Two-column workbench: finding data entry left, live ASME B31.3 assessment right.
-         Stacks to a single column below 960px (finding panels first). -->
-    <div class="form-split">
-    <div class="form-col" id="formColMain">
+    <!-- ONE column, the SAME order as the detail page and the finding PDF:
+           Location -> Anomaly -> Photos -> Temporary Repair -> Line Identification ->
+           Reference & Planning -> ASME B31.3 Assessment -> Repair Advisor.
+         Line Identification and Reference & Planning share a row on wide screens (.detail-pair).
+         Change the order in all three or none (this block, .detail-flow, buildFindingPdf). -->
+    <div class="form-flow">
 
     <div class="panel" id="panelInfo">
-      <div class="panel-h">
-        <h2>Finding Info</h2>
-        <!-- Opens in a NEW TAB deliberately. This used to be a dialog that overlaid the form, so a
-             half-entered finding survived. The line list is a page now, and navigating in-place
-             would silently discard unsaved form input. -->
-        <a class="btn" data-variant="outline" id="btnLineList" href="#/lines" target="_blank" rel="noopener">Manage line list</a>
-      </div>
+      <div class="panel-h"><h2>Location</h2></div>
+      <!-- fields | map side by side on wide screens, like the detail page's Location panel -->
+      <div class="loc-split">
       <div class="panel-b">
         <div class="fgrid">
           <div>
@@ -417,33 +396,40 @@
             <select id="fTerminal" class="select"><option value="" selected disabled>Select terminal…</option><option>KBY</option><option>SRC</option><option>BRP</option></select>
             <div class="validation-alert" id="errTerminal">Terminal is required.</div>
           </div>
-          <div class="full">
-            <label class="f-label req" for="fLocationDesc">Location Description</label>
-            <input id="fLocationDesc" class="input" type="text" placeholder="เช่น ข้อต่องอ (Elbow) ด้านท้าย P-101 บริเวณ Pipe Rack เสาที่ 5">
-            <div class="validation-alert" id="errLocationDesc">Location description is required.</div>
-          </div>
-          <div>
-            <label class="f-label" for="fTag">Pipe Tag / Line No. <span class="f-optnote">— engineer can add later</span></label>
-            <div class="combo">
-              <input id="fTag" class="input" type="text" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false">
-              <ul class="combo-menu" id="tagCombo" role="listbox"></ul>
-            </div>
-          </div>
-          <div>
-            <label class="f-label" for="fPid">P&amp;ID No.</label>
-            <input id="fPid" class="input" type="text">
-          </div>
-          <div>
-            <label class="f-label" for="fService">Service / Fluid</label>
-            <input id="fService" class="input" type="text" placeholder="e.g., LPG, HSD, FO">
-          </div>
           <div>
             <label class="f-label" for="fInspDate">Inspection Date</label>
-            <input id="fInspDate" class="input" type="date">
+            <input id="fInspDate" class="input" type="date" min="2000-01-01">
+            <div class="validation-alert" id="errInspDate">The inspection date cannot be in the future.</div>
+          </div>
+          <div class="full">
+            <label class="f-label req" for="fLocationDesc">Location Description</label>
+            <input id="fLocationDesc" class="input" type="text" maxlength="200" placeholder="เช่น ข้อต่องอ (Elbow) ด้านท้าย P-101 บริเวณ Pipe Rack เสาที่ 5">
+            <div class="validation-alert" id="errLocationDesc">Location description is required.</div>
           </div>
         </div>
+        <div class="coord-row" style="margin: 12px 0 10px;">
+          <div>
+            <label class="f-label" for="fLat">Latitude</label>
+            <input id="fLat" class="input" type="number" step="0.000001" inputmode="decimal" placeholder="e.g. 13.0977">
+          </div>
+          <div>
+            <label class="f-label" for="fLng">Longitude</label>
+            <input id="fLng" class="input" type="number" step="0.000001" inputmode="decimal" placeholder="e.g. 100.8872">
+          </div>
+          <div style="display:flex; align-items:flex-end; gap:6px;">
+            <button class="btn btn-subtle" id="btnGpsLoc" type="button" style="height: 36px; display:inline-flex; align-items:center; gap:4px;" title="Use current device GPS location">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="12 8 8 12 12 16 12 8"/></svg>
+              <span class="t-text-swap">GPS</span>
+            </button>
+            <button class="btn" data-variant="outline" id="btnClearLoc" type="button" style="height: 36px;">Clear</button>
+          </div>
+        </div>
+        <div class="hint">Click the map to drop the pin, use GPS, or paste "lat, lng" (e.g. copied from Google Maps) into either box. Optional — used for the dashboard map.</div>
+      </div>
+      <div class="loc-map"><div id="fMap"></div></div>
       </div>
     </div>
+
 
     <div class="panel" id="panelAnomaly">
       <div class="panel-h"><h2>Anomaly</h2></div>
@@ -453,34 +439,104 @@
           <span>ACTIVELY LEAKING — URGENT REPAIR REQUIRED</span>
         </div>
         <div class="fgrid">
-          <div>
+          <div class="span-2">
             <label class="f-label req" for="fType">Finding Type</label>
             <select id="fType" class="select"><option value="" selected disabled>Select type…</option></select>
             <div class="validation-alert" id="errType">Finding type is required.</div>
           </div>
-          <div>
+          <div class="span-2">
             <label class="f-label" for="fSeverity">Severity</label>
-            <div class="severity-row">
-              <select id="fSeverity" class="select"><option value="" selected>—</option><option>Low</option><option>Medium</option><option>High</option></select>
-              <label class="switch-inline">
-                <input class="input" type="checkbox" role="switch" id="fIsLeaking">
-                <span>Actively Leaking</span>
-              </label>
+            <select id="fSeverity" class="select"><option value="" selected>—</option><option>Low</option><option>Medium</option><option>High</option></select>
+          </div>
+          <!-- Defect size. The depth is THE field reading (deepest point of the wall loss) and is saved
+               on the finding itself (findings.depth_mm), with or without a Line No. / pipe size /
+               pressure — the ASME B31.3 assessment below reads it from here (there is no second
+               depth box). Three short numbers side by side, also on a phone. -->
+          <div class="full defect-row">
+            <div>
+              <label class="f-label" for="fDepth">Wall-loss depth (mm)</label>
+              <input id="fDepth" class="input" type="number" step="0.01" min="0" inputmode="decimal" placeholder="deepest point">
             </div>
-            <div class="hint" id="leakHint" style="display:none; color:#dc2626; margin-top:4px; font-weight:600;">Disabled for coating or support defects</div>
+            <div>
+              <label class="f-label" for="fDefLen">Length (mm)</label>
+              <input id="fDefLen" class="input" type="number" step="1" inputmode="decimal" placeholder="optional">
+            </div>
+            <div>
+              <label class="f-label" for="fDefWid">Width (mm)</label>
+              <input id="fDefWid" class="input" type="number" step="1" inputmode="decimal" placeholder="optional">
+            </div>
+            <div class="validation-alert defect-row-err" id="errDepth">Depth cannot be negative.</div>
+          </div>
+          <!-- Own full-width row: leaking drives the Temporary Repair panel, the assessment lockout
+               and the advisor's safety overlay, so it must not read as a minor option. -->
+          <div class="full leak-row">
+            <label class="switch-inline">
+              <input class="input" type="checkbox" role="switch" id="fIsLeaking">
+              <span>Actively Leaking</span>
+            </label>
+            <span class="hint" style="margin:0;">Pressure boundary breached — product escaping now.</span>
+            <div class="hint" id="leakHint" style="display:none; color:#dc2626; margin:0; font-weight:600;">Disabled for coating or support defects</div>
           </div>
           <div class="full">
             <label class="f-label" for="fDescription">Anomaly Description</label>
-            <textarea id="fDescription" class="textarea" rows="3" placeholder="สิ่งที่พบ ขอบเขตความเสียหาย และอ้างอิงหัวข้อในรายงานตรวจสอบ…"></textarea>
+            <textarea id="fDescription" class="textarea" rows="3" maxlength="4000" placeholder="สิ่งที่พบ ขอบเขตความเสียหาย และอ้างอิงหัวข้อในรายงานตรวจสอบ…"></textarea>
           </div>
-          <div>
-            <label class="f-label" for="fDefLen">Defect Length (mm)</label>
-            <input id="fDefLen" class="input" type="number" step="1" placeholder="optional">
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="pendingPhotoPanel">
+      <div class="panel-h">
+        <h2>Photos (as found)</h2>
+        <button class="btn" data-variant="outline" id="btnAddPendingPhoto" type="button">+ Add photos</button>
+      </div>
+      <div class="panel-b">
+        <div class="photo-grid" id="pendingPhotoGrid"></div>
+        <div class="photo-empty" id="pendingPhotoEmpty"><span class="pe-icon" aria-hidden="true" data-ui-icon="upload"></span><span class="pe-text"><span class="pe-main">Drag photos here or <u>choose files</u></span><span class="pe-sub">You can also paste a screenshot with <kbd>Ctrl</kbd>+<kbd>V</kbd>. A phone photo with location data fills the map pin and inspection date above (if still empty).</span></span></div>
+      </div>
+    </div>
+
+    <!-- Existing-finding photo management — same grids/logic as the detail page's Photographic
+         Record panel (distinct ids: gridFound2/gridRepaired2/etc.), shown only when editing. -->
+    <div class="panel" id="editPhotoPanel" style="display:none;">
+      <div class="panel-h">
+        <h2>Photographic Record</h2>
+        <span class="hint" style="margin:0;">Tip: paste a screenshot with <kbd>Ctrl</kbd>+<kbd>V</kbd> (uses the last "+ Add" you clicked)</span>
+      </div>
+      <div class="panel-b">
+        <div class="photo-group">
+          <div class="photo-group-h">
+            <h3>As Found</h3>
+            <button class="btn" data-variant="outline" id="btnAddFound2" type="button">+ Add</button>
           </div>
-          <div>
-            <label class="f-label" for="fDefWid">Defect Width (mm)</label>
-            <input id="fDefWid" class="input" type="number" step="1" placeholder="optional">
+          <div class="photo-grid" id="gridFound2"></div>
+          <div class="photo-empty" id="emptyFound2"><span class="pe-icon" aria-hidden="true" data-ui-icon="upload"></span><span class="pe-text"><span class="pe-main">Drag photos here or <u>choose files</u></span><span class="pe-sub">No as-found photos.</span></span></div>
+        </div>
+        <div class="photo-group">
+          <div class="photo-group-h">
+            <h3>After Repair</h3>
+            <button class="btn" data-variant="outline" id="btnAddRepaired2" type="button">+ Add</button>
           </div>
+          <div class="photo-grid" id="gridRepaired2"></div>
+          <div class="photo-empty" id="emptyRepaired2"><span class="pe-icon" aria-hidden="true" data-ui-icon="upload"></span><span class="pe-text"><span class="pe-main">Drag photos here or <u>choose files</u></span><span class="pe-sub">No after-repair photos yet — add one when the repair is completed.</span></span></div>
+        </div>
+        <!-- Temporary-repair evidence (legacy Excel section 5). Both groups are hidden by
+             renderPhotoGroups unless a temp_repair record exists for this finding. -->
+        <div class="photo-group tr-photo-group" id="trPhotoGroupBefore2">
+          <div class="photo-group-h">
+            <h3>Before Temporary Repair <span class="photo-group-th">/ ก่อนติดตั้ง</span></h3>
+            <button class="btn" data-variant="outline" id="btnAddTempBefore2" type="button">+ Add</button>
+          </div>
+          <div class="photo-grid" id="gridTempBefore2"></div>
+          <div class="photo-empty" id="emptyTempBefore2"><span class="pe-icon" aria-hidden="true" data-ui-icon="upload"></span><span class="pe-text"><span class="pe-main">Drag photos here or <u>choose files</u></span><span class="pe-sub">No before-installation photos yet.</span></span></div>
+        </div>
+        <div class="photo-group tr-photo-group" id="trPhotoGroupAfter2">
+          <div class="photo-group-h">
+            <h3>After Temporary Repair <span class="photo-group-th">/ หลังติดตั้ง</span></h3>
+            <button class="btn" data-variant="outline" id="btnAddTempAfter2" type="button">+ Add</button>
+          </div>
+          <div class="photo-grid" id="gridTempAfter2"></div>
+          <div class="photo-empty" id="emptyTempAfter2"><span class="pe-icon" aria-hidden="true" data-ui-icon="upload"></span><span class="pe-text"><span class="pe-main">Drag photos here or <u>choose files</u></span><span class="pe-sub">No after-installation photos yet.</span></span></div>
         </div>
       </div>
     </div>
@@ -522,7 +578,7 @@
               <input id="fTrInstalledBy" class="input" type="text" placeholder="e.g., Maintenance Team A">
             </div>
             <div class="full">
-              <label class="f-label" for="fTrInstallMethod">Installation Method</label>
+              <label class="f-label" for="fTrInstallMethod">Installation Procedure / Notes</label>
               <textarea id="fTrInstallMethod" class="textarea" rows="2" placeholder="Procedure / WPS reference if any, on-stream or shutdown…"></textarea>
             </div>
           </div>
@@ -592,13 +648,15 @@
                 <label class="f-label" for="fTrTestP">Test Pressure (bar(g))</label>
                 <input id="fTrTestP" class="input" type="number" step="0.1" min="0">
               </div>
+              <!-- One "Tested At" field (it is one tested_at timestamp). Date + time stay two inputs on
+                   one row on purpose: a native datetime-local picker shows AM/PM on many phones,
+                   and the time box is a 24h HH:mm text input (see initTempRepair's blur formatter). -->
               <div>
-                <label class="f-label" for="fTrTestDate">Tested Date</label>
-                <input id="fTrTestDate" class="input" type="date">
-              </div>
-              <div>
-                <label class="f-label" for="fTrTestTime">Tested Time (24h)</label>
-                <input id="fTrTestTime" class="input mono" type="text" placeholder="HH:mm (e.g. 14:30)" maxlength="5">
+                <label class="f-label" for="fTrTestDate">Tested At (date · 24h time)</label>
+                <div class="p-row">
+                  <input id="fTrTestDate" class="input" type="date" aria-label="Tested date">
+                  <input id="fTrTestTime" class="input mono" type="text" placeholder="HH:mm" maxlength="5" aria-label="Tested time, 24-hour" style="flex:0 0 76px;">
+                </div>
               </div>
               <div>
                 <label class="f-label" for="fTrTestResult">Test Result</label>
@@ -648,101 +706,39 @@
       </div>
     </div>
 
-    <div class="panel" id="panelPosition">
-      <div class="panel-h"><h2>Position</h2></div>
-      <div class="panel-b">
-        <div class="coord-row" style="margin-bottom: 10px;">
-          <div>
-            <label class="f-label" for="fLat">Latitude</label>
-            <input id="fLat" class="input" type="number" step="0.000001" placeholder="13.097720">
-          </div>
-          <div>
-            <label class="f-label" for="fLng">Longitude</label>
-            <input id="fLng" class="input" type="number" step="0.000001" placeholder="100.887211">
-          </div>
-          <div style="display:flex; align-items:flex-end; gap:6px;">
-            <button class="btn btn-subtle" id="btnGpsLoc" type="button" style="height: 36px; display:inline-flex; align-items:center; gap:4px;" title="Use current device GPS location">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="12 8 8 12 12 16 12 8"/></svg>
-              <span>GPS</span>
-            </button>
-            <button class="btn" data-variant="outline" id="btnClearLoc" type="button" style="height: 36px;">Clear</button>
-          </div>
-        </div>
-        <div id="fMap"></div>
-        <div class="hint">Click the map to drop the pin, use GPS, or type coordinates. Optional — used for the dashboard map.</div>
-      </div>
-    </div>
-
-    <div class="panel" id="pendingPhotoPanel">
+    <div class="detail-pair">
+    <div class="panel" id="panelLine">
       <div class="panel-h">
-        <h2>Photos (as found)</h2>
-        <button class="btn" data-variant="outline" id="btnAddPendingPhoto" type="button">+ Add photos</button>
+        <h2>Line Identification</h2>
+        <!-- Opens in a NEW TAB deliberately. This used to be a dialog that overlaid the form, so a
+             half-entered finding survived. The line list is a page now, and navigating in-place
+             would silently discard unsaved form input. -->
+        <a class="btn" data-variant="outline" id="btnLineList" href="#/lines" target="_blank" rel="noopener">Manage line list</a>
       </div>
       <div class="panel-b">
-        <div class="photo-grid" id="pendingPhotoGrid"></div>
-        <div class="photo-empty" id="pendingPhotoEmpty"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No photos yet — add a file or paste a screenshot with <kbd>Ctrl</kbd>+<kbd>V</kbd>. Photos are downscaled automatically before upload.</span></div>
-      </div>
-    </div>
-
-    <!-- Existing-finding photo management — same grids/logic as the detail page's Photographic
-         Record panel (distinct ids: gridFound2/gridRepaired2/etc.), shown only when editing. -->
-    <div class="panel" id="editPhotoPanel" style="display:none;">
-      <div class="panel-h">
-        <h2>Photographic Record</h2>
-        <span class="hint" style="margin:0;">Tip: paste a screenshot with <kbd>Ctrl</kbd>+<kbd>V</kbd> (uses the last "+ Add" you clicked)</span>
-      </div>
-      <div class="panel-b">
-        <div class="photo-group">
-          <div class="photo-group-h">
-            <h3>As Found</h3>
-            <button class="btn" data-variant="outline" id="btnAddFound2" type="button">+ Add</button>
-          </div>
-          <div class="photo-grid" id="gridFound2"></div>
-          <div class="photo-empty" id="emptyFound2"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No as-found photos.</span></div>
-        </div>
-        <div class="photo-group">
-          <div class="photo-group-h">
-            <h3>After Repair</h3>
-            <button class="btn" data-variant="outline" id="btnAddRepaired2" type="button">+ Add</button>
-          </div>
-          <div class="photo-grid" id="gridRepaired2"></div>
-          <div class="photo-empty" id="emptyRepaired2"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No after-repair photos yet — add one when the repair is completed.</span></div>
-        </div>
-        <!-- Temporary-repair evidence (legacy Excel section 5). Both groups are hidden by
-             renderPhotoGroups unless a temp_repair record exists for this finding. -->
-        <div class="photo-group tr-photo-group" id="trPhotoGroupBefore2">
-          <div class="photo-group-h">
-            <h3>Before Temporary Repair <span class="photo-group-th">/ ก่อนติดตั้ง</span></h3>
-            <button class="btn" data-variant="outline" id="btnAddTempBefore2" type="button">+ Add</button>
-          </div>
-          <div class="photo-grid" id="gridTempBefore2"></div>
-          <div class="photo-empty" id="emptyTempBefore2"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No before-installation photos yet.</span></div>
-        </div>
-        <div class="photo-group tr-photo-group" id="trPhotoGroupAfter2">
-          <div class="photo-group-h">
-            <h3>After Temporary Repair <span class="photo-group-th">/ หลังติดตั้ง</span></h3>
-            <button class="btn" data-variant="outline" id="btnAddTempAfter2" type="button">+ Add</button>
-          </div>
-          <div class="photo-grid" id="gridTempAfter2"></div>
-          <div class="photo-empty" id="emptyTempAfter2"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No after-installation photos yet.</span></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-h"><h2>Source Inspection</h2></div>
-      <div class="panel-b">
+        <p class="hint" style="margin:0 0 10px;">Optional — an engineer can add these later. A known Pipe Tag fills the assessment's pipe setup from the line list.</p>
         <div class="fgrid">
           <div>
-            <label class="f-label" for="fReportLink">Report Link (SharePoint)</label>
-            <input id="fReportLink" class="input" type="url" placeholder="https://…  paste the SharePoint link to the source report">
+            <label class="f-label" for="fTag">Pipe Tag / Line No.</label>
+            <div class="combo">
+              <input id="fTag" class="input" type="text" maxlength="80" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false">
+              <ul class="combo-menu" id="tagCombo" role="listbox"></ul>
+            </div>
+          </div>
+          <div>
+            <label class="f-label" for="fPid">P&amp;ID No.</label>
+            <input id="fPid" class="input" type="text" maxlength="80">
+          </div>
+          <div>
+            <label class="f-label" for="fService">Service / Fluid</label>
+            <input id="fService" class="input" type="text" maxlength="120" placeholder="e.g., LPG, HSD, FO">
           </div>
         </div>
       </div>
     </div>
 
     <div class="panel" id="panelPlanning">
-      <div class="panel-h"><h2>Planning &amp; SAP</h2></div>
+      <div class="panel-h"><h2>Reference &amp; Planning</h2></div>
       <div class="panel-b">
         <!-- Mixed-role panel: SAP numbers are inspector-editable (they raise the notification),
              while the repair schedule and budget are maintenance-only. The two maintenance-only
@@ -751,6 +747,10 @@
              their empty values, or an inspector save would wipe a maintenance-set date/budget.
              See features/form.ts collectForm() and db/schema.sql section 9. -->
         <div class="fgrid">
+          <div class="full">
+            <label class="f-label" for="fReportLink">Source Inspection Report (SharePoint link)</label>
+            <input id="fReportLink" class="input" type="url" placeholder="https://…  paste the SharePoint link to the source report">
+          </div>
           <div class="maintenance-only">
             <label class="f-label" for="fTargetDate">Target Repair Date</label>
             <input id="fTargetDate" class="input" type="date">
@@ -765,139 +765,129 @@
           </div>
           <div class="maintenance-only">
             <label class="f-label" for="fEstCost">Estimated Repair Cost (฿)</label>
-            <input id="fEstCost" class="input" type="number" step="1000" min="0" placeholder="e.g., 150000">
+            <input id="fEstCost" class="input" type="number" step="1000" min="0" inputmode="numeric" placeholder="e.g., 150000">
+            <div class="validation-alert" id="errEstCost">The repair cost cannot be negative.</div>
           </div>
         </div>
       </div>
     </div>
 
-    </div><!-- /formColMain -->
+    </div>
 
-    <!-- ================= ASSESSMENT (full ASME B31.3 workbench, right column) ================= -->
-    <div class="form-col form-col-assess" id="formColAssess">
-      <div class="panel" id="repairAdvisorPanel">
-        <div class="panel-h">
-          <h2>Repair Advisor</h2>
-          <a href="#" id="advisorAssessLink" class="back-link" style="display:none;">ดูผลการประเมิน ASME B31.3 ฉบับเต็ม</a>
-        </div>
-        <div class="panel-b" id="raBody"></div>
-      </div>
-      <div class="panel" id="assessPanel">
-        <div class="panel-h">
-          <h2>ASME B31.3 Assessment</h2>
-          <div class="panel-h-actions">
-            <button class="btn" data-variant="outline" id="btnResetAssessLine" type="button" title="Reset the pipe setup (NPS / Schedule / Material / design pressure) to the master line list entry for the selected Pipe Tag. The UT reading is kept.">Reset to line list</button>
-            <label class="switch-inline">
-              <input class="input" type="checkbox" role="switch" id="aToggle">
-              <span>Include assessment</span>
-            </label>
-          </div>
-        </div>
-        <div class="panel-b" id="aBody">
-          <div class="leaking-warning-banner" id="aLeakingNote" style="display:none; margin-bottom:12px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <span>ASME B31.3 wall-loss calculation is disabled for actively leaking lines — immediate emergency repair/clamping required.</span>
-          </div>
-          <p class="hint" id="aIntro" style="margin-top:0;">
-            Enter the pipe data and the UT reading — the full B31.3 result (status, cross-section, results,
-            equations) computes live below and is saved onto the finding.
-          </p>
-          <div class="fgrid">
-            <div>
-              <label class="f-label" for="aNps">Nominal Pipe Size</label>
-              <select id="aNps" class="select"></select>
-            </div>
-            <div>
-              <label class="f-label" for="aSch">Schedule</label>
-              <select id="aSch" class="select"></select>
-            </div>
-            <div>
-              <label class="f-label" for="aMat">Material</label>
-              <select id="aMat" class="select"></select>
-            </div>
-            <div>
-              <label class="f-label" for="aTnom">Nominal Thickness (mm)</label>
-              <input id="aTnom" class="input" type="number" step="0.01" placeholder="auto from schedule">
-              <div class="hint">Auto-filled from the schedule; edit for an as-built value.</div>
-            </div>
-          </div>
-
-          <div class="a-reading">
-            <div class="seg-row" id="aModeSeg" role="tablist" aria-label="Reading type">
-              <span class="seg-pill" aria-hidden="true"></span>
-              <button class="seg-btn active" data-mode="depth" type="button">Wall-loss depth</button>
-              <button class="seg-btn" data-mode="tmeas" type="button">Measured thickness</button>
-            </div>
-            <div class="fgrid">
-              <div id="aTmeasGrp" style="display:none;">
-                <label class="f-label req" for="aTmeas">Measured Min. Thickness — UT (mm)</label>
-                <input id="aTmeas" class="input" type="number" step="0.01" placeholder="e.g., 5.40">
-              </div>
-              <div id="aDepthGrp">
-                <label class="f-label req" for="aDepth">Wall-Loss Depth (mm)</label>
-                <input id="aDepth" class="input" type="number" step="0.01" placeholder="e.g., 1.20">
-              </div>
-            </div>
-          </div>
-
-          <div class="fgrid">
-            <div>
-              <label class="f-label req" for="aP">Design Pressure</label>
-              <div class="p-row">
-                <input id="aP" class="input" type="number" step="0.1" placeholder="e.g., 7.0">
-                <select id="aPUnit" class="select"><option value="bar(g)" selected>bar(g)</option><option value="bar">bar</option><option value="psi">psi</option></select>
-              </div>
-            </div>
-            <div>
-              <label class="f-label" for="aCorrType">Corrosion Type</label>
-              <select id="aCorrType" class="select"><option value="external" selected>External Wall Loss</option><option value="internal">Internal Wall Loss</option></select>
-            </div>
-            <div>
-              <label class="f-label" for="aCa">Corrosion Allowance, CA (mm)</label>
-              <input id="aCa" class="input" type="number" step="0.01" value="1.5">
-              <div class="hint">Design/spec reserve for <em>future</em> corrosion — not the loss you measured.</div>
-            </div>
-          </div>
-
-          <details class="a-advanced">
-            <summary>Advanced parameters (defaults suit most carbon-steel lines)</summary>
-            <div class="fgrid" style="margin-top:10px;">
-              <div>
-                <label class="f-label" for="aS">Allowable Stress, S (MPa)</label>
-                <input id="aS" class="input" type="number" step="0.1">
-              </div>
-              <div>
-                <label class="f-label" for="aTemp">Design Temperature (°C)</label>
-                <input id="aTemp" class="input" type="number" step="1" placeholder="e.g., 65">
-              </div>
-              <div>
-                <label class="f-label" for="aE">Joint Factor, E</label>
-                <input id="aE" class="input" type="number" step="0.01" value="1.0">
-              </div>
-              <div>
-                <label class="f-label" for="aW">Weld Strength Factor, W</label>
-                <input id="aW" class="input" type="number" step="0.01" value="1.0">
-              </div>
-              <div>
-                <label class="f-label" for="aY">Coefficient, Y</label>
-                <input id="aY" class="input" type="number" step="0.01" value="0.4">
-              </div>
-              <div>
-                <label class="f-label" for="aCr">Corrosion Rate (mm/yr)</label>
-                <input id="aCr" class="input" type="number" step="0.001" placeholder="optional — enables remaining life">
-              </div>
-            </div>
-          </details>
-
-          <div class="validation-alert" id="aCalcHint" style="display:none; margin-top:10px;"></div>
-
-          <!-- Full workbench (status banner, cross-section, results, advisor, equations) is
-               injected here by paCreateAssessView (src/workbench/assess-view.ts) in initAssessment(). -->
-          <div id="awForm" style="margin-top:14px;"></div>
+    <div class="panel" id="assessPanel">
+      <div class="panel-h">
+        <h2>ASME B31.3 Assessment</h2>
+        <div class="panel-h-actions">
+          <button class="btn" data-variant="outline" id="btnResetAssessLine" type="button" title="Reset the pipe setup (NPS / Schedule / Material / design pressure) to the master line list entry for the selected Pipe Tag. The UT reading is kept.">Reset to line list</button>
+          <label class="switch-inline">
+            <input class="input" type="checkbox" role="switch" id="aToggle">
+            <span>Include assessment</span>
+          </label>
         </div>
       </div>
-    </div><!-- /formColAssess -->
-    </div><!-- /form-split -->
+      <div class="panel-b" id="aBody">
+        <div class="leaking-warning-banner" id="aLeakingNote" style="display:none; margin-bottom:12px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span>ASME B31.3 wall-loss calculation is disabled for actively leaking lines — immediate emergency repair/clamping required.</span>
+        </div>
+        <!-- inputs left, the live result right (stacked below 1100px) -->
+        <div class="assess-split">
+        <div class="assess-inputs">
+        <p class="hint" id="aIntro" style="margin-top:0;">
+          Pipe size, schedule and design pressure turn the wall-loss depth into the ASME B31.3 result.
+          <b>Don't know them?</b> Save anyway — the finding and its depth are kept, and an engineer completes
+          this later (choosing the Line No. fills it from the line list).
+        </p>
+        <div class="fgrid">
+          <div>
+            <label class="f-label" for="aNps">Nominal Pipe Size</label>
+            <select id="aNps" class="select"></select>
+          </div>
+          <div>
+            <label class="f-label" for="aSch">Schedule</label>
+            <select id="aSch" class="select"></select>
+          </div>
+          <div>
+            <label class="f-label" for="aMat">Material</label>
+            <select id="aMat" class="select"></select>
+          </div>
+          <div>
+            <label class="f-label" for="aTnom">Nominal Thickness (mm)</label>
+            <input id="aTnom" class="input" type="number" step="0.01" placeholder="auto from schedule">
+            <div class="hint">Auto-filled from the schedule; edit for an as-built value.</div>
+          </div>
+        </div>
+
+        <!-- No reading box here: the wall-loss depth is entered once, in the Anomaly section (#fDepth). -->
+        <div class="a-depth-ref" id="aDepthRef"></div>
+
+        <div class="fgrid">
+          <div>
+            <label class="f-label" for="aP">Design Pressure</label>
+            <div class="p-row">
+              <input id="aP" class="input" type="number" step="0.1" placeholder="e.g., 7.0">
+              <select id="aPUnit" class="select"><option value="bar(g)" selected>bar(g)</option><option value="bar">bar</option><option value="psi">psi</option></select>
+            </div>
+          </div>
+          <div>
+            <label class="f-label" for="aCorrType">Corrosion Type</label>
+            <select id="aCorrType" class="select"><option value="external" selected>External Wall Loss</option><option value="internal">Internal Wall Loss</option></select>
+            <div class="hint" id="aCorrTypeHint" style="display:none;">Set by the Finding Type.</div>
+          </div>
+          <div>
+            <label class="f-label" for="aCa">Corrosion Allowance, CA (mm)</label>
+            <input id="aCa" class="input" type="number" step="0.01" value="1.5">
+            <div class="hint">Design/spec reserve for <em>future</em> corrosion — not the loss you measured.</div>
+          </div>
+        </div>
+
+        <details class="a-advanced">
+          <summary>Advanced parameters (defaults suit most carbon-steel lines)</summary>
+          <div class="fgrid" style="margin-top:10px;">
+            <div>
+              <label class="f-label" for="aS">Allowable Stress, S (MPa)</label>
+              <input id="aS" class="input" type="number" step="0.1">
+            </div>
+            <div>
+              <label class="f-label" for="aTemp">Design Temperature (°C)</label>
+              <input id="aTemp" class="input" type="number" step="1" placeholder="e.g., 65">
+            </div>
+            <div>
+              <label class="f-label" for="aE">Joint Factor, E</label>
+              <input id="aE" class="input" type="number" step="0.01" value="1.0">
+            </div>
+            <div>
+              <label class="f-label" for="aW">Weld Strength Factor, W</label>
+              <input id="aW" class="input" type="number" step="0.01" value="1.0">
+            </div>
+            <div>
+              <label class="f-label" for="aY">Coefficient, Y</label>
+              <input id="aY" class="input" type="number" step="0.01" value="0.4">
+            </div>
+            <div>
+              <label class="f-label" for="aCr">Corrosion Rate (mm/yr)</label>
+              <input id="aCr" class="input" type="number" step="0.001" placeholder="optional — enables remaining life">
+            </div>
+          </div>
+        </details>
+
+        <div class="validation-alert" id="aCalcHint" style="display:none; margin-top:10px;"></div>
+        </div>
+
+        <!-- Full workbench (status banner, cross-section, results, equations) is injected here
+             by paCreateAssessView (src/workbench/assess-view.ts) in initAssessment(). -->
+        <div id="awForm"></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" id="repairAdvisorPanel">
+      <div class="panel-h">
+        <h2>Repair Advisor</h2>
+        <a href="#" id="advisorAssessLink" class="back-link" style="display:none;">ดูผลการประเมิน ASME B31.3 ฉบับเต็ม</a>
+      </div>
+      <div class="panel-b" id="raBody"></div>
+    </div>
+    </div><!-- /form-flow -->
   </section>
 
   <!-- ================= LINE RISK RANKING ================= -->
@@ -909,7 +899,7 @@
           <div class="risk-toolbar-title">Line Risk Ranking</div>
         </div>
         <div class="panel-h-btns">
-          <input id="riskSearch" class="input input-sm" type="search" placeholder="Search line tag or location…">
+          <input id="riskSearch" class="input" type="search" placeholder="Search line tag or location…">
           <select id="riskTerminalFilter" class="select">
             <option value="">All terminals</option>
             <option>KBY</option><option>SRC</option><option>BRP</option>
@@ -1009,7 +999,7 @@
           <div class="risk-toolbar-title">Inspection Plan</div>
         </div>
         <div class="panel-h-btns">
-          <input id="planSearch" class="input input-sm" type="search" placeholder="Search task, tag or assignee…">
+          <input id="planSearch" class="input" type="search" placeholder="Search task, tag or assignee…">
           <select id="planYearFilter" class="select"></select>
           <select id="planTerminalFilter" class="select">
             <option value="">All terminals</option>
@@ -1192,11 +1182,15 @@
     <div class="sticky-page-header">
       <div class="toolbar">
         <div class="toolbar-id-row">
-          <a class="back-link" href="#/list">&#8592; Dashboard</a>
+          <a class="back-link authed-only" href="#/list">&#8592; Dashboard</a>
+          <a class="back-link guest-only" href="#/list">&#8592; Sign in</a>
           <div class="risk-toolbar-title">Quick ASME B31.3 Calculator</div>
         </div>
         <div class="panel-h-btns">
-          <button class="btn" data-variant="outline" id="btnCopyQuickSummary" type="button" title="Copy calculation summary to clipboard">📋 Copy Summary</button>
+          <!-- Shown only where the browser can share files (phones): sends the named PDF + message
+               to LINE etc. via the OS share sheet. Hidden by initQuickCalc elsewhere. -->
+          <button class="btn btn-primary" id="btnQuickShare" type="button" title="Share the PDF and summary (e.g. to LINE)" style="display:none;"><span aria-hidden="true" data-ui-icon="share"></span><span class="t-text-swap">Share</span></button>
+          <button class="btn" data-variant="outline" id="btnCopyQuickSummary" type="button" title="Copy calculation summary to clipboard"><span aria-hidden="true" data-ui-icon="copy"></span><span class="t-text-swap">Copy Summary</span></button>
           <button class="btn" data-variant="outline" id="btnQuickPdf" type="button" title="Export this calculation as a PDF report">Export PDF</button>
           <button class="btn" data-variant="outline" id="btnQuickReset" type="button">Reset</button>
         </div>
@@ -1214,9 +1208,9 @@
 
             <div class="quick-spec-bar" id="qSpecBar">
               <div class="q-spec-item"><span>OD:</span> <strong id="qSpecOd">—</strong></div>
-              <div class="q-spec-item"><span>t_nom:</span> <strong id="qSpecTnom">—</strong></div>
-              <div class="q-spec-item"><span>Stress S:</span> <strong id="qSpecS">—</strong></div>
-              <div class="q-spec-item"><span>Uncorroded MAWP:</span> <strong id="qSpecMawp">—</strong></div>
+              <div class="q-spec-item"><span>Original wall:</span> <strong id="qSpecTnom">—</strong></div>
+              <div class="q-spec-item"><span>Allowable stress:</span> <strong id="qSpecS">—</strong></div>
+              <div class="q-spec-item"><span>Max. safe pressure:</span> <strong id="qSpecMawp">—</strong></div>
             </div>
 
             <div class="fgrid">
@@ -1328,64 +1322,52 @@
           <button class="btn btn-primary" id="btnEdit" type="button">Edit details</button>
         </div>
       </div>
+      <!-- Section links: buttons (not #anchors — the URL hash is the app's router). Scroll with an
+           offset for the pinned bars and highlight the section in view (core/section-nav.ts). A link
+           whose section is hidden (e.g. Temporary Repair with no record) hides itself. -->
+      <nav class="section-nav" id="detailSectionNav" aria-label="Sections on this page">
+        <button type="button" data-target="detailPanelLocation">Location</button>
+        <button type="button" data-target="detailPanelAnomaly">Anomaly</button>
+        <button type="button" data-target="detailPanelPhotos">Photos</button>
+        <button type="button" data-target="detailPanelTempRepair">Temporary repair</button>
+        <button type="button" data-target="detailPanelLine">Line</button>
+        <button type="button" data-target="detailPanelStatus">Reference &amp; planning</button>
+        <button type="button" data-target="detailPanelAssess">Assessment</button>
+        <button type="button" data-target="detailPanelAdvisor">Repair advice</button>
+        <button type="button" data-target="detailPanelHistory">History</button>
+      </nav>
     </div>
 
     <!-- Integrity health banner (same design/logic as the finding PDF's top banner, via the shared
          resolveIntegrityBanner) — the at-a-glance health verdict at the top of the detail content. -->
     <div id="detailHealthBanner"></div>
 
-    <div class="detail-split">
-      <!-- LEFT: the finding data — priority order: what/where it is, then lifecycle status,
-           then the engineering assessment, then the audit trail. -->
-      <div class="detail-col">
-        <div class="panel" id="detailPanelDetails">
-          <div class="panel-h"><h2>Details</h2></div>
+    <div class="detail-flow">
+      <!-- ONE column, the SAME order as the finding form and the finding PDF:
+             Location -> Anomaly -> Photos -> Temporary Repair -> Line Identification ->
+             Reference & Planning -> ASME B31.3 Assessment -> Repair Advisor -> History.
+           Line Identification and Reference & Planning share a row on wide screens (.detail-pair).
+           Change the order in all three or none (form markup, this block, buildFindingPdf). -->
+        <div class="panel" id="detailPanelLocation">
+          <div class="panel-h">
+            <h2>Location</h2>
+            <a class="back-link" id="detailMapLink" href="#" target="_blank" rel="noopener" style="display:none;">Open in Google Maps <span aria-hidden="true" data-ui-icon="external"></span></a>
+          </div>
+          <!-- fields | map side by side on wide screens (stacked on phones); the map half hides when
+               the finding has no pin and the fields take the full width -->
+          <div class="loc-split">
+            <div class="panel-b">
+              <div class="dgrid" id="detailLocGrid"></div>
+            </div>
+            <div id="detailLocPanel" style="display:none;"><div id="detailMap"></div></div>
+          </div>
+        </div>
+
+        <div class="panel" id="detailPanelAnomaly">
+          <div class="panel-h"><h2>Anomaly</h2></div>
           <div class="panel-b">
-            <div class="dgrid" id="detailGrid"></div>
-            <div id="detailDesc" style="margin-top: 12px;"></div>
+            <div class="dgrid" id="detailAnomGrid"></div>
           </div>
-        </div>
-
-        <div class="panel" id="detailPanelStatus">
-          <div class="panel-h"><h2>Status</h2></div>
-          <div class="panel-b">
-            <div class="dgrid" id="lifecycleGrid" style="margin-bottom: 12px;"></div>
-            <div class="status-actions" id="statusActions"></div>
-          </div>
-        </div>
-
-        <!-- Emergency stop-leak record. Hidden entirely unless a temp_repair row exists, so a
-             normal finding's detail page is unchanged. Sits ABOVE the Repair Advisor on purpose:
-             a reader needs to know a clamp is already on before reading repair advice. -->
-        <div class="panel" id="detailPanelTempRepair" style="display:none;">
-          <div class="panel-h">
-            <h2>Temporary Repair</h2>
-          </div>
-          <div class="panel-b" id="trDetailBody"></div>
-        </div>
-
-        <div class="panel" id="detailPanelAdvisor">
-          <div class="panel-h"><h2>Repair Advisor</h2></div>
-          <div class="panel-b" id="raDetailBody"></div>
-        </div>
-
-        <div class="panel" id="detailPanelAssess">
-          <div class="panel-h">
-            <h2>ASME B31.3 Assessment</h2>
-            <button class="btn" data-variant="outline" id="btnAssess" type="button">Run assessment</button>
-          </div>
-          <div class="panel-b" id="assessBody"></div>
-        </div>
-      </div>
-
-      <!-- RIGHT: evidence -->
-      <div class="detail-col">
-        <div class="panel" id="detailLocPanel" style="display:none;">
-          <div class="panel-h">
-            <h2>Site Location</h2>
-            <a class="back-link" id="detailMapLink" href="#" target="_blank" rel="noopener" style="font-size:12px;">Open in Google Maps &#8599;</a>
-          </div>
-          <div id="detailMap"></div>
         </div>
 
         <div class="panel" id="detailPanelPhotos">
@@ -1400,7 +1382,7 @@
                 <button class="btn" data-variant="outline" id="btnAddFound" type="button">+ Add</button>
               </div>
               <div class="photo-grid" id="gridFound"></div>
-              <div class="photo-empty" id="emptyFound"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No as-found photos.</span></div>
+              <div class="photo-empty" id="emptyFound"><span class="pe-icon" aria-hidden="true" data-ui-icon="upload"></span><span class="pe-text"><span class="pe-main">Drag photos here or <u>choose files</u></span><span class="pe-sub">No as-found photos.</span></span></div>
             </div>
             <div class="photo-group">
               <div class="photo-group-h">
@@ -1408,7 +1390,7 @@
                 <button class="btn" data-variant="outline" id="btnAddRepaired" type="button">+ Add</button>
               </div>
               <div class="photo-grid" id="gridRepaired"></div>
-              <div class="photo-empty" id="emptyRepaired"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No after-repair photos yet — add one when the repair is completed.</span></div>
+              <div class="photo-empty" id="emptyRepaired"><span class="pe-icon" aria-hidden="true" data-ui-icon="upload"></span><span class="pe-text"><span class="pe-main">Drag photos here or <u>choose files</u></span><span class="pe-sub">No after-repair photos yet — add one when the repair is completed.</span></span></div>
             </div>
             <!-- Temporary-repair evidence (legacy Excel section 5). Both groups are hidden by
                  renderPhotoGroups unless a temp_repair record exists for this finding. -->
@@ -1418,7 +1400,7 @@
                 <button class="btn" data-variant="outline" id="btnAddTempBefore" type="button">+ Add</button>
               </div>
               <div class="photo-grid" id="gridTempBefore"></div>
-              <div class="photo-empty" id="emptyTempBefore"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No before-installation photos yet.</span></div>
+              <div class="photo-empty" id="emptyTempBefore"><span class="pe-icon" aria-hidden="true" data-ui-icon="upload"></span><span class="pe-text"><span class="pe-main">Drag photos here or <u>choose files</u></span><span class="pe-sub">No before-installation photos yet.</span></span></div>
             </div>
             <div class="photo-group tr-photo-group" id="trPhotoGroupAfter">
               <div class="photo-group-h">
@@ -1426,18 +1408,58 @@
                 <button class="btn" data-variant="outline" id="btnAddTempAfter" type="button">+ Add</button>
               </div>
               <div class="photo-grid" id="gridTempAfter"></div>
-              <div class="photo-empty" id="emptyTempAfter"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No after-installation photos yet.</span></div>
+              <div class="photo-empty" id="emptyTempAfter"><span class="pe-icon" aria-hidden="true" data-ui-icon="upload"></span><span class="pe-text"><span class="pe-main">Drag photos here or <u>choose files</u></span><span class="pe-sub">No after-installation photos yet.</span></span></div>
             </div>
           </div>
         </div>
 
-        <div class="panel">
+        <!-- Emergency stop-leak record. Hidden entirely unless a temp_repair row exists, so a
+             normal finding's detail page is unchanged. Sits ABOVE the Repair Advisor on purpose:
+             a reader needs to know a clamp is already on before reading repair advice. -->
+        <div class="panel" id="detailPanelTempRepair" style="display:none;">
+          <div class="panel-h">
+            <h2>Temporary Repair</h2>
+          </div>
+          <div class="panel-b" id="trDetailBody"></div>
+        </div>
+
+        <div class="detail-pair">
+        <div class="panel" id="detailPanelLine">
+          <div class="panel-h"><h2>Line Identification</h2></div>
+          <div class="panel-b">
+            <div class="dgrid" id="detailLineGrid"></div>
+          </div>
+        </div>
+
+        <!-- Reference & Planning = the form panel of the same name + the workflow status (and its
+             actions), which only exists once a finding is saved. Keeps id detailPanelStatus — the
+             public-view CSS hides its status actions by that id. -->
+        <div class="panel" id="detailPanelStatus">
+          <div class="panel-h"><h2>Reference &amp; Planning</h2></div>
+          <div class="panel-b">
+            <div class="dgrid" id="lifecycleGrid" style="margin-bottom: 12px;"></div>
+            <div class="status-actions" id="statusActions"></div>
+          </div>
+        </div>
+        </div>
+        <div class="panel" id="detailPanelAssess">
+          <div class="panel-h">
+            <h2>ASME B31.3 Assessment</h2>
+            <button class="btn" data-variant="outline" id="btnAssess" type="button">Run assessment</button>
+          </div>
+          <div class="panel-b" id="assessBody"></div>
+        </div>
+        <div class="panel" id="detailPanelAdvisor">
+          <div class="panel-h"><h2>Repair Advisor</h2></div>
+          <div class="panel-b" id="raDetailBody"></div>
+        </div>
+
+        <div class="panel" id="detailPanelHistory">
           <div class="panel-h"><h2>History</h2></div>
           <div class="panel-b">
             <ul class="timeline" id="timeline"></ul>
           </div>
         </div>
-      </div>
     </div>
   </section>
 

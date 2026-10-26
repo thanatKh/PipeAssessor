@@ -146,7 +146,7 @@ export function tempRepairRows(
   }
   add(S2, 'Installed Date', dt(tr.installed_date));
   add(S2, 'Installed By', tr.installed_by);
-  add(S2, 'Installation Method', tr.install_method);
+  add(S2, 'Installation Procedure / Notes', tr.install_method);
 
   /* ---- 3. post-installation verification ---- */
   add(S3, 'Verification Method', tr.verify_method);

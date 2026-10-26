@@ -36,6 +36,7 @@
    never disagree with the screen.
    ============================================================================ */
 import { $, esc, val, notify, openDialog, closeDialog, setBusy, todayISO, isOverdue, dueDateOf } from '../core/dom';
+import { icon } from '../core/icons';
 import { sb } from '../core/supabase';
 import {
   PLAN_TASK_COLORS, PLAN_TASK_STATUS_META, STATUS_COLORS, FINDING_TYPE_SHORT,
@@ -365,7 +366,7 @@ export function renderPlanTable(planRows) {
     const tasks = visibleTasksOf(p.id);
     const meta = [p.terminal, p.pipe_category, p.status].filter(Boolean).join(' · ');
     const head = `<tr class="plan-row" data-plan-id="${esc(p.id)}">
-      <td><span class="expand-caret">▶</span> ${esc(p.name)}<div class="plan-meta">${esc(meta)}</div></td>
+      <td><span class="expand-caret">${icon('chevronRight')}</span> ${esc(p.name)}<div class="plan-meta">${esc(meta)}</div></td>
       <td>—</td><td>—</td><td>—</td><td>—</td>
       <td>${esc(p.status)}</td>
       <td><button class="btn btn-xs" data-variant="outline" data-add-task="${esc(p.id)}" type="button">+ Task</button>

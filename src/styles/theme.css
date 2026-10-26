@@ -34,6 +34,22 @@
 }
 
 :root {
+  /* Spacing scale — the app's real grid is 2px steps (dense-engineering styling), so that IS the
+     scale; named by px so the value is self-documenting. Every padding / margin / gap in both
+     stylesheets uses one of these (0 and 1px hairlines excepted); a value outside the set is a
+     mistake — pick the nearest step instead of typing a new number. */
+  --sp-2: 2px;  --sp-4: 4px;  --sp-6: 6px;  --sp-8: 8px;  --sp-10: 10px; --sp-12: 12px;
+  --sp-14: 14px; --sp-16: 16px; --sp-20: 20px; --sp-24: 24px; --sp-32: 32px;
+  /* Control sizes — two only. Default for form fields and page-level buttons; compact for
+     anything that lives inside a panel header or a toolbar strip, so every panel header is one
+     height whether or not it carries a button. */
+  --ctl-h: 36px;
+  --ctl-h-sm: 28px;
+  --panel-h-min: 40px;
+  /* Content width of the single-record pages (finding detail, finding form, Quick Calc) — one value
+     so they line up when you move between them. The data pages (dashboard, risk ranking, plan,
+     line list, users) deliberately use the full .wrap width for their maps, tables and Gantt. */
+  --page-read-w: 1280px;
   /* Theme variables */
   --bg-color: #f8fafc;
   --text-color: #0f172a;
@@ -51,18 +67,18 @@
      --fs-4xl/--fs-hero are a deliberate numeric-KPI/heading hierarchy (secondary ring metric,
      enlarged section heading, KPI card headline number, Risk Ranking's biggest hero number) —
      kept apart on purpose, not merged, since several sit side by side in the same card/row. */
-  --fs-2xs: 9px;    /* shortest uppercase badge/eyebrow chip or single glyph (below the 11px floor — badge-only) */
-  --fs-xs: 10px;    /* uppercase eyebrow / section-label / small badge text */
-  --fs-sm: 11px;    /* base caption/hint/muted-label text — the readability floor for body-ish text */
-  --fs-base: 12px;  /* standard UI body text — form labels, buttons, table/list body */
-  --fs-md: 13px;    /* prominent small text — dialog headers, tag/title text, table.list rows */
-  --fs-lg: 14px;    /* sticky-toolbar identity titles (detail/risk page headings) */
-  --fs-xl: 15px;    /* secondary numeric metric beside a bigger one (health-banner ERF, KPI ring fraction) */
-  --fs-2xl: 16px;   /* compact page/section title (login title, mobile header h1, health-banner word) */
-  --fs-3xl: 17px;   /* KPI ring-center percentage */
-  --fs-4xl: 18px;   /* enlarged heading (presentation-mode panel title, header h1 desktop, dialog close glyph) */
-  --fs-5xl: 20px;   /* KPI card headline number */
-  --fs-hero: 26px;  /* largest numeric hero (Risk Ranking KPI band) */
+  --fs-2xs: 10px;    /* shortest uppercase badge/eyebrow chip or single glyph (below the 11px floor — badge-only) */
+  --fs-xs: 11px;    /* uppercase eyebrow / section-label / small badge text */
+  --fs-sm: 12px;    /* base caption/hint/muted-label text — the readability floor for body-ish text */
+  --fs-base: 14px;  /* standard UI body text — form labels, buttons, table/list body */
+  --fs-md: 15px;    /* prominent small text — dialog headers, tag/title text, table.list rows */
+  --fs-lg: 16px;    /* sticky-toolbar identity titles (detail/risk page headings) */
+  --fs-xl: 17px;    /* secondary numeric metric beside a bigger one (health-banner ERF, KPI ring fraction) */
+  --fs-2xl: 18px;   /* compact page/section title (login title, mobile header h1, health-banner word) */
+  --fs-3xl: 20px;   /* KPI ring-center percentage */
+  --fs-4xl: 22px;   /* enlarged heading (presentation-mode panel title, header h1 desktop, dialog close glyph) */
+  --fs-5xl: 24px;   /* KPI card headline number */
+  --fs-hero: 30px;  /* largest numeric hero (Risk Ranking KPI band) */
 
   /* Shared motion-token scale (transitions.dev) — only the handful of roles referenced by
      already-existing app.css/theme.css animations (presentation-mode expand/collapse, sidebar
@@ -113,9 +129,6 @@
 
   /* SVG Colors (calculator cross-section) */
   --svg-bg: #f8fafc;
-  --svg-metal: #64748b;
-  --svg-loss: #fee2e2;
-  --svg-loss-border: #ef4444;
 
   /* Cross-section limit-line/label colors — dark, saturated 700/800-tier shades so 11px bold
      label text clears WCAG AA (4.5:1) against the near-white --svg-bg, including on a
@@ -161,12 +174,13 @@ html, body {
   padding: 0;
 }
 
-/* 1500px — the app's comfortable page width. */
+/* 1760px — wide enough that a 1920px screen isn't framed by ~210px of empty margin each side
+   (it was 1500px), still bounded so lines/tables don't stretch edge-to-edge on ultrawide. */
 .wrap {
-  max-width: 1500px;
+  max-width: 1760px;
   width: 100%;
   margin: auto;
-  padding: 20px;
+  padding: var(--sp-20);
 }
 
 /* Shared numeric/tabular utility */
@@ -200,22 +214,22 @@ body > header .wrap {
      together (padding AND --hdr-pad-x) at any breakpoint that changes this padding — see the
      480px override further down. */
   --hdr-pad-x: 20px;
-  padding: 12px var(--hdr-pad-x);
+  padding: var(--sp-12) var(--hdr-pad-x);
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--sp-10);
 }
 
 .header-brand {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--sp-14);
 }
 
 /* Transparent-background logo, so the chip is just a hit-area/spacing wrapper. */
 .hdr-logo-chip {
   display: inline-flex;
   align-items: center;
-  padding: 0 12px;
+  padding: 0 var(--sp-12);
   flex: none;
 }
 
@@ -225,84 +239,18 @@ body > header .wrap {
 }
 
 /* ============================================================================
-   Navigation command menu — Basecoat's own .command / .command-dialog component
-   (basecoat-css/command.min + the compiled command rules in basecoat.cdn.min.css, see
-   main.ts). Replaced the sidebar: with ~9 nav items total, a searchable palette (type to
-   filter, arrow keys + Enter, click) covers the same navigation need without a persistent
-   240px rail permanently narrowing every page. Opened via the header's "Menu" button or
-   Ctrl/Cmd+K (app.ts). This block retheme's Basecoat's own popover/muted tokens to the app's
-   palette (matching the --card/--card-foreground aliases already declared above) and styles
-   the app-specific pieces (nav item icons) — it does not re-implement filtering, keyboard
-   nav, or open/close, that's Basecoat's shipped CSS+JS.
-
-   The top bar deliberately STAYS. --app-header-h is measured off `body > header`
-   (app.ts's syncHeaderHeight) and two sticky consumers hang off it — .toaster and
-   .sticky-page-header (the one shared sticky-toolbar treatment used by every page
-   that has one) — plus .page-loading-bar is anchored to it. */
-:root {
-  --popover: var(--card-bg);
-  --popover-foreground: var(--text-color);
-  --muted: var(--button-ghost-hover);
-}
-
-.command header {
-  gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--card-border);
-}
-
-.command header svg {
-  width: 16px;
-  height: 16px;
-  color: var(--text-light);
-}
-
-.command header input {
-  font-size: var(--fs-base);
-  color: var(--text-color);
-}
-
-.command [role="menu"] {
-  padding: 6px;
-  max-height: 60vh;
-}
-
-.command [role="heading"] {
-  font-size: var(--fs-2xs);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-light);
-  padding: 8px 8px 4px;
-}
-
-.command [role="menuitem"] {
-  gap: 9px;
-  padding: 7px 8px;
-  border-radius: 6px;
-  color: var(--text-color);
-  text-decoration: none;
-  font-size: var(--fs-base);
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.sb-ico {
-  flex: none;
-  width: 18px;
-  text-align: center;
-  font-size: var(--fs-md);
-  color: var(--text-light);
-}
-
-/* ---- Header nav trigger: "Menu" button + ⌘K hint, opens #cmdMenu ---- */
-.cmd-trigger {
-  flex: none;
+   Main menu — a drop-down anchored under the Menu button (#btnNavToggle), top-right, at every
+   screen size. History: a sidebar, then a centred Basecoat command-palette dialog (users disliked
+   the centred pop-up), then inline header links; the user chose this drop-down. body.nav-open
+   shows it (app.ts setNavOpen); it overlays the page and does not change the header height.
+   ============================================================================ */
+.nav-menu { position: relative; flex: none; }
+.top-nav-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 34px;
-  padding: 0 10px 0 8px;
+  gap: var(--sp-8);
+  height: 40px;
+  padding: 0 var(--sp-12);
   border: 1px solid var(--card-border);
   border-radius: 8px;
   background: var(--card-bg);
@@ -311,20 +259,63 @@ body > header .wrap {
   font-weight: 500;
   cursor: pointer;
 }
-
-.cmd-trigger:hover { background: var(--button-ghost-hover); }
-
-.cmd-trigger-ico { font-size: var(--fs-md); color: var(--text-muted); }
-
-.cmd-trigger-kbd {
-  padding: 1px 5px;
+body.nav-open .top-nav-toggle { background: var(--button-ghost-hover); }
+    @media (hover: hover) and (pointer: fine) { .top-nav-toggle:hover { background: var(--button-ghost-hover); } }
+.top-nav-toggle .ico { width: 18px; height: 18px; }
+.top-nav {
+  display: none;
+  position: absolute;
+  top: calc(100% + var(--sp-6));
+  right: 0;
+  z-index: 120;                       /* above the sticky page headers (50) and the app header (100) */
+  min-width: 240px;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-6);
+  background: var(--card-bg);
   border: 1px solid var(--card-border);
-  border-radius: 4px;
-  background: var(--bg-color);
-  color: var(--text-light);
-  font-size: var(--fs-2xs);
-  font-weight: 700;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgb(15 23 42 / 0.16), 0 2px 6px rgb(15 23 42 / 0.08);
+  transform-origin: top right;
 }
+body.nav-open .top-nav { display: flex; animation: navMenuIn var(--duration-fast, 150ms) ease-out; }
+@keyframes navMenuIn { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { body.nav-open .top-nav { animation: none; } }
+.top-nav a {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-10);
+  height: 40px;
+  padding: 0 var(--sp-12);
+  border-radius: 6px;
+  color: var(--text-color);
+  font-size: var(--fs-base);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.top-nav a:focus-visible { background: var(--button-ghost-hover); outline: none; }
+    @media (hover: hover) and (pointer: fine) { .top-nav a:hover { background: var(--button-ghost-hover); outline: none; } }
+.top-nav a .ico { width: 16px; height: 16px; color: var(--text-muted); }
+.top-nav a.is-active {
+  background: color-mix(in oklab, var(--button-primary) 10%, transparent);
+  color: var(--button-primary);
+  font-weight: 600;
+}
+.top-nav a.is-active .ico { color: var(--button-primary); }
+@media (max-width: 640px) {
+  .top-nav a { height: 44px; }      /* thumb-sized targets */
+  .top-nav-toggle { padding: 0 var(--sp-10); }
+}
+
+/* UI icons (core/icons.ts): inline SVG, 1em so they scale with the text they sit in, stroke =
+   currentColor so they take the surrounding colour. The only icon mechanism in the web UI — no
+   emoji or Unicode pictographs (platform-dependent rendering, iOS turns some into colour emoji). */
+.ico { width: 1em; height: 1em; flex: none; display: inline-block; vertical-align: -0.125em; }
+.hdr-signout .ico { width: 16px; height: 16px; }
+.expand-caret .ico { width: 12px; height: 12px; }
+.photo-remove .ico { width: 14px; height: 14px; }
+
 
 /* ---- Header account block: avatar + email/role + icon-only sign out ----
    Was the sidebar footer's job; moved into .header-actions (right side of the app header)
@@ -333,8 +324,8 @@ body > header .wrap {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-left: 10px;
+  gap: var(--sp-8);
+  padding-left: var(--sp-10);
   border-left: 1px solid var(--card-border);
 }
 
@@ -393,7 +384,14 @@ body > header .wrap {
   cursor: pointer;
 }
 
-.hdr-signout:hover { background: var(--button-ghost-hover); color: var(--danger-color); }
+@media (hover: hover) and (pointer: fine) { .hdr-signout:hover { background: var(--button-ghost-hover); color: var(--danger-color); } }
+
+/* Phones: avatar + sign-out only (the e-mail/role text would push the header onto two rows).
+   After the base rules above on purpose — an earlier copy placed before them lost on source order. */
+@media (max-width: 640px) {
+  body > header .hdr-account .hdr-user-text { display: none; }
+  body > header .hdr-account { padding-left: var(--sp-8); gap: var(--sp-4); }
+}
 
 /* Global "something is loading" indicator (page-loading skill.dev): an indeterminate sliding bar
    pinned to the header's bottom edge, toggled by body.is-loading (see core/dom.ts's
@@ -448,8 +446,8 @@ body.is-loading .page-loading-bar {
   body > header .wrap {
     flex-wrap: wrap;
     --hdr-pad-x: 14px; /* redeclared alongside padding, see the base rule's comment above */
-    padding: 10px var(--hdr-pad-x);
-    gap: 6px 8px;
+    padding: var(--sp-10) var(--hdr-pad-x);
+    gap: var(--sp-6) var(--sp-8);
   }
 
   .header-info h1 {
@@ -457,7 +455,7 @@ body.is-loading .page-loading-bar {
   }
 
   .header-actions {
-    gap: 6px 8px;
+    gap: var(--sp-6) var(--sp-8);
     flex-wrap: wrap;
     justify-content: flex-end;
     margin-left: auto;
@@ -465,7 +463,7 @@ body.is-loading .page-loading-bar {
 }
 
 .header-info h1 {
-  font-size: var(--fs-4xl); /* was 19px */
+  font-size: var(--fs-2xl);
   font-weight: 800;
   margin: 0;
   letter-spacing: -0.3px;
@@ -486,7 +484,7 @@ body.is-loading .page-loading-bar {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--sp-14);
 }
 
 @media (max-width: 700px) {
@@ -495,12 +493,12 @@ body.is-loading .page-loading-bar {
   }
 
   .hdr-logo-chip {
-    padding: 6px 10px;
+    padding: var(--sp-6) var(--sp-10);
   }
 }
 
 .hdr-logo {
-  height: 42px;
+  height: 34px;
   width: auto;
   object-fit: contain;
   display: block;
@@ -523,7 +521,7 @@ body.is-loading .page-loading-bar {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 8px;
-  margin-bottom: 14px;
+  margin-bottom: var(--sp-14);
   overflow: hidden;
 }
 
@@ -532,17 +530,26 @@ body.is-loading .page-loading-bar {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  row-gap: 8px;
-  gap: 10px;
-  padding: 10px 14px;
+  row-gap: var(--sp-8);
+  gap: var(--sp-10);
+  min-height: var(--panel-h-min);
+  padding: var(--sp-6) var(--sp-14);
 }
+/* Controls inside a panel header are compact: 28px + 2x6px padding = the 40px header, so a header
+   with a button is no taller than a text-only one (they used to be 38px vs 56px). */
+.panel-h .btn, .panel-h .select, .panel-h .input:not([type=checkbox]):not([type=radio]) {
+  height: var(--ctl-h-sm);
+}
+.panel-h .btn { padding-inline: var(--sp-10); }
+/* Compact size, usable anywhere (table actions, toolbars). */
+.btn-sm, .select-sm, .input-sm { height: var(--ctl-h-sm); }
 
 /* Right-side cluster in a panel header (e.g. the assessment panel's "Reset to line list"
    button beside the Include-assessment switch). */
 .panel-h-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-10);
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -554,19 +561,19 @@ body.is-loading .page-loading-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 12px 16px;
+  gap: var(--sp-16);
+  padding: var(--sp-12) var(--sp-16);
   border-left: 5px solid var(--hb-spine);
   border-radius: var(--radius);
   background: var(--hb-fill);
   color: #fff;
-  margin-bottom: 14px;
+  margin-bottom: var(--sp-14);
 }
 .hb-word { font-size: var(--fs-2xl); font-weight: 800; letter-spacing: 0.2px; line-height: 1.15; }
-.hb-line { font-size: var(--fs-base); /* was 12.5px */ opacity: 0.93; margin-top: 3px; }
+.hb-line { font-size: var(--fs-base); /* was 12.5px */ opacity: 0.93; margin-top: var(--sp-4); }
 .hb-metrics { text-align: right; flex: 0 0 auto; white-space: nowrap; }
 .hb-erf { font-size: var(--fs-xl); font-weight: 800; font-variant-numeric: tabular-nums; }
-.hb-sub { font-size: var(--fs-sm); opacity: 0.9; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.hb-sub { font-size: var(--fs-sm); opacity: 0.9; margin-top: var(--sp-2); font-variant-numeric: tabular-nums; }
 .hb-ok      { --hb-fill: #047857; --hb-spine: #065f46; }
 .hb-monitor { --hb-fill: #b45309; --hb-spine: #92400e; }
 .hb-repair  { --hb-fill: #b91c1c; --hb-spine: #7f1d1d; }
@@ -574,7 +581,7 @@ body.is-loading .page-loading-bar {
 .hb-pending { --hb-fill: #475569; --hb-spine: #334155; }
 .hb-none    { --hb-fill: #475569; --hb-spine: #334155; }
 @media (max-width: 640px) {
-  .health-banner { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .health-banner { flex-direction: column; align-items: flex-start; gap: var(--sp-6); }
   .hb-metrics { text-align: left; }
 }
 
@@ -602,7 +609,7 @@ body.is-loading .page-loading-bar {
   text-align: right;
 }
 
-.panel-b { padding: 14px; }
+.panel-b { padding: var(--sp-14); }
 
 /* ============ Accordion expand (transitions.dev 21-accordion), adapted for native
    <details>/<summary> ============
@@ -677,17 +684,17 @@ details.panel.is-closing[open] > .panel-b-track > .panel-b-inner {
   transform: rotate(45deg);
   transition: transform var(--acc-expand) var(--acc-ease); /* matches the panel's own accordion timing */
   flex-shrink: 0;
-  margin-top: -3px;
+  margin-top: calc(-1 * var(--sp-4));
 }
 
 details.panel[open]:not(.is-closing) > .panel-collapse::after {
   transform: rotate(225deg);
-  margin-top: 3px;
+  margin-top: var(--sp-4);
 }
 
 /* Workbench sections with no title (status/scope) render as a bare block instead of a card —
    .panel's own margin-bottom keeps their vertical rhythm matching the card sections. */
-.aw-plain { margin-bottom: 14px; }
+.aw-plain { margin-bottom: var(--sp-14); }
 
 /* Status banner */
 /* Just a label + a small status badge — the same shape/weight as the register's .pill/.st-*
@@ -698,7 +705,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 .status-banner {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 .status-label {
@@ -718,7 +725,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  padding: 3px 10px;
+  padding: var(--sp-4) var(--sp-10);
   border-radius: 999px;
   border: 1px solid transparent;
   white-space: nowrap;
@@ -752,7 +759,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 .status-desc {
   font-size: var(--fs-sm);
   font-weight: 500;
-  margin-top: 5px;
+  margin-top: var(--sp-6);
   line-height: 1.4;
   color: var(--text-muted);
 }
@@ -765,7 +772,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   background: var(--warn-bg);
   border: 1px solid var(--warn-border);
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: var(--sp-10) var(--sp-12);
 }
 
 .scope-notice strong {
@@ -776,7 +783,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 .compliance-box {
   border: 1px solid var(--card-border);
   border-radius: 6px;
-  margin-bottom: 14px;
+  margin-bottom: var(--sp-14);
   overflow: hidden;
 }
 
@@ -784,8 +791,8 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 7px 10px;
+  gap: var(--sp-12);
+  padding: var(--sp-8) var(--sp-10);
   border-bottom: 1px solid var(--card-border);
 }
 
@@ -803,7 +810,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   font-family: 'Google Sans', sans-serif;
   font-size: var(--fs-sm);
   font-weight: 700;
-  padding: 2px 10px;
+  padding: var(--sp-2) var(--sp-10);
   border-radius: 4px;
   letter-spacing: 1px;
 }
@@ -821,7 +828,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 }
 
 .compliance-ffs-note {
-  padding: 8px 10px;
+  padding: var(--sp-8) var(--sp-10);
   font-size: var(--fs-sm);
   line-height: 1.5;
   color: var(--warn-text);
@@ -834,7 +841,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 10px;
+  padding: var(--sp-10);
   max-width: 900px;
   margin: 0 auto;
 }
@@ -845,38 +852,19 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   width: 100%;
 }
 
-.aw-svg-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: center;
+/* One-line key under the cross-section (the figure labels everything directly, so no legend) */
+.aw-svg-note {
+  margin-top: var(--sp-8);
+  text-align: center;
   font-size: var(--fs-sm);
-  font-weight: 600;
-  margin-top: 8px;
+  color: var(--text-muted);
 }
-
-.aw-svg-legend > span {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.aw-swatch {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-}
-
-.aw-line {
-  display: inline-block;
-  width: 16px;
-}
+.aw-svg-note b { color: var(--text-color); }
 
 /* ERF safety gauge */
 .pressure-gauge-container {
-  margin-bottom: 24px;
-  padding: 16px;
+  margin-bottom: var(--sp-24);
+  padding: var(--sp-16);
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 8px;
@@ -888,12 +876,12 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   font-size: var(--fs-sm);
   font-weight: 700;
   color: var(--text-muted);
-  margin-bottom: 6px;
+  margin-bottom: var(--sp-6);
 }
 
 .pressure-gauge-bar-wrapper {
   position: relative;
-  margin-bottom: 12px;
+  margin-bottom: var(--sp-12);
 }
 
 .pressure-gauge-track {
@@ -959,7 +947,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   display: flex;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--sp-10);
   font-size: var(--fs-sm);
   font-weight: 600;
 }
@@ -967,7 +955,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--sp-4);
 }
 
 .legend-color {
@@ -988,8 +976,8 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  margin: 14px 0 6px;
-  padding-bottom: 4px;
+  margin: var(--sp-14) 0 var(--sp-6);
+  padding-bottom: var(--sp-4);
   border-bottom: 1px solid var(--card-border);
 }
 
@@ -1000,7 +988,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 .res-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  column-gap: 24px;
+  column-gap: var(--sp-24);
   row-gap: 0;
 }
 
@@ -1014,8 +1002,8 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 12px;
-  padding: 5px 8px;
+  gap: var(--sp-12);
+  padding: var(--sp-6) var(--sp-8);
   border-bottom: 1px solid var(--card-border);
 }
 
@@ -1023,14 +1011,22 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   background: rgba(0, 0, 0, 0.015);
 }
 
-.res-item:hover {
+@media (hover: hover) and (pointer: fine) { .res-item:hover {
   background: rgba(0, 0, 0, 0.04);
-}
+} }
 
 .res-name {
   font-size: var(--fs-sm);
   font-weight: 500;
   color: var(--text-muted);
+}
+/* Engineering symbol beside a plain-language label (workbench/labels.ts paLabelHtml): present for
+   engineers mapping onto the equations, visually secondary for everyone else. */
+.lbl-sym {
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  color: var(--text-light);
+  white-space: nowrap;
 }
 
 .res-val {
@@ -1067,7 +1063,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
    instead of a pale card inset inside a neutral white/gray-bordered frame, which read as "gray"
    overall regardless of how saturated the inner tint was. */
 .advisor-header-card {
-  padding: 10px 14px;
+  padding: var(--sp-10) var(--sp-14);
   background: var(--svg-bg, #f8fafc);
   border-bottom: 1px solid var(--card-border, #e2e8f0);
 }
@@ -1101,8 +1097,8 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 .advisor-body-pad {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 10px;
+  gap: var(--sp-10);
+  padding: var(--sp-10);
 }
 
 .advisor-banner-tag {
@@ -1111,7 +1107,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--button-primary, #0284c7);
-  margin-bottom: 3px;
+  margin-bottom: var(--sp-4);
 }
 
 .advisor-container.danger .advisor-banner-tag { color: var(--danger-text); }
@@ -1136,7 +1132,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 
 .advisor-item-row td {
   border-bottom: 1px solid var(--card-border, #e2e8f0);
-  padding: 9px 4px;
+  padding: var(--sp-8) var(--sp-4);
   vertical-align: top;
 }
 
@@ -1150,8 +1146,8 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
     width: auto;
   }
   .advisor-item-row td { padding: 0; }
-  .advisor-item-row td:first-child { padding: 9px 0 2px; }
-  .advisor-item-row td:last-child { padding: 0 0 9px; }
+  .advisor-item-row td:first-child { padding: var(--sp-8) 0 var(--sp-2); }
+  .advisor-item-row td:last-child { padding: 0 0 var(--sp-8); }
 }
 
 .advisor-item-title {
@@ -1168,7 +1164,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   color: var(--text-muted, #475569);
   line-height: 1.4;
   padding-top: 1px;
-  padding-left: 12px;
+  padding-left: var(--sp-12);
 }
 
 .advisor-body-text {
@@ -1179,11 +1175,11 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 .advisor-sub-group {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--sp-4);
 }
 
 .advisor-body-text + .advisor-sub-group {
-  margin-top: 4px;
+  margin-top: var(--sp-4);
 }
 
 .advisor-sub-item {
@@ -1195,7 +1191,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 .advisor-standards-note {
   font-size: var(--fs-sm);
   color: var(--text-muted, #64748b);
-  padding: 6px 10px;
+  padding: var(--sp-6) var(--sp-10);
   background: var(--svg-bg, #f8fafc);
   border-radius: 6px;
   border: 1px dashed var(--card-border, #cbd5e1);
@@ -1212,20 +1208,20 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   font-size: var(--fs-base);
   font-weight: 700;
   color: var(--button-primary);
-  margin-bottom: 8px;
+  margin-bottom: var(--sp-8);
 }
 
 .eq-box {
   background: var(--svg-bg);
   border: 1px solid var(--card-border);
   border-radius: 6px;
-  padding: 10px;
+  padding: var(--sp-10);
   font-family: 'Google Sans', sans-serif;
   font-size: var(--fs-base);
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  margin-bottom: 10px;
+  margin-bottom: var(--sp-10);
   font-weight: 700;
   color: var(--text-color);
 }
@@ -1235,33 +1231,33 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 0 4px;
+  padding: 0 var(--sp-4);
   vertical-align: middle;
   font-size: var(--fs-sm);
 }
 
 .numerator {
   border-bottom: 1px solid var(--text-color);
-  padding-bottom: 2px;
+  padding-bottom: var(--sp-2);
   width: 100%;
 }
 
 .denominator {
-  padding-top: 2px;
+  padding-top: var(--sp-2);
   width: 100%;
 }
 
 .eq-legend-list {
   list-style-type: none;
   padding-left: 0;
-  margin-top: 8px;
+  margin-top: var(--sp-8);
   font-size: var(--fs-sm);
   line-height: 1.5;
 }
 
 .eq-legend-list li {
-  margin-bottom: 4px;
-  padding-left: 12px;
+  margin-bottom: var(--sp-4);
+  padding-left: var(--sp-12);
   position: relative;
 }
 
@@ -1277,9 +1273,9 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   background: var(--svg-bg);
   border: 1px solid var(--card-border);
   border-radius: 8px;
-  padding: 12px;
-  margin-top: 10px;
-  margin-bottom: 14px;
+  padding: var(--sp-12);
+  margin-top: var(--sp-10);
+  margin-bottom: var(--sp-14);
   border-left: 4px solid var(--button-primary);
 }
 
@@ -1288,7 +1284,7 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
   font-size: var(--fs-sm);
   font-weight: 700;
   color: var(--button-primary);
-  margin-bottom: 8px;
+  margin-bottom: var(--sp-8);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -1308,13 +1304,13 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 
 .eq-status-badge {
   display: inline-block;
-  padding: 2px 8px;
+  padding: var(--sp-2) var(--sp-8);
   border-radius: 4px;
   font-size: var(--fs-xs);
   font-weight: bold;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-top: 4px;
+  margin-top: var(--sp-4);
 }
 
 .eq-status-badge.ok {
@@ -1370,23 +1366,23 @@ details.panel[open]:not(.is-closing) > .panel-collapse::after {
 .drag-handle {
   cursor: ns-resize;
   fill: #ffffff;
-  stroke: #dc2626;
+  stroke: #1e293b;          /* neutral: colour on the figure belongs to the verdict bracket */
   stroke-width: 2.5px;
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.35));
   /* .dragging also changes stroke, so stroke must be in this list or it snaps. */
   transition: r 0.15s, stroke-width 0.15s, fill 0.15s, stroke 0.15s;
 }
 
-.drag-handle:hover {
+@media (hover: hover) and (pointer: fine) { .drag-handle:hover {
   r: 8px;
   stroke-width: 3.5px;
-  fill: #fee2e2;
-}
+  fill: #e2e8f0;
+} }
 
 .drag-handle.dragging {
   r: 9px;
   stroke-width: 4px;
-  fill: #ef4444;
+  fill: #1e293b;
   stroke: #ffffff;
 }
 /* Remove the browser's built-in up/down micro-increment spinner on every numeric field — values
@@ -1402,3 +1398,32 @@ input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
+
+/* ============================================================================
+   Touch devices (mobile-native skill, Oct 2026 audit). Each line has a reason:
+   - no grey tap flash (it fights our own press feedback); :active below replaces it
+   - no font inflation when a phone is turned sideways
+   - taps fire immediately (no double-tap-zoom wait) and long-press doesn't select a button's label
+   - fields are 16px on touch screens: iOS Safari zooms the page into anything smaller and doesn't
+     zoom back out (25 selects/search boxes were 14px). !important because many components set their
+     own size; this is a platform constraint, not a style choice. Never fixed with maximum-scale.
+   - pull-to-refresh is off ONLY on the finding form, where a reload loses a half-typed finding
+   ============================================================================ */
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+a, button, summary, label, [role="button"], .btn { touch-action: manipulation; }
+button, summary, [role="button"], .btn, .qt, .seg-btn, .fab-new {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+:is(button, .btn, .qt, .seg-btn, .fab-new, summary):active:not(:disabled) { opacity: 0.8; }
+@media (pointer: coarse) {
+  :is(input, select, textarea):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) {
+    font-size: var(--fs-lg) !important;
+  }
+}
+html:has(#viewForm.active), html:has(#viewForm.active) body { overscroll-behavior-y: none; }

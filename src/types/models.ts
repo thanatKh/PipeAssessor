@@ -115,6 +115,8 @@ export interface Finding {
   lng: number | null;
   t_nominal: number | null;
   t_measured: number | null;
+  /** measured wall-loss depth at the deepest point (mm) — the field reading, saved with or without pipe data */
+  depth_mm: number | null;
   created_at: string | null;
   [k: string]: any;
 }

@@ -69,6 +69,31 @@ alter table public.findings add column if not exists estimated_cost numeric;
 -- finding can independently be actively leaking or not). Existing finding_type = 'Leak' rows are
 -- NOT auto-migrated here — reclassify them manually (set is_leaking = true + a real finding_type).
 alter table public.findings add column if not exists is_leaking boolean not null default false;
+-- The measured wall-loss depth at the deepest point, stored as the field reading itself. Operators
+-- record it with no Line No. / pipe size / pressure; the ASME B31.3 assessment reads it later.
+-- (t_nominal / t_measured are written only from a complete assessment, never from a guessed size.)
+alter table public.findings add column if not exists depth_mm numeric check (depth_mm is null or depth_mm >= 0);
+do $
+begin
+  if not exists (select 1 from pg_constraint where conname = 'findings_pipe_tag_len') then
+    alter table public.findings add constraint findings_pipe_tag_len check (char_length(pipe_tag) <= 80);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'findings_location_desc_len') then
+    alter table public.findings add constraint findings_location_desc_len check (char_length(location_desc) <= 200);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'findings_description_len') then
+    alter table public.findings add constraint findings_description_len check (char_length(description) <= 4000);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'findings_pid_no_len') then
+    alter table public.findings add constraint findings_pid_no_len check (char_length(pid_no) <= 80);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'findings_service_len') then
+    alter table public.findings add constraint findings_service_len check (char_length(service) <= 120);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'findings_estimated_cost_nonneg') then
+    alter table public.findings add constraint findings_estimated_cost_nonneg check (estimated_cost is null or estimated_cost >= 0);
+  end if;
+end $;
 
 -- ---------------------------------------------------------------------------
 -- 2. finding_photos — photos live in the 'finding-photos' storage bucket;

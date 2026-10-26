@@ -32,6 +32,8 @@ import {
 import {
   $, val, positionSegPill, closeDialog, esc, notify, setBusy, setPageLoading,
 } from './core/dom';
+import { hydrateIcons } from './core/icons';
+import { initSectionNav } from './core/section-nav';
 
 function updateAuthUI() {
   document.body.classList.toggle('authed', !!session);
@@ -197,11 +199,35 @@ export function show(viewId) {
     toggleMapPresentation(false);
   }
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === viewId));
+  syncTopNav();
   window.scrollTo(0, 0);
   // Seg-row pills measure offsetLeft/offsetWidth, which read 0 while their view was
   // display:none — same gotcha as the dashboard/detail Leaflet maps. Re-snap (no animation)
   // now that the view is visible.
   document.querySelectorAll(`#${viewId} .seg-row`).forEach(row => positionSegPill(row, false));
+}
+
+// Main menu (index.html #topNav, a drop-down under the Menu button): highlight the link for the
+// current page and close the menu. Keyed off the hash, not the view id — #/edit/<id> and #/f/<id> belong to
+// "Findings", while #/new is its own link even though it shares viewForm with editing.
+function navKeyForHash(h) {
+  if (h.startsWith('#/new')) return 'new';
+  for (const k of ['plan', 'risk', 'calc', 'lines', 'users']) if (h.startsWith('#/' + k)) return k;
+  return 'list'; // #/list, #/f/<id>, #/edit/<id>, empty
+}
+function syncTopNav() {
+  const key = navKeyForHash(location.hash || '#/list');
+  document.querySelectorAll('#topNav a[data-nav]').forEach(a => {
+    const on = a.dataset.nav === key;
+    a.classList.toggle('is-active', on);
+    if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  });
+  setNavOpen(false);
+}
+function setNavOpen(open) {
+  document.body.classList.toggle('nav-open', open);
+  const btn = $('btnNavToggle');
+  if (btn) { btn.setAttribute('aria-expanded', String(open)); btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu'); }
 }
 
 // Public read-only share view (#/s/<id>) — no sign-in required. Intercepted before the auth gate;
@@ -218,6 +244,15 @@ async function route() {
   const h = location.hash || '#/list';
   if (h.startsWith('#/s/')) { await routePublic(h.slice(4)); return; }
   document.body.classList.remove('public-view'); // any non-share route is the normal authed app
+  // Quick Calc is open to guests too: it is pure computeB313 + a client-side PDF — no Supabase read
+  // or write anywhere in it — so it sits before the login gate. Guest chrome (Sign in link instead
+  // of "Dashboard", no menu/account) falls out of the existing body:not(.authed) rules.
+  // #/calc?nps=…&sch=… is a shared calculation link (Quick Calc share message) — load it first.
+  if (h === '#/calc' || h.startsWith('#/calc?')) {
+    if (h.startsWith('#/calc?')) applyQuickCalcLink(h.slice('#/calc?'.length));
+    show('viewCalc');
+    return;
+  }
   if (!session) { show('viewLogin'); return; }
 
   // Every branch below awaits at least one Supabase round-trip before the view actually renders
@@ -235,11 +270,6 @@ async function route() {
     if (h === '#/new') {
       openForm(null);
       show('viewForm');
-      return;
-    }
-    if (h === '#/calc') {
-      // standalone what-if workbench — nothing loads, nothing saves
-      show('viewCalc');
       return;
     }
     if (h === '#/risk') {
@@ -307,7 +337,7 @@ async function route() {
 
 
 import {
-  loadFindings, ageDays, STATUS_RANK, sortFindings, loadDetail, loadPublicFinding, photoUrl, applyFilters, KPI_RING_CIRCUMFERENCE, renderKpis, renderBudgetKpi, ensureDashMap, popupHtml, showAddFindingPopup, renderMap, highlightPin, flashRow, CAMERA_SVG, ageHtml, renderTable, updateSelectionUI, buildTagOptions, renderList, toggleMapPresentation, resetMapView, togglePresSidebar, toggleRiskRadius, revealListSkeleton, swapText,
+  loadFindings, ageDays, STATUS_RANK, sortFindings, loadDetail, loadPublicFinding, photoUrl, applyFilters, renderKpis, renderBudgetKpi, ensureDashMap, popupHtml, showAddFindingPopup, renderMap, highlightPin, flashRow, CAMERA_SVG, ageHtml, renderTable, updateSelectionUI, buildTagOptions, renderList, toggleMapPresentation, resetMapView, togglePresSidebar, toggleRiskRadius, revealListSkeleton, swapText, toggleMobileMap,
 } from './features/dashboard';
 
 /* ---------------- CSV export (filtered register, Excel-friendly UTF-8 BOM) ---------------- */
@@ -317,11 +347,11 @@ import {
 } from './features/import-export';
 
 import {
-  clearValidation, setPin, clearPin, ensurePickMap, renderPendingGrid, addPendingFiles, imageFilesFromClipboard, onPastePhoto, WALL_LOSS_TYPES, AUTO_ASSESS_TYPES, CORR_TYPE_BY_FINDING, syncCorrTypeFromFinding, syncLeakAndAssessRules, SEVERITY_BY_FINDING, suggestSeverityFromType, aMode, setAssessOn, updateAschedules, autofillAtnom, applyMaterialStress, gatherAssessParams, assessThickness, recalcAssessment, loadAssessmentInto, resetAssessment, initAssessment, initRepairAdvisor, initTempRepair, applyTagMemory, TAG_COMBO_MAX, initTagCombo, initQuickCalc, openForm, collectForm, collectAssessment, uploadPhoto, saveForm, deleteFinding,
+  clearValidation, setPin, clearPin, ensurePickMap, renderPendingGrid, addPendingFiles, imageFilesFromClipboard, onPastePhoto, WALL_LOSS_TYPES, AUTO_ASSESS_TYPES, CORR_TYPE_BY_FINDING, syncCorrTypeFromFinding, syncLeakAndAssessRules, SEVERITY_BY_FINDING, suggestSeverityFromType, aMode, setAssessOn, updateAschedules, autofillAtnom, applyMaterialStress, gatherAssessParams, recalcAssessment, loadAssessmentInto, resetAssessment, initAssessment, initRepairAdvisor, initTempRepair, applyTagMemory, TAG_COMBO_MAX, initTagCombo, initQuickCalc, applyQuickCalcLink, openForm, collectForm, collectAssessment, uploadPhoto, saveForm, deleteFinding,
 } from './features/form';
 
 import {
-  dItem, renderDetail, renderDetailMap, fmtN, erfNo, assessPill, materialName, CORR_TYPE_LABEL, assessSetupLine, resFromSnapshot, renderAssessments, photoThumb, PHOTO_GRID_SETS, renderPhotoGroups, addDetailPhotos, renderTimeline, openStatusDialog, renderDlgRepairedPhotos, confirmStatusChange, lightboxPrev, lightboxNext,
+  dItem, renderDetail, renderDetailMap, fmtN, erfNo, assessPill, materialName, CORR_TYPE_LABEL, assessSetupLine, resFromSnapshot, renderAssessments, photoThumb, PHOTO_GRID_SETS, photoAddUsable, renderPhotoGroups, addDetailPhotos, renderTimeline, openStatusDialog, renderDlgRepairedPhotos, confirmStatusChange, lightboxPrev, lightboxNext,
 } from './features/detail';
 
 /* ---------------- Line Risk Ranking ---------------- */
@@ -362,6 +392,9 @@ function initApp() {
   // If we're arriving on a public share link, hide the app chrome immediately (before the auth
   // state resolves) so a non-signed-in visitor never sees a flash of the login screen / app nav.
   if ((location.hash || '').startsWith('#/s/')) document.body.classList.add('public-view');
+  hydrateIcons(); // fill every static data-icon placeholder (core/icons.ts) before first paint settles
+  initSectionNav('detailSectionNav'); // section links on the detail page and the finding form:
+  initSectionNav('formSectionNav');   // jump + highlight the section in view (core/section-nav.ts)
   syncHeaderHeight();
   window.addEventListener('resize', syncHeaderHeight);
   window.addEventListener('resize', () => {
@@ -490,22 +523,21 @@ function initApp() {
   // routing
   window.addEventListener('hashchange', route);
 
-  // nav command menu: basecoat-css/command.min (registered via window.basecoat in main.ts)
-  // auto-initializes #cmdMenu on DOMContentLoaded — search filtering, arrow-key navigation, and
-  // click-to-close are all handled by its own shipped JS (see initCommand in
-  // node_modules/basecoat-css/dist/js/command.js). #btnCmdMenu's open action is wired inline in
-  // index.html (onclick="...showModal()"), matching Basecoat's own documented pattern; the only
-  // wiring needed here is the Ctrl/Cmd+K shortcut, since that's app-level (not scoped to one
-  // element) and Basecoat's command.js doesn't register a global shortcut itself.
+  // main menu: the Menu button opens a drop-down under itself (not a centred dialog). Escape, a
+  // click outside, or choosing any link (even the current page, which fires no hashchange) closes it.
+  $('btnNavToggle')?.addEventListener('click', () => setNavOpen(!document.body.classList.contains('nav-open')));
+  $('topNav')?.addEventListener('click', (e) => { if (e.target.closest('a')) setNavOpen(false); });
   window.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-      e.preventDefault();
-      $('cmdMenu')?.showModal?.();
-    }
+    if (e.key === 'Escape' && document.body.classList.contains('nav-open')) { setNavOpen(false); $('btnNavToggle')?.focus(); }
+  });
+  // a click anywhere outside the open drop-down closes it
+  document.addEventListener('click', (e) => {
+    if (document.body.classList.contains('nav-open') && !e.target.closest?.('.nav-menu')) setNavOpen(false);
   });
 
   // list
   $('btnNew').addEventListener('click', () => { location.hash = '#/new'; });
+  $('btnShowMap')?.addEventListener('click', () => toggleMobileMap());
   $('filTerminal').addEventListener('change', () => { filters.terminal = val('filTerminal'); renderList(); });
   $('filStatus').addEventListener('change', () => { filters.status = val('filStatus'); renderList(); });
   $('kpiRingCard').addEventListener('click', () => {
@@ -639,7 +671,9 @@ function initApp() {
       notify('Geolocation is not supported by your browser.', true);
       return;
     }
-    notify('Detecting GPS location…');
+    // Progress shows on the button itself (one toast at the end, not two stacked over the toolbar)
+    const btn = $('btnGpsLoc');
+    setBusy(btn, true, 'Locating…');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const lat = pos.coords.latitude;
@@ -647,42 +681,69 @@ function initApp() {
         $('fLat').value = lat.toFixed(6);
         $('fLng').value = lng.toFixed(6);
         setPin(lat, lng, true);
-        notify('GPS location updated!');
+        setBusy(btn, false);
+        const acc = pos.coords.accuracy;
+        notify('Location set' + (acc ? ' (±' + Math.round(acc) + ' m)' : '') + '.');
       },
       (err) => {
+        setBusy(btn, false);
         notify('Unable to detect GPS location: ' + err.message, true);
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
   });
 
-  // Drag and Drop photo upload
-  function setupDragAndDrop(targetEl, onFiles) {
-    if (!targetEl) return;
-    targetEl.addEventListener('dragover', (e) => {
+  // Photo drag & drop. Each photo GROUP is its own drop target (plus the new-finding queue), so a
+  // photo dropped on "After Repair" lands there rather than in As Found. A zone accepts files only
+  // while its "+ Add" button is usable (role, public view and the 4-photo cap are all respected).
+  const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+  function setupPhotoDrop(zone, addBtnId, onFiles) {
+    if (!zone) return;
+    const usable = () => zone.offsetParent !== null && photoAddUsable($(addBtnId));
+    zone.addEventListener('dragover', (e) => {
+      if (!hasFiles(e) || !usable()) return;
       e.preventDefault();
       e.stopPropagation();
-      targetEl.classList.add('drag-active');
+      e.dataTransfer.dropEffect = 'copy';
+      zone.classList.add('drag-over');
     });
-    targetEl.addEventListener('dragleave', (e) => {
+    zone.addEventListener('dragleave', (e) => { if (!zone.contains(e.relatedTarget)) zone.classList.remove('drag-over'); });
+    zone.addEventListener('drop', async (e) => {
+      if (!hasFiles(e)) return;
       e.preventDefault();
       e.stopPropagation();
-      targetEl.classList.remove('drag-active');
-    });
-    targetEl.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      targetEl.classList.remove('drag-active');
-      const files = [...(e.dataTransfer?.files || [])].filter(f => f.type.startsWith('image/'));
-      if (files.length) {
-        await onFiles(files);
-      }
+      zone.classList.remove('drag-over');
+      endFileDrag();
+      if (!usable()) return;
+      const files = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
+      if (!files.length) { notify('Only image files can be added as photos.', true); return; }
+      await onFiles(files);
     });
   }
-
-  setupDragAndDrop($('pendingPhotoPanel'), async (files) => { await addPendingFiles(files); });
-  setupDragAndDrop($('detailPanelPhotos'), async (files) => { await addDetailPhotos(files, 'found'); });
-  setupDragAndDrop($('editPhotoPanel'), async (files) => { await addDetailPhotos(files, 'found', editingId); });
+  setupPhotoDrop($('pendingPhotoPanel'), 'btnAddPendingPhoto', (files) => addPendingFiles(files));
+  PHOTO_GRID_SETS.forEach(({ grid, addBtn, kind }) => {
+    // the edit form's grids end in "2" and upload against editingId (see the "+ Add" wiring below)
+    const onForm = grid.endsWith('2');
+    setupPhotoDrop($(grid)?.closest('.photo-group'), addBtn, (files) => addDetailPhotos(files, kind, onForm ? editingId : undefined));
+  });
+  // Page-wide: while files are dragged over the window, outline every zone that will accept them
+  // (body.dragging-files), and never let a drop outside a zone open the image in the tab.
+  let fileDragDepth = 0;
+  function endFileDrag() { fileDragDepth = 0; document.body.classList.remove('dragging-files'); }
+  window.addEventListener('dragenter', (e) => { if (hasFiles(e)) { fileDragDepth++; document.body.classList.add('dragging-files'); } });
+  window.addEventListener('dragleave', (e) => { if (hasFiles(e) && --fileDragDepth <= 0) endFileDrag(); });
+  window.addEventListener('dragover', (e) => { if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; } });
+  window.addEventListener('drop', (e) => { if (hasFiles(e)) e.preventDefault(); endFileDrag(); });
+  // Clicking (or Enter/Space on) an empty drop zone or a grid's "Add or drop" tile = that group's "+ Add".
+  document.addEventListener('click', (e) => {
+    const z = e.target.closest?.('.photo-empty.is-droppable, .photo-add-tile');
+    if (z && z.dataset.add) $(z.dataset.add)?.click();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const z = e.target.closest?.('.photo-empty.is-droppable');
+    if (z && z.dataset.add) { e.preventDefault(); $(z.dataset.add)?.click(); }
+  });
 
   // line risk ranking
   initRiskPage();
@@ -707,6 +768,18 @@ function initApp() {
   };
   $('fLat').addEventListener('change', coordChanged);
   $('fLng').addEventListener('change', coordChanged);
+  // Paste "13.0898, 100.8751" (Google Maps' copy format) into either box: split into lat + lng and
+  // drop the pin. Needed on paste, not input — a type="number" box rejects the comma text outright.
+  const onCoordPaste = (e) => {
+    const m = /(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)/.exec((e.clipboardData && e.clipboardData.getData('text')) || '');
+    if (!m) return;
+    const lat = parseFloat(m[1]), lng = parseFloat(m[2]);
+    if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return;
+    e.preventDefault();
+    setPin(lat, lng, true);
+  };
+  $('fLat').addEventListener('paste', onCoordPaste);
+  $('fLng').addEventListener('paste', onCoordPaste);
 
   $('btnAddPendingPhoto').addEventListener('click', () => $('filePending').click());
   $('filePending').addEventListener('change', async (e) => { await addPendingFiles([...e.target.files]); e.target.value = ''; });

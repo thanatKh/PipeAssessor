@@ -8,9 +8,12 @@
    the form CRUD (open/collect/save/delete). Extracted from the app monolith.
    ============================================================================ */
 import L from 'leaflet';
-import { $, val, esc, notify, setBusy, positionSegPill, pillHtml, isOverdue } from '../core/dom';
+import { paPressureUsePct } from '../workbench/labels';
+import { icon } from '../core/icons';
+import { syncSectionNav } from '../core/section-nav';
+import { $, val, esc, notify, setBusy, positionSegPill, pillHtml, isOverdue, todayISO, inspectionDateIssue } from '../core/dom';
 import {
-  R2_UPLOAD_ENDPOINT, PHOTO_LIMIT_PER_KIND, DEFAULT_MAP_VIEW, SAT_TILES, WALL_LOSS_TYPES, NON_LEAKABLE_TYPES,
+  R2_UPLOAD_ENDPOINT, PUBLIC_BASE_URL, PHOTO_LIMIT_PER_KIND, DEFAULT_MAP_VIEW, SAT_TILES, WALL_LOSS_TYPES, NON_LEAKABLE_TYPES,
   REPAIR_METHOD_OPTIONS, TEMP_REPAIR_METHODS, TEMP_REPAIR_METHOD_KIND, TEMP_REPAIR_VERIFY_RESULTS,
   TEMP_REPAIR_VERIFY_METHODS, TEMP_REPAIR_MONITOR_FREQS,
 } from '../core/constants';
@@ -30,16 +33,17 @@ import {
 } from '../core/state';
 import { loadFindings, buildTagOptions } from './dashboard';
 import { loadLineList } from './import-export';
-import { exportQuickCalcPdf } from './pdf';
+import { exportQuickCalcPdf, buildQuickCalcPdf } from './pdf';
 // show() is the router's view-switcher — stays in app.ts (the hub).
 import { show } from '../app';
-import { addDetailPhotos, renderPhotoGroups } from './detail';
+import { addDetailPhotos, renderPhotoGroups, materialName, photoAddUsable, photoAddTileHtml, syncPhotoDropZone } from './detail';
+import { paFmtDate } from '../engine/format';
 
 /* ---------------- form (new / edit) ---------------- */
 
 export function clearValidation() {
-  ['fTerminal', 'fLocationDesc', 'fType'].forEach(id => $(id).removeAttribute('aria-invalid'));
-  ['errTerminal', 'errLocationDesc', 'errType'].forEach(id => $(id).style.display = 'none');
+  ['fTerminal', 'fLocationDesc', 'fType', 'fDepth', 'fInspDate', 'fEstCost'].forEach(id => $(id).removeAttribute('aria-invalid'));
+  ['errTerminal', 'errLocationDesc', 'errType', 'errDepth', 'errInspDate', 'errEstCost'].forEach(id => $(id).style.display = 'none');
 }
 
 export function setPin(lat, lng, recenter) {
@@ -81,7 +85,7 @@ export function renderPendingGrid() {
   grid.innerHTML = pendingPhotos.map((p, i) =>
     `<div class="photo-thumb">
        <img src="${p.previewUrl}" alt="Pending photo">
-       <button type="button" class="photo-remove" data-i="${i}" title="Remove">&#215;</button>
+       <button type="button" class="photo-remove" data-i="${i}" title="Remove" aria-label="Remove photo">${icon('x')}</button>
      </div>`).join('');
   // 'flex' not 'block' — see the identical note on detail.ts's renderPhotoGroups().
   $('pendingPhotoEmpty').style.display = pendingPhotos.length ? 'none' : 'flex';
@@ -95,6 +99,9 @@ export function renderPendingGrid() {
   const atLimit = pendingPhotos.length >= PHOTO_LIMIT_PER_KIND;
   addBtn.disabled = atLimit;
   addBtn.textContent = atLimit ? `Max ${PHOTO_LIMIT_PER_KIND} reached` : `+ Add photos (${pendingPhotos.length}/${PHOTO_LIMIT_PER_KIND})`;
+  const usable = photoAddUsable(addBtn);
+  syncPhotoDropZone($('pendingPhotoEmpty'), 'btnAddPendingPhoto', usable);
+  if (pendingPhotos.length && usable) grid.insertAdjacentHTML('beforeend', photoAddTileHtml('btnAddPendingPhoto'));
 }
 
 // Queue as-found photos on the new-finding form (downscaled preview held in memory until save).
@@ -114,10 +121,47 @@ export async function addPendingFiles(files) {
     } catch (err) { console.warn('preview failed', err); }
   }
   renderPendingGrid();
+  await applyPhotoExif(toQueue);
   if (files.length > toQueue.length) {
     notify(`${n} photo(s) queued (${files.length - toQueue.length} skipped — ${PHOTO_LIMIT_PER_KIND} max reached).`, true);
   }
   return n;
+}
+
+// Fill the pin and Inspection Date from the photos' EXIF (GPS + DateTimeOriginal) — only
+// fields that are still empty, so a manually placed pin or typed date always wins. Read
+// from the original File (downscaleImage's canvas output carries no EXIF). exifr is
+// lazy-loaded like jspdf/xlsx. Phones may strip GPS on upload (iOS: the picker's
+// "Location" option), so absence is normal and silent.
+async function applyPhotoExif(files) {
+  const needPin = !val('fLat') && !val('fLng');
+  const needDate = !val('fInspDate');
+  if (!files.length || (!needPin && !needDate)) return;
+  let exifr;
+  try { exifr = (await import('exifr')).default; } catch (err) { console.warn('exifr load failed', err); return; }
+  let gps = null, taken = null;
+  for (const file of files) {
+    try {
+      if (needPin && !gps) {
+        const g = await exifr.gps(file);
+        if (g && Number.isFinite(g.latitude) && Number.isFinite(g.longitude)) gps = g;
+      }
+      if (needDate && !taken) {
+        const t = await exifr.parse(file, ['DateTimeOriginal', 'CreateDate']);
+        const d = t && (t.DateTimeOriginal || t.CreateDate);
+        if (d instanceof Date && !isNaN(d)) taken = d;
+      }
+    } catch (err) { console.warn('exif read failed', err); }
+    if ((!needPin || gps) && (!needDate || taken)) break;
+  }
+  const filled = [];
+  if (gps) { setPin(gps.latitude, gps.longitude, true); filled.push('position'); }
+  if (taken) {
+    const pad = (x) => String(x).padStart(2, '0');
+    $('fInspDate').value = `${taken.getFullYear()}-${pad(taken.getMonth() + 1)}-${pad(taken.getDate())}`;
+    filled.push('inspection date');
+  }
+  if (filled.length) notify(`Filled ${filled.join(' & ')} from photo — check before saving.`);
 }
 
 // Which detail-page photo group a Ctrl+V paste targets (set when a group's "+ Add" is used).
@@ -178,9 +222,14 @@ export const CORR_TYPE_BY_FINDING = {
   'CUI (Corrosion Under Insulation)': 'external',
   'CUS (Corrosion Under Support)': 'external'
 };
+// When the finding type decides the side, the select is LOCKED to it (no second input of the same
+// fact); it stays editable only for types that don't (e.g. Dent / Other assessed manually).
 export function syncCorrTypeFromFinding() {
   const c = CORR_TYPE_BY_FINDING[$('fType').value];
   if (c) $('aCorrType').value = c;
+  $('aCorrType').disabled = !!c;
+  const hint = $('aCorrTypeHint');
+  if (hint) hint.style.display = c ? 'block' : 'none';
 }
 
 // Sensible starting severity by finding type, shown before any assessment has run — the user
@@ -249,6 +298,7 @@ export function syncLeakAndAssessRules() {
   // the assessment lockout — one function owns every leak-dependent piece of the form.
   if ($('panelTempRepair')) $('panelTempRepair').style.display = effectiveLnk ? '' : 'none';
   syncTempRepairFields();
+  syncSectionNav('formSectionNav'); // the Temporary repair link follows its panel
 }
 
 /* ---------------- temporary repair (emergency stop-leak) ----------------
@@ -434,12 +484,32 @@ export function initTempRepair() {
       }
     });
   }
+
+  // The stop-leak's permanent-repair target date pre-fills the finding's Target Repair Date when
+  // that is still empty — maintenance-only, because target_date is guarded for inspectors (and
+  // collectForm omits it for them). Never overwrites a date already set.
+  $('fTrPermDate').addEventListener('change', () => {
+    if (isMaintenance() && val('fTrPermDate') && !val('fTargetDate')) $('fTargetDate').value = val('fTrPermDate');
+  });
 }
 
 
+// The finding form records ONE reading: the wall-loss depth at the deepest point, entered in the
+// Anomaly section (#fDepth) and saved on the finding (findings.depth_mm). Localized corrosion is the
+// governing damage, so depth is the reading; the snapshot keeps its long-standing mode/depth/tmeas
+// shape with mode 'depth'. (Quick Calc keeps its own depth / measured-thickness toggle.)
 export function aMode() {
-  const b = document.querySelector('#aModeSeg .seg-btn.active');
-  return b ? b.dataset.mode : 'tmeas';
+  return 'depth';
+}
+
+// The assessment's read-only "depth used" line (#aDepthRef) — points back to Anomaly when empty.
+export function syncDepthRef() {
+  const el = $('aDepthRef');
+  if (!el) return;
+  const d = $('fDepth').value.trim();
+  el.innerHTML = d !== ''
+    ? `Wall-loss depth used: <b>${esc(d)} mm</b> <span class="hint" style="margin:0;">(from the Anomaly section)</span>`
+    : `<span>No wall-loss depth yet —</span> <a href="#" data-goto-depth>enter it in the Anomaly section</a>`;
 }
 
 export function setAssessOn(on) {
@@ -452,7 +522,7 @@ export function setAssessOn(on) {
 export function updateAschedules(keepValue) {
   const nps = $('aNps').value;
   const pipe = PA_PIPE_DATABASE[nps];
-  if (!pipe) return;
+  if (!pipe) { $('aSch').innerHTML = '<option value="">—</option>'; $('aTnom').value = ''; return; }
   const prev = $('aSch').value;
   $('aSch').innerHTML = Object.keys(pipe.schedules)
     .map(s => `<option value="${s}">${pipe.schedules[s].label}</option>`).join('');
@@ -477,31 +547,31 @@ export function gatherAssessParams() {
   return {
     nps: $('aNps').value, sch: $('aSch').value,
     overrideTnom: $('aTnom').value, overrideOd: '',
-    mode: aMode(), depth: $('aDepth').value, tmeas: $('aTmeas').value,
+    mode: 'depth', depth: $('fDepth').value, tmeas: '',
     ca: $('aCa').value, pInput: $('aP').value, pUnit: $('aPUnit').value,
     S: $('aS').value, E: $('aE').value, W: $('aW').value, Y: $('aY').value, CR: $('aCr').value,
     matCode: $('aMat').value, isInternal: $('aCorrType').value === 'internal'
   };
 }
 
-// best-effort thickness for the finding record, even if the full calc can't run (no pressure yet)
-export function assessThickness() {
-  const pipe = PA_PIPE_DATABASE[$('aNps').value];
-  const schT = pipe && pipe.schedules[$('aSch').value] ? pipe.schedules[$('aSch').value].t : null;
-  const tnom = $('aTnom').value !== '' ? Number($('aTnom').value) : schT;
-  let tmeas = null;
-  if (aMode() === 'tmeas') {
-    if ($('aTmeas').value !== '') tmeas = Number($('aTmeas').value);
-  } else if ($('aDepth').value !== '' && tnom != null) {
-    tmeas = Math.max(0, tnom - Number($('aDepth').value));
-  }
-  return { t_nom: tnom, t_meas: tmeas };
-}
-
 // The form's live workbench instance (paCreateAssessView), created in initAssessment().
+
+// The UT reading box for the active mode is still blank. The engine reads a blank depth as 0 mm
+// (parity-locked), which would show "OK, 100% wall left" for an unmeasured pipe — so a blank reading
+// is handled here as "not entered yet": neutral banner, no result, nothing saved.
+export function aReadingEmpty() {
+  return $('fDepth').value.trim() === '';
+}
 
 export function recalcAssessment() {
   if (!$('assessPanel').classList.contains('on')) { setAssessResult(null); renderRepairAdvisor(); return; }
+  if (aReadingEmpty()) {
+    setAssessResult(null);
+    $('aCalcHint').style.display = 'none';
+    if (awFormView) awFormView.render(null, { neutral: true });
+    renderRepairAdvisor();
+    return;
+  }
   const res = computeB313(gatherAssessParams());
   const hint = $('aCalcHint');
   if (res.hasErrors) {
@@ -509,8 +579,8 @@ export function recalcAssessment() {
     // Distinguish "not filled in yet" (neutral banner, no red) from "typed something invalid"
     // (ERROR banner + targeted message) — same cold-load rule the calculator used. (CA >= t_meas
     // is no longer an error — a thin wall below its reserve is a valid case; only ca < 0 errors.)
-    const readingEmpty = aMode() === 'tmeas' ? $('aTmeas').value === '' : $('aDepth').value === '';
-    const msg = (res.errors.tmeas || res.errors.depth) && !readingEmpty ? 'Check the UT reading (cannot exceed nominal thickness).'
+    const readingEmpty = aReadingEmpty();
+    const msg = (res.errors.tmeas || res.errors.depth) && !readingEmpty ? 'Check the wall-loss depth (it cannot exceed the original wall thickness).'
       : (res.errors.ca && !readingEmpty) ? (typeof res.errors.ca === 'string' ? res.errors.ca : 'Check the corrosion allowance.')
       : (res.errors.P && $('aP').value !== '') ? 'Design pressure must be positive.'
       : res.errors.overrideTnom ? 'Check the nominal thickness.'
@@ -548,26 +618,33 @@ export function loadAssessmentInto(inp, skipReading) {
   if (inp.P != null) $('aP').value = inp.P;
   if (inp.p_unit) $('aPUnit').value = inp.p_unit;
   if (inp.ca != null) $('aCa').value = inp.ca;
-  if (inp.corr_type) $('aCorrType').value = inp.corr_type;
+  // A saved corrosion type only applies when the finding type doesn't already decide it (the
+  // select is locked then — see syncCorrTypeFromFinding).
+  if (inp.corr_type && !CORR_TYPE_BY_FINDING[$('fType').value]) $('aCorrType').value = inp.corr_type;
   if (inp.cr != null) $('aCr').value = inp.cr;
   if (inp.E != null) $('aE').value = inp.E;
   if (inp.W != null) $('aW').value = inp.W;
   if (inp.Y != null) $('aY').value = inp.Y;
   if (inp.override_tnom != null && inp.override_tnom !== '') $('aTnom').value = inp.override_tnom;
-  if (!skipReading) {
-    const m = inp.mode === 'depth' ? 'depth' : 'tmeas';
-    document.querySelectorAll('#aModeSeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
-    positionSegPill($('aModeSeg'), false);
-    $('aTmeasGrp').style.display = m === 'tmeas' ? 'block' : 'none';
-    $('aDepthGrp').style.display = m === 'depth' ? 'block' : 'none';
-    if (inp.tmeas != null) $('aTmeas').value = inp.tmeas;
-    if (inp.depth != null) $('aDepth').value = inp.depth;
+  // The depth comes from the finding (depth_mm) when it has one. Findings saved before depth_mm
+  // existed carry their reading only in the snapshot: a depth-mode snapshot gives it directly; a
+  // measured-thickness snapshot converts with that snapshot's OWN pipe size (real data, not a guess).
+  if (!skipReading && $('fDepth').value.trim() === '') {
+    let d = null;
+    if (inp.mode === 'depth' && inp.depth != null && String(inp.depth).trim() !== '') d = Number(inp.depth);
+    else if (inp.mode === 'tmeas' && inp.tmeas != null && String(inp.tmeas).trim() !== '' && $('aTnom').value !== '')
+      d = Math.max(0, Number($('aTnom').value) - Number(inp.tmeas));
+    if (d != null && isFinite(d)) $('fDepth').value = +d.toFixed(2);
   }
+  syncDepthRef();
 }
 
 export function resetAssessment() {
-  $('aNps').value = '4"';
-  updateAschedules(false);
+  // Pipe size starts blank: a preset size looked like a real answer to an operator who never chose
+  // it, and used to turn their depth into a guessed thickness on save.
+  $('aNps').value = '';
+  $('aSch').innerHTML = '<option value="">—</option>';
+  $('aTnom').value = '';
   $('aMat').value = 'API5LB'; // default line-pipe material
   applyMaterialStress();
   $('aTemp').value = '';
@@ -577,12 +654,7 @@ export function resetAssessment() {
   $('aCorrType').value = 'external';
   $('aCr').value = '';
   $('aE').value = '1.0'; $('aW').value = '1.0'; $('aY').value = '0.4';
-  $('aTmeas').value = ''; $('aDepth').value = '';
-  document.querySelectorAll('#aModeSeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === 'depth'));
-  positionSegPill($('aModeSeg'), false);
-  $('aTmeasGrp').style.display = 'none';
-  $('aDepthGrp').style.display = 'block';
-  autofillAtnom();
+  syncDepthRef();
   setAssessResult(null);
   $('aCalcHint').style.display = 'none';
   if (awFormView) awFormView.render(null, { neutral: true });
@@ -643,7 +715,7 @@ export function initRepairAdvisor() {
 }
 
 export function initAssessment() {
-  $('aNps').innerHTML = Object.keys(PA_PIPE_DATABASE).map(n => `<option>${n}</option>`).join('');
+  $('aNps').innerHTML = '<option value="">Select size…</option>' + Object.keys(PA_PIPE_DATABASE).map(n => `<option>${n}</option>`).join('');
   $('aMat').innerHTML = PA_MATERIALS.map(m => `<option value="${m.code}">${m.name}</option>`).join('');
 
   // Full workbench under the inputs (equations ship collapsed to keep the column scannable —
@@ -654,11 +726,8 @@ export function initAssessment() {
     collapsed: ['equations'],
     onDepthDrag: (depth_mm) => {
       if (!assessResult) return;
-      if (aMode() === 'depth') {
-        $('aDepth').value = depth_mm.toFixed(2);
-      } else {
-        $('aTmeas').value = (assessResult.t_nom - depth_mm).toFixed(2);
-      }
+      $('fDepth').value = depth_mm.toFixed(2); // the one depth field (Anomaly section)
+      syncDepthRef();
       recalcAssessment();
     }
   }));
@@ -669,18 +738,14 @@ export function initAssessment() {
   $('aNps').addEventListener('change', () => { updateAschedules(false); recalcAssessment(); });
   $('aSch').addEventListener('change', () => { autofillAtnom(); recalcAssessment(); });
   $('aMat').addEventListener('change', () => { applyMaterialStress(); recalcAssessment(); });
-  document.querySelectorAll('#aModeSeg .seg-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#aModeSeg .seg-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      positionSegPill($('aModeSeg'), true);
-      const m = btn.dataset.mode;
-      $('aTmeasGrp').style.display = m === 'tmeas' ? 'block' : 'none';
-      $('aDepthGrp').style.display = m === 'depth' ? 'block' : 'none';
-      recalcAssessment();
-    });
+  $('fDepth').addEventListener('input', () => { syncDepthRef(); recalcAssessment(); });
+  $('aDepthRef').addEventListener('click', (e) => {
+    if (!e.target.closest('[data-goto-depth]')) return;
+    e.preventDefault();
+    $('panelAnomaly').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => $('fDepth').focus({ preventScroll: true }), 400);
   });
-  ['aTnom', 'aTmeas', 'aDepth', 'aCa', 'aP', 'aPUnit', 'aCorrType', 'aS', 'aTemp', 'aE', 'aW', 'aY', 'aCr']
+  ['aTnom', 'aCa', 'aP', 'aPUnit', 'aCorrType', 'aS', 'aTemp', 'aE', 'aW', 'aY', 'aCr']
     .forEach(id => $(id).addEventListener('input', recalcAssessment));
 
   $('fType').addEventListener('change', () => {
@@ -880,6 +945,13 @@ export function initTagCombo() {
    Its own small input set (q-prefixed ids) + workbench instance, fully independent of the
    finding form so a what-if never clobbers a half-entered finding's assessment. */
 
+// Set by initQuickCalc (it needs that function's closures); the router calls applyQuickCalcLink
+// for #/calc?… links shared from the Quick Calc message.
+let applyQuickLinkImpl = null;
+export function applyQuickCalcLink(search) {
+  if (applyQuickLinkImpl) applyQuickLinkImpl(search);
+}
+
 export function initQuickCalc() {
   $('qNps').innerHTML = Object.keys(PA_PIPE_DATABASE).map(n => `<option>${n}</option>`).join('');
   $('qMat').innerHTML = PA_MATERIALS.map(m => `<option value="${m.code}">${m.name}</option>`).join('');
@@ -929,17 +1001,25 @@ export function initQuickCalc() {
     if ($('qSpecS')) $('qSpecS').textContent = S ? `${S.toFixed(1)} MPa` : '—';
 
     if (lastQuickRes && lastQuickRes.mawp_no != null) {
-      const pUnit = $('qPUnit').value;
-      const mawpVal = pUnit === 'psi' ? (lastQuickRes.mawp_no * 145.038).toFixed(1) + ' psi' : (lastQuickRes.mawp_no * 10).toFixed(2) + ' bar';
-      if ($('qSpecMawp')) $('qSpecMawp').textContent = mawpVal;
+      // mawp_no is already in the input pressure unit (computeB313 converts back from MPa). The
+      // old "* 10" (bar) / "* 145.038" (psi) conversions showed this 10x / 145x too high.
+      if ($('qSpecMawp')) $('qSpecMawp').textContent = `${lastQuickRes.mawp_no.toFixed(2)} ${lastQuickRes.pUnit}`;
     } else if ($('qSpecMawp')) {
       $('qSpecMawp').textContent = '—';
     }
   };
 
   const recalcQuick = () => {
-    const res = computeB313(params());
     const hint = $('qCalcHint');
+    // blank reading = "not entered yet", not 0 mm lost (see aReadingEmpty)
+    if ((qMode() === 'tmeas' ? $('qTmeas').value : $('qDepth').value).trim() === '') {
+      lastQuickRes = null;
+      hint.style.display = 'none';
+      awQuickView.render(null, { neutral: true });
+      updateSpecBar();
+      return;
+    }
+    const res = computeB313(params());
     if (res.hasErrors) {
       lastQuickRes = null;
       // same neutral-vs-invalid rule as the form's assessment section
@@ -987,26 +1067,81 @@ export function initQuickCalc() {
     recalcQuick();
   };
 
+  /* ---- Sharing a what-if with the team (LINE chat) ----
+     One message builder used by Copy Summary and Share: verdict first (colour dot, readable from
+     the chat-list preview), one fact per line, a ✅/❌ on every code check, plain-Thai labels with
+     English technical terms (the Repair Advisor's convention), the margin stated outright, and a
+     link that reopens this exact calculation (#/calc is public — no sign-in needed). */
+  const schLabelOf = () => {
+    const pipe = PA_PIPE_DATABASE[$('qNps').value];
+    const sch = $('qSch').value;
+    return (pipe && pipe.schedules[sch]) ? pipe.schedules[sch].label : (sch || '—');
+  };
+  // e.g. PA-QCALC-8in-Sch40-24Oct2026.pdf — LINE showed the old blob download as "Unknown.pdf".
+  const quickFileName = () => {
+    const nps = $('qNps').value.replace(/"/g, 'in').replace(/[^a-zA-Z0-9-]/g, '-');
+    const sch = 'Sch' + $('qSch').value.replace(/[^a-zA-Z0-9]/g, '');
+    return `PA-QCALC-${nps}-${sch}-${paFmtDate(new Date()).replace(/\s+/g, '')}.pdf`;
+  };
+  const quickInputs = () => ({
+    nps: $('qNps').value, schLabel: schLabelOf(), matCode: $('qMat').value, mode: qMode(),
+    designTemp: $('qTemp').value, fileTitle: quickFileName().replace(/\.pdf$/, ''),
+  });
+  // Only non-default inputs go in the link, so it stays short enough to paste into a chat.
+  const quickPermalink = () => {
+    const q = new URLSearchParams();
+    const pipe = PA_PIPE_DATABASE[$('qNps').value];
+    const schT = pipe && pipe.schedules[$('qSch').value] ? pipe.schedules[$('qSch').value].t : null;
+    q.set('nps', $('qNps').value); q.set('sch', $('qSch').value); q.set('mat', $('qMat').value);
+    q.set('mode', qMode());
+    if (qMode() === 'depth') q.set('depth', $('qDepth').value); else q.set('tmeas', $('qTmeas').value);
+    q.set('p', $('qP').value); q.set('unit', $('qPUnit').value); q.set('ca', $('qCa').value);
+    if ($('qTnom').value && Number($('qTnom').value) !== schT) q.set('tnom', $('qTnom').value);
+    if ($('qCorrType').value === 'internal') q.set('corr', 'internal');
+    if ($('qCr').value) q.set('cr', $('qCr').value);
+    if (!$('qS').disabled && $('qS').value) q.set('s', $('qS').value);
+    if ($('qE').value && Number($('qE').value) !== 1) q.set('e', $('qE').value);
+    if ($('qW').value && Number($('qW').value) !== 1) q.set('w', $('qW').value);
+    if ($('qY').value && Number($('qY').value) !== 0.4) q.set('y', $('qY').value);
+    if ($('qTemp').value) q.set('temp', $('qTemp').value);
+    return `${PUBLIC_BASE_URL}/#/calc?${q.toString()}`;
+  };
+  const STATUS_LINE = {
+    OK: ['🟢', 'ท่อยังรับความดันได้ ไม่ต้องซ่อมเร่งด่วน'],
+    MONITOR: ['🟡', 'ใกล้ถึงค่าขั้นต่ำ — ควรติดตามและเพิ่มความถี่การตรวจ'],
+    REPAIR: ['🔴', 'ต่ำกว่าเกณฑ์ที่ยอมรับได้ — ต้องวางแผนซ่อมหรือเปลี่ยนท่อ'],
+  };
+  const quickShareText = (res) => {
+    const [dot, meaning] = STATUS_LINE[res.status] || ['⚪', ''];
+    const ok = (pass) => pass ? '✅' : '❌';
+    const n2 = (v) => Number(v).toFixed(2);
+    // mawp_no is already in the input pressure unit (computeB313 converts back from MPa) — an
+    // earlier "* 10" here reported MAWP 10x too high in every copied summary.
+    const erf = res.mawp_no > 0 ? res.P_input / res.mawp_no : null;
+    const unit = res.pUnit;
+    const lines = [
+      `${dot} INTEGRITY: ${res.status} — ASME B31.3`,
+      meaning,
+      '━━━━━━━━━━━━',
+      `📍 ${$('qNps').value} ${schLabelOf()} · ${materialName($('qMat').value)}`,
+      `📏 เนื้อท่อเหลือ ${n2(res.t_meas)} / ${n2(res.t_nom)} mm (${res.pctRemainNom.toFixed(0)}%)`,
+      `🔻 ผนังหายไป ${n2(res.depth)} mm`,
+      `${ok(res.margin >= 0)} ขั้นต่ำที่ต้องมี ${n2(res.t_req_total)} mm (รวมค่าเผื่อการกัดกร่อน ${n2(res.ca)}) → ${res.margin >= 0 ? 'สูงกว่าขั้นต่ำ' : 'ต่ำกว่าขั้นต่ำ'} ${n2(Math.abs(res.margin))} mm`,
+      `${ok(res.t_meas >= res.t_struct)} API 574 ขั้นต่ำเชิงโครงสร้าง ${n2(res.t_struct)} mm`,
+      `${ok(res.mawp_no >= res.P_input)} รับความดันได้สูงสุด ${n2(res.mawp_no)} ${unit} ${res.mawp_no >= res.P_input ? '≥' : '<'} Design ${res.P_input} ${unit}`
+        + (erf != null ? ` (ใช้ไป ${paPressureUsePct(erf)})` : ''),
+    ];
+    if (res.CR > 0 && res.remainingLife != null) {
+      lines.push(`⏳ อายุใช้งานคงเหลือ ~${Math.max(0, res.remainingLife).toFixed(1)} ปี (CR ${res.CR} mm/yr)`);
+    }
+    lines.push('━━━━━━━━━━━━', '📎 รายละเอียด + สมการ ใน PDF ที่แนบ', `🔗 เปิดคำนวณนี้: ${quickPermalink()}`);
+    return lines.join('\n');
+  };
+
   const copyQuickSummary = () => {
     if (!lastQuickRes) { notify('Enter a valid calculation to copy summary.', true); return; }
-    const res = lastQuickRes;
-    const nps = $('qNps').value;
-    const sch = $('qSch').value;
-    const mat = $('qMat').value;
-    const pVal = $('qP').value;
-    const pUnit = $('qPUnit').value;
-    const text = [
-      `ASME B31.3 What-If Calculation Summary`,
-      `Piping: ${nps} Sch ${sch} (${mat}, OD ${res.D.toFixed(2)}mm, t_nom ${res.t_nom.toFixed(2)}mm)`,
-      `Pressure: ${pVal} ${pUnit} | CA: ${res.ca.toFixed(2)}mm`,
-      `Measured Min. Thickness: ${res.t_meas.toFixed(2)}mm | Wall Loss Depth: ${res.depth.toFixed(2)}mm`,
-      `Required Thickness t_req: ${res.t_req_noCA.toFixed(2)}mm (w/ CA: ${res.t_req_total.toFixed(2)}mm)`,
-      `Remaining Wall: ${res.pctRemainNom.toFixed(0)}% of t_nom | MAWP: ${(res.mawp_no * 10).toFixed(2)} bar`,
-      `Status: ${res.status} (${res.desc})`
-    ].join('\n');
-
-    navigator.clipboard.writeText(text).then(() => {
-      notify('Calculation summary copied to clipboard!');
+    navigator.clipboard.writeText(quickShareText(lastQuickRes)).then(() => {
+      notify('Summary copied — paste it into the chat.');
     }).catch(() => {
       notify('Failed to copy to clipboard.', true);
     });
@@ -1014,16 +1149,79 @@ export function initQuickCalc() {
 
   const exportQuickPdf = () => {
     if (!lastQuickRes) { notify('Enter a valid calculation to export.', true); return; }
-    const nps = $('qNps').value;
-    const sch = $('qSch').value;
-    const pipe = PA_PIPE_DATABASE[nps];
-    const schLabel = (pipe && pipe.schedules[sch]) ? pipe.schedules[sch].label : (sch || '—');
-    exportQuickCalcPdf({
-      nps, schLabel,
-      matCode: $('qMat').value,
-      mode: qMode(),
-      designTemp: $('qTemp').value
-    }, lastQuickRes);
+    exportQuickCalcPdf(quickInputs(), lastQuickRes);
+  };
+
+  // Share (phones): hands the NAMED PDF to the OS share sheet (pick LINE) with the message, and
+  // also copies the message, since some apps keep only the file. navigator.share needs a fresh tap;
+  // if building the PDF took too long the browser refuses, so the file is cached and a second tap
+  // shares instantly.
+  let sharedPdf = null; // { key, file }
+  const shareQuick = async () => {
+    if (!lastQuickRes) { notify('Enter a valid calculation to share.', true); return; }
+    const text = quickShareText(lastQuickRes);
+    let copied = false;
+    try { await navigator.clipboard.writeText(text); copied = true; } catch (_) { /* share still works */ }
+    const key = quickPermalink();
+    if (!sharedPdf || sharedPdf.key !== key) {
+      const btn = $('btnQuickShare');
+      setBusy(btn, true, 'Preparing…');
+      try {
+        const blob = await buildQuickCalcPdf(quickInputs(), lastQuickRes);
+        sharedPdf = { key, file: new File([blob], quickFileName(), { type: 'application/pdf' }) };
+      } catch (e) {
+        notify('PDF failed: ' + e.message, true);
+        return;
+      } finally {
+        setBusy(btn, false);
+      }
+    }
+    try {
+      await navigator.share({ files: [sharedPdf.file], title: sharedPdf.file.name, text });
+      if (copied) notify('Shared. The summary is also copied — paste it if the chat only got the PDF.');
+    } catch (e) {
+      if (e && e.name === 'AbortError') return; // user closed the share sheet
+      if (e && e.name === 'NotAllowedError') { notify('PDF ready — tap Share again to send it.'); return; }
+      notify('Share failed: ' + (e && e.message ? e.message : e), true);
+    }
+  };
+  const canShareFiles = (() => {
+    try { return !!(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'x.pdf', { type: 'application/pdf' })] })); }
+    catch (_) { return false; }
+  })();
+  if ($('btnQuickShare')) $('btnQuickShare').style.display = canShareFiles ? '' : 'none';
+
+  // Re-open a shared calculation (#/calc?nps=…&sch=…). Unknown/invalid values are ignored and fall
+  // back to the form's defaults, so a mangled link still opens a usable calculator.
+  applyQuickLinkImpl = (search) => {
+    const q = new URLSearchParams(search);
+    const nps = q.get('nps');
+    if (!nps || !PA_PIPE_DATABASE[nps]) return;
+    $('qNps').value = nps;
+    updateSchedules(false);
+    const sch = q.get('sch');
+    if (sch && PA_PIPE_DATABASE[nps].schedules[sch]) { $('qSch').value = sch; autofillTnom(); }
+    if (q.get('tnom')) $('qTnom').value = q.get('tnom');
+    const mat = q.get('mat');
+    if (mat && PA_MATERIALS.some(m => m.code === mat)) $('qMat').value = mat;
+    applyStress();
+    if (q.get('s') && !$('qS').disabled) $('qS').value = q.get('s');
+    $('qP').value = q.get('p') || '';
+    const unit = q.get('unit');
+    if (unit && [...$('qPUnit').options].some(o => o.value === unit)) $('qPUnit').value = unit;
+    $('qCa').value = q.get('ca') || '1.5';
+    $('qCorrType').value = q.get('corr') === 'internal' ? 'internal' : 'external';
+    $('qCr').value = q.get('cr') || '';
+    $('qE').value = q.get('e') || '1.0'; $('qW').value = q.get('w') || '1.0'; $('qY').value = q.get('y') || '0.4';
+    $('qTemp').value = q.get('temp') || '';
+    const mode = q.get('mode') === 'tmeas' ? 'tmeas' : 'depth';
+    document.querySelectorAll('#qModeSeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+    positionSegPill($('qModeSeg'), false);
+    $('qTmeasGrp').style.display = mode === 'tmeas' ? 'block' : 'none';
+    $('qDepthGrp').style.display = mode === 'depth' ? 'block' : 'none';
+    $('qDepth').value = q.get('depth') || '';
+    $('qTmeas').value = q.get('tmeas') || '';
+    recalcQuick();
   };
 
   setAwQuickView(paCreateAssessView($('awQuick'), {
@@ -1075,6 +1273,7 @@ export function initQuickCalc() {
     .forEach(id => $(id).addEventListener('input', recalcQuick));
   $('btnQuickReset').addEventListener('click', reset);
   $('btnCopyQuickSummary')?.addEventListener('click', copyQuickSummary);
+  $('btnQuickShare')?.addEventListener('click', shareQuick);
   $('btnQuickPdf')?.addEventListener('click', exportQuickPdf);
   document.querySelectorAll('.preset-chip[data-preset]').forEach(btn => {
     btn.addEventListener('click', () => applyPreset((btn as HTMLElement).dataset.preset));
@@ -1127,7 +1326,8 @@ export function openForm(f) {
   $('fService').value = f ? (f.service || '') : '';
   $('fLocationDesc').value = f ? (f.location_desc || '') : '';
   $('fReportLink').value = f ? (f.report_link || '') : '';
-  $('fInspDate').value = f ? (f.inspection_date || '') : '';
+  $('fInspDate').value = f ? (f.inspection_date || '') : todayISO(); // field reports are nearly always same-day
+  $('fInspDate').max = todayISO(); // no future inspection dates (the picker greys them out)
   $('fType').value = f ? f.finding_type : '';
   const isLnk = f ? !!f.is_leaking : false;
   $('fIsLeaking').checked = isLnk;
@@ -1155,6 +1355,8 @@ export function openForm(f) {
   $('fDescription').value = f ? (f.description || '') : '';
   $('fDefLen').value = f && f.defect_length_mm != null ? f.defect_length_mm : '';
   $('fDefWid').value = f && f.defect_width_mm != null ? f.defect_width_mm : '';
+  $('fDepth').value = f && f.depth_mm != null ? f.depth_mm : '';
+  syncDepthRef();
   $('fTargetDate').value = f ? (f.target_date || '') : '';
   $('fSapNotif').value = f ? (f.sap_notification || '') : '';
   $('fSapOrder').value = f ? (f.sap_order || '') : '';
@@ -1163,9 +1365,7 @@ export function openForm(f) {
   // Assessment section: auto-enable for wall-loss types (new) or when the finding carries a
   // reading / a saved assessment (edit). When editing, restore the last saved assessment inputs.
   if (f) {
-    if (f.t_nominal != null) $('aTnom').value = f.t_nominal;
-    if (f.t_measured != null) $('aTmeas').value = f.t_measured;
-    const hasReading = f.t_measured != null;
+    const hasReading = f.depth_mm != null || f.t_measured != null;
     if (hasReading || WALL_LOSS_TYPES.includes(f.finding_type)) setAssessOn(true);
     // restore the full saved assessment setup (async; overrides the coarse prefill above)
     sb.from('assessments').select('inputs').eq('finding_id', f.id)
@@ -1201,6 +1401,7 @@ export function openForm(f) {
       if (pickMap) pickMap.setView(DEFAULT_MAP_VIEW.center, DEFAULT_MAP_VIEW.zoom);
     }
   }, 60);
+  syncSectionNav('formSectionNav'); // new vs existing finding show different photo panels
 }
 
 export function collectForm() {
@@ -1228,11 +1429,18 @@ export function collectForm() {
   need('fTerminal', 'errTerminal', !val('fTerminal'));
   need('fLocationDesc', 'errLocationDesc', !val('fLocationDesc').trim());
   need('fType', 'errType', !val('fType'));
+  need('fDepth', 'errDepth', val('fDepth') !== '' && !(Number(val('fDepth')) >= 0));
+  need('fInspDate', 'errInspDate', inspectionDateIssue(val('fInspDate')) === 'future');
+  need('fEstCost', 'errEstCost', val('fEstCost') !== '' && Number(val('fEstCost')) < 0);
   if (bad) return null;
+  // before 2000 is allowed (old vendor reports exist) but usually a typing slip: ask once
+  if (inspectionDateIssue(val('fInspDate')) === 'old' &&
+      !window.confirm(`The inspection date is ${val('fInspDate')} — before 2000. Is that right?`)) return null;
 
-  // Thickness fields come from the assessment section (single source for the reading).
-  const assessOn = $('assessPanel').classList.contains('on');
-  const thk = assessOn ? assessThickness() : { t_nom: null, t_meas: null };
+  // t_nominal / t_measured come ONLY from a complete assessment (real pipe size + the depth). With
+  // no assessment the keys are omitted, so an edit never wipes values already on the row and a new
+  // finding stores none — never a thickness worked out from a pipe size nobody chose.
+  const a = collectAssessment();
 
   const patch = {
     terminal: val('fTerminal'),
@@ -1246,8 +1454,8 @@ export function collectForm() {
     severity: sOrNull('fSeverity'),
     is_leaking: $('fIsLeaking').checked,
     description: sOrNull('fDescription'),
-    t_nominal: (thk.t_nom != null && isFinite(thk.t_nom)) ? thk.t_nom : null,
-    t_measured: (thk.t_meas != null && isFinite(thk.t_meas)) ? thk.t_meas : null,
+    depth_mm: nOrNull('fDepth'),
+    ...(a ? { t_nominal: a.results.t_nom, t_measured: a.results.t_meas } : {}),
     defect_length_mm: nOrNull('fDefLen'),
     defect_width_mm: nOrNull('fDefWid'),
     lat: nOrNull('fLat'),
@@ -1274,6 +1482,8 @@ export function collectForm() {
 // defined by the old calculator page's saveAssessmentToFinding) — keep it stable, saved rows depend on it.
 export function collectAssessment() {
   if (!$('assessPanel').classList.contains('on')) return null;
+  // nothing to record: no UT reading yet, or actively leaking (the calculation does not apply)
+  if (aReadingEmpty() || ($('fIsLeaking') && $('fIsLeaking').checked)) return null;
   const res = computeB313(gatherAssessParams());
   if (res.hasErrors) return null;
   const inputs = {
@@ -1281,7 +1491,7 @@ export function collectAssessment() {
     S: $('aS').value, E: $('aE').value, W: $('aW').value, Y: $('aY').value,
     design_temp: $('aTemp').value, P: $('aP').value, p_unit: $('aPUnit').value,
     ca: $('aCa').value, corr_type: $('aCorrType').value, cr: $('aCr').value,
-    mode: aMode(), depth: $('aDepth').value, tmeas: $('aTmeas').value,
+    mode: 'depth', depth: $('fDepth').value, tmeas: '',
     override_tnom: $('aTnom').value
   };
   const results = Object.assign({}, res, {
@@ -1365,9 +1575,14 @@ export async function saveForm(addAnother) {
     if (assessment && !unchanged) {
       const { error: aErr } = await sb.from('assessments').insert({ finding_id: id, inputs: assessment.inputs, results: assessment.results });
       if (aErr) notify('Finding saved, but the assessment could not be recorded: ' + aErr.message, true);
-    } else if (assessWanted && !assessment) {
-      notify('Finding saved. Assessment left incomplete (needs UT reading + pressure) — not recorded.', true);
     }
+    // An operator saving location + damage (+ depth) with no pipe data is the intended flow, not an
+    // error: say what happens next in the ONE save message (two stacked toasts covered the toolbar).
+    const pendingNote = (assessWanted && !assessment && !$('fIsLeaking').checked)
+      ? ($('fDepth').value.trim() !== ''
+        ? ' Assessment pending — an engineer adds the pipe size and design pressure.'
+        : ' No wall-loss depth yet — add it when measured.')
+      : '';
 
     // Attach (or clear) the emergency stop-leak record. Upsert on finding_id, since temp_repair is
     // ONE row per finding — unlike assessments, this is the current state, not a dated snapshot.
@@ -1390,9 +1605,9 @@ export async function saveForm(addAnother) {
       $('fTerminal').value = keep.terminal;
       $('fInspDate').value = keep.inspDate;
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      notify('Saved. Ready for the next finding on this report.');
+      notify('Saved.' + pendingNote + ' Ready for the next finding on this report.');
     } else {
-      notify(editingId ? 'Finding updated.' : 'Finding recorded.');
+      notify((editingId ? 'Finding updated.' : 'Finding recorded.') + pendingNote);
       location.hash = '#/f/' + id;
     }
   } catch (e) {
@@ -1410,7 +1625,7 @@ export async function deleteFinding() {
     return;
   }
   const f = findings.find(x => x.id === editingId) || current;
-  const tag = f ? f.pipe_tag : '';
+  const tag = f ? (f.pipe_tag || f.location_desc || '') : ''; // location-first: operator findings have no tag
   if (!window.confirm(`Delete this finding (${tag})? Its photos and history are removed permanently.`)) return;
   const btn = $('btnDelete');
   setBusy(btn, true, 'Deleting…');

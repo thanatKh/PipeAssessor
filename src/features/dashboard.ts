@@ -7,10 +7,13 @@
    CSV export helpers shared with import-export. Extracted from the app monolith.
    ============================================================================ */
 import L from 'leaflet';
-import { $, esc, notify, fmtDate, isOverdue, dueDateOf, pillHtml } from '../core/dom';
-import { FINDING_TYPE_SHORT, STATUS_COLORS, TYPE_COLORS, SEVERITY_COLORS, DEFAULT_MAP_VIEW, SAT_TILES, R2_PUBLIC_BASE } from '../core/constants';
+import { $, esc, notify, fmtDate, isOverdue, dueDateOf, pillHtml, inspectionDateIssue } from '../core/dom';
+import { FINDING_TYPE_SHORT, STATUS_COLORS, TYPE_COLORS, SEVERITY_COLORS, DEFAULT_MAP_VIEW, SAT_TILES, R2_PUBLIC_BASE, WALL_LOSS_TYPES } from '../core/constants';
 import { paFmtBahtShort } from '../engine/format';
 import { sb } from '../core/supabase';
+import { snapshotHasReading, resolveIntegrityBanner } from '../workbench/assess-view';
+import { icon } from '../core/icons';
+import { resFromSnapshot } from './detail';
 import {
   findings, setFindings, lineList, filters, selectedIds, setSelectedIds,
   current, setCurrent, currentPhotos, setCurrentPhotos, currentHistory, setCurrentHistory,
@@ -69,14 +72,44 @@ export function revealListSkeleton() {
   $('listSkelWrap')?.classList.add('is-revealed');
 }
 
+// Findings with a usable assessment (a saved snapshot WITH a reading) — for needsEngineer() — and
+// the latest such snapshot per finding, for integrityOf().
+let assessedIds = new Set();
+let latestAssessByFinding = new Map();
+
+// An operator can save a finding with only a location + the damage (+ depth); an engineer completes
+// it. "Needs engineer" = still unresolved AND either no Line No. yet, or a wall-loss finding with no
+// ASME B31.3 result yet (leaking ones excepted — the calculation does not apply to them). Drives the
+// KPI chip and the __needs_eng register filter, so engineers have one list to work through.
+export function needsEngineer(f) {
+  if (f.status === 'Repaired' || f.status === 'Closed') return false;
+  if (!f.pipe_tag) return true;
+  return WALL_LOSS_TYPES.includes(f.finding_type) && !f.is_leaking && !assessedIds.has(f.id);
+}
+
 export async function loadFindings() {
   selectedIds.clear(); // fresh data -> drop any selection from a previous load (ids may be stale)
-  const [fq, pq] = await Promise.all([
+  const [fq, pq, aq] = await Promise.all([
     sb.from('findings').select('*').order('created_at', { ascending: false }),
-    sb.from('finding_photos').select('finding_id, storage_path, kind, created_at').order('created_at', { ascending: true })
+    sb.from('finding_photos').select('finding_id, storage_path, kind, created_at').order('created_at', { ascending: true }),
+    sb.from('assessments').select('finding_id, inputs, results, created_at').order('created_at', { ascending: false })
   ]);
+  const usable = (aq.data || []).filter(snapshotHasReading);
+  assessedIds = new Set(usable.map(a => a.finding_id));
+  latestAssessByFinding = new Map();
+  usable.forEach(a => { if (!latestAssessByFinding.has(a.finding_id)) latestAssessByFinding.set(a.finding_id, a); });
+  integrityCache = new Map();
   if (fq.error) { notify('Load failed: ' + fq.error.message, true); return; }
   setFindings(fq.data || []);
+  // DEV ONLY (break-ui): ?data=worst|empty|one|huge swaps in a worst-case fixture at the data
+  // boundary, plus a small toggle to flip between them. The production build drops this branch.
+  if (import.meta.env.DEV) {
+    const which = new URLSearchParams(location.search).get('data') || '';
+    const { fixtureFor } = await import('../dev/dashboard-fixtures');
+    const fx = fixtureFor(which);
+    if (fx) { setFindings(fx); assessedIds = new Set(); latestAssessByFinding = new Map(); integrityCache = new Map(); }
+    if (which) mountDevDataToggle(which); // only while a test dataset is open: it covers the phone FAB
+  }
   setPhotoCounts({});
   setPhotoThumbs({}); // finding_id -> storage_path of its earliest "found" photo (falls back to any)
   (pq.data || []).forEach(p => {
@@ -86,8 +119,26 @@ export async function loadFindings() {
   });
 }
 
+// DEV ONLY: the break-ui "Demo data / Worst case" switch, fixed bottom-centre. Plain chrome, not
+// part of the design under test. Selection lives in the URL (?data=…) so a reload keeps it.
+function mountDevDataToggle(which) {
+  if (document.getElementById('devDataToggle')) return;
+  const el = document.createElement('div');
+  el.id = 'devDataToggle';
+  el.style.cssText = 'position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:9999;display:flex;gap:2px;padding:3px;border-radius:999px;background:#e5e7eb;font:12px system-ui;box-shadow:0 2px 8px rgba(0,0,0,.15)';
+  [['', 'Demo data'], ['worst', 'Worst case'], ['empty', 'Empty'], ['one', 'One'], ['huge', '1,200 rows']].forEach(([v, label]) => {
+    const a = document.createElement('a');
+    a.textContent = label;
+    a.href = (v ? '?data=' + v : location.pathname) + '#/list';
+    a.style.cssText = 'padding:4px 10px;border-radius:999px;color:#111;text-decoration:none;' + (v === which ? 'background:#fff;font-weight:600' : '');
+    el.appendChild(a);
+  });
+  document.body.appendChild(el);
+}
+
 /* Days since the inspection date (falls back to created_at) — how long the finding has existed. */
 export function ageDays(f) {
+  if (inspectionDateIssue(f.inspection_date)) return null; // future or pre-2000: not a real age
   const base = f.inspection_date || f.created_at;
   if (!base) return null;
   const ms = Date.now() - new Date(base).getTime();
@@ -126,7 +177,7 @@ export async function loadDetail(id) {
   setCurrent(f.data);
   setCurrentPhotos(ph.data || []);
   setCurrentHistory(hi.data || []);
-  setCurrentAssessments(as.data || []);
+  setCurrentAssessments((as.data || []).filter(snapshotHasReading));
   setCurrentTempRepair(tr.data || null);
   return true;
 }
@@ -143,7 +194,7 @@ export async function loadPublicFinding(id) {
     setCurrent(data.finding);
     setCurrentPhotos(data.photos || []);
     setCurrentHistory(data.history || []);
-    setCurrentAssessments(data.assessments || []);
+    setCurrentAssessments((data.assessments || []).filter(snapshotHasReading));
     setCurrentTempRepair(data.temp_repair || null);
     return true;
   } catch (_) {
@@ -165,6 +216,9 @@ export function applyFilters(rows) {
     if (filters.status === '__overdue') { if (!isOverdue(f)) return false; }
     else if (filters.status === '__complete') { if (f.status !== 'Repaired' && f.status !== 'Closed') return false; }
     else if (filters.status === '__outstanding') { if (f.status === 'Repaired' || f.status === 'Closed') return false; }
+    else if (filters.status === '__needs_eng') { if (!needsEngineer(f)) return false; }
+    else if (filters.status === '__leaking') { if (!isLeakingNow(f)) return false; }
+    else if (filters.status === '__repair') { if (!isRepairRequired(f)) return false; }
     else if (filters.status && f.status !== filters.status) return false;
     if (filters.type && f.finding_type !== filters.type) return false;
     if (filters.severity && f.severity !== filters.severity) return false;
@@ -177,98 +231,185 @@ export function applyFilters(rows) {
   });
 }
 
-// Circumference of the ring's r=42 circle (2 * PI * 42) — stroke-dasharray/-dashoffset are set
-// in absolute SVG units, not percentages, so this constant drives the fill math below.
-export const KPI_RING_CIRCUMFERENCE = 2 * Math.PI * 42;
+// Integrity of each finding for the dashboard (stripe, badge, "Leaking now" / "Repair required"),
+// from the SAME resolver the detail page's banner uses, on the finding's latest usable assessment
+// re-derived through computeB313 (resFromSnapshot) — so the dashboard can never disagree with the
+// finding's own page. Cached per loadFindings().
+let integrityCache = new Map();
+export function integrityOf(f) {
+  if (!integrityCache.has(f.id)) {
+    const snap = latestAssessByFinding.get(f.id);
+    integrityCache.set(f.id, resolveIntegrityBanner(f, snap ? resFromSnapshot(snap) : null).key);
+  }
+  return integrityCache.get(f.id);
+}
+const isResolved = (f) => f.status === 'Repaired' || f.status === 'Closed';
+export const isLeakingNow = (f) => !isResolved(f) && !!f.is_leaking;
+export const isRepairRequired = (f) => !isResolved(f) && !f.is_leaking && integrityOf(f) === 'repair';
 
-// number pop-in (transitions.dev): rebuilds #kpiRingPct as per-character spans and replays the
-// entrance animation, pairing with the ring arc's own stroke-dashoffset ease so neither the arc
-// nor the % text snaps instantly. No-ops when the value hasn't changed so redundant renderKpis()
-// calls (e.g. back-to-back filter changes) don't replay the animation on an unchanged number.
-function setRingPct(str) {
-  const el = $('kpiRingPct');
-  if (el.dataset.val === str) return;
-  el.dataset.val = str;
-  el.classList.remove('is-animating');
-  el.replaceChildren();
-  const chars = str.split('');
-  chars.forEach((ch, i) => {
-    const span = document.createElement('span');
-    span.className = 't-digit';
-    span.textContent = ch;
-    if (i === chars.length - 2) span.dataset.stagger = '1';
-    else if (i === chars.length - 1) span.dataset.stagger = '2';
-    el.appendChild(span);
-  });
-  void el.offsetHeight; // force reflow so the animation restarts
-  el.classList.add('is-animating');
+// Quick views above the register — each is a filters.status value (the #filStatus select carries
+// the same values, so the two always agree).
+const QUICK_VIEWS = [
+  { label: 'All', filter: '' },
+  { label: 'Open', filter: 'Open' },
+  { label: 'Leaking', filter: '__leaking' },
+  { label: 'Repair required', filter: '__repair' },
+  { label: 'Needs engineer', filter: '__needs_eng' },
+  { label: 'Overdue', filter: '__overdue' },
+];
+
+function setStatusFilter(value) {
+  filters.status = value;
+  filters.severity = '';
+  $('filStatus').value = value;
+  renderList();
 }
 
+// Plural-safe "N finding(s)"
+const nFindings = (n) => `${n} finding${n === 1 ? '' : 's'}`;
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// Everything above the map | register: sub-line, "Needs attention" cards, status bar + budget,
+// new findings per month, open by terminal / severity, and the quick-view tabs. Global counts
+// (independent of the active filter), like the old KPI chips. Name kept: app.ts and renderList call it.
 export function renderKpis() {
   const count = (st) => findings.filter(f => f.status === st).length;
-  const overdue = findings.filter(isOverdue).length;
-  const items = [
-    { label: 'Open', num: count('Open'), filter: 'Open' },
-    { label: 'Monitoring', num: count('Monitoring'), filter: 'Monitoring' },
-    { label: 'Repair Planned', num: count('Repair Planned'), filter: 'Repair Planned' },
-    { label: 'Overdue', num: overdue, filter: '__overdue', cls: 'k-overdue' },
-    { label: 'Repaired', num: count('Repaired'), filter: 'Repaired' },
-    { label: 'All', num: findings.length, filter: '' }
-  ];
-  $('kpiRowBottom').innerHTML = items.map(it =>
-    `<button type="button" class="kpi ${it.cls || ''} ${filters.status === it.filter && (it.filter !== '' || filters.status === '') ? '' : ''}" data-filter="${esc(it.filter)}">
-       <span class="k-num">${it.num}</span><span class="k-label">${esc(it.label)}</span>
-     </button>`).join('');
-  $('kpiRowBottom').querySelectorAll('.kpi').forEach(btn => {
-    if (btn.dataset.filter === filters.status) btn.classList.add('active');
-    btn.addEventListener('click', () => {
-      filters.status = btn.dataset.filter;
-      filters.severity = '';
-      $('filStatus').value = filters.status;
-      renderList();
-    });
-  });
+  const open = findings.filter(f => !isResolved(f));
+  const resolved = findings.length - open.length;
+  const terms = [...new Set(open.map(f => f.terminal).filter(Boolean))].sort();
+  $('dashSub').textContent = findings.length
+    ? `${open.length} open${terms.length ? ' across ' + new Intl.ListFormat('en', { type: 'conjunction' }).format(terms) : ''} · ${resolved} resolved`
+    : 'No findings recorded yet';
 
-  // Completion ring: Repaired + Closed vs. all findings. A finding is "resolved" once its
-  // repair is confirmed OR the record is formally closed out — matches the register's own
-  // dimmed/"row-dim" treatment for these two statuses.
+  // ---- Needs attention: the four lists to act on today, with their first findings by name
+  const groups = [
+    { key: 'leak', label: 'Leaking now', filter: '__leaking', icon: 'alert', rows: findings.filter(isLeakingNow),
+      note: 'Pressure boundary breached — containment first.', none: 'No finding is actively leaking.' },
+    { key: 'repair', label: 'Repair required', filter: '__repair', icon: 'wrench', rows: findings.filter(isRepairRequired),
+      note: 'Integrity: REPAIR — the wall or the defect needs repair.', none: 'No finding needs repair right now.' },
+    { key: 'eng', label: 'Needs engineer', filter: '__needs_eng', icon: 'ruler', rows: findings.filter(needsEngineer),
+      note: 'No Line No. or no assessment yet.', none: 'Every open finding has a Line No. and an assessment.' },
+    { key: 'due', label: 'Overdue', filter: '__overdue', icon: 'clock', rows: findings.filter(isOverdue),
+      note: 'Past the target or re-check date.', none: 'Nothing is past its target or re-check date.' },
+  ];
+  $('attnGrid').innerHTML = groups.map(g => {
+    const top = sortFindings(g.rows).slice(0, 3);
+    const items = top.map(f => {
+      const meta = g.key === 'due' ? `due ${fmtDate(dueDateOf(f))}`
+        : `${esc(f.terminal || '')} · ${ageDays(f) ?? '—'} d`; // terminal + age tell same-named findings apart
+      const name = f.pipe_tag || f.location_desc || '—';
+      return `<li><a href="#/f/${esc(f.id)}" title="${esc(name)}">${esc(name)}</a><span>${meta}</span></li>`;
+    }).join('');
+    const n = g.rows.length;
+    return `<article class="attn-card attn-${g.key}${n ? '' : ' is-clear'}${filters.status === g.filter ? ' active' : ''}">
+      <button type="button" class="attn-head" data-filter="${g.filter}" aria-label="${esc(g.label)}: ${n}. Show in the register">
+        <span class="attn-ico" aria-hidden="true">${icon(n ? g.icon : 'check')}</span>
+        <span class="attn-label">${esc(g.label)}</span>
+        <span class="attn-num">${n}</span>
+      </button>
+      <p class="attn-note">${esc(n ? g.note : g.none)}</p>
+      ${items ? `<ul class="attn-list">${items}</ul>` : ''}
+      ${n > top.length ? `<button type="button" class="attn-more" data-filter="${g.filter}">View all ${n}</button>` : ''}
+    </article>`;
+  }).join('');
+  $('attnGrid').querySelectorAll('[data-filter]').forEach(b => b.addEventListener('click', () => setStatusFilter(b.dataset.filter)));
+
+  // ---- Status bar (one segment per status, sized by count) + legend with counts
+  const statuses = ['Open', 'Monitoring', 'Repair Planned', 'Repaired', 'Closed'];
+  $('statusBar').innerHTML = statuses.filter(st => count(st) > 0).map(st =>
+    `<button type="button" class="sb-seg${filters.status === st ? ' active' : ''}" data-filter="${esc(st)}" style="flex:${count(st)} 1 0; background:${STATUS_COLORS[st]};" title="${esc(st)}: ${count(st)}" aria-label="${esc(st)}: ${count(st)}"></button>`
+  ).join('') || '<span class="sb-empty"></span>';
+  $('statusLegend').innerHTML = statuses.map(st =>
+    `<li><button type="button" class="sl-item${filters.status === st ? ' active' : ''}" data-filter="${esc(st)}"><i style="background:${STATUS_COLORS[st]};"></i>${esc(st)}<b>${count(st)}</b></button></li>`
+  ).join('');
+  ['statusBar', 'statusLegend'].forEach(id => $(id).querySelectorAll('[data-filter]').forEach(b => b.addEventListener('click', () => setStatusFilter(b.dataset.filter))));
+
+  // completion: Repaired + Closed vs all
   const total = findings.length;
-  const complete = count('Repaired') + count('Closed');
-  const pct = total > 0 ? Math.round((complete / total) * 100) : 0;
-  const offset = KPI_RING_CIRCUMFERENCE * (1 - (total > 0 ? complete / total : 0));
-  $('kpiRingFill').style.strokeDasharray = `${KPI_RING_CIRCUMFERENCE}`;
-  $('kpiRingFill').style.strokeDashoffset = `${offset}`;
-  setRingPct(`${pct}%`);
-  $('kpiRingFraction').textContent = `${complete} of ${total}`;
+  const pct = total > 0 ? Math.round((resolved / total) * 100) : 0;
+  $('kpiRingPct').textContent = `${pct}%`;
+  $('kpiRingFraction').textContent = `${resolved} of ${total}`;
   $('kpiRingCard').classList.toggle('active', filters.status === '__complete');
 
   renderBudgetKpi();
+  renderTrend();
+
+  // ---- Open findings by terminal (bars) and severity (chips)
+  const byTerm = terms.map(t => ({ t, n: open.filter(f => f.terminal === t).length }));
+  const maxT = Math.max(1, ...byTerm.map(x => x.n));
+  $('openTotal').textContent = nFindings(open.length);
+  $('termBars').innerHTML = byTerm.map(({ t, n }) =>
+    `<button type="button" class="tb-row${filters.terminal === t ? ' active' : ''}" data-term="${esc(t)}" aria-label="${esc(t)}: ${n} open">
+      <span class="tb-name">${esc(t)}</span><span class="tb-track"><span style="width:${Math.round((n / maxT) * 100)}%;"></span></span><b>${n}</b>
+    </button>`).join('') || '<p class="dcard-meta">No open findings.</p>';
+  $('termBars').querySelectorAll('[data-term]').forEach(b => b.addEventListener('click', () => {
+    filters.terminal = filters.terminal === b.dataset.term ? '' : b.dataset.term;
+    $('filTerminal').value = filters.terminal;
+    renderList();
+  }));
+  const sevs = ['High', 'Medium', 'Low'];
+  $('sevRow').innerHTML = `<span class="dcard-meta">Severity</span>` + sevs.map(s =>
+    `<button type="button" class="sev-chip sev-${s.toLowerCase()}${filters.severity === s ? ' active' : ''}" data-sev="${s}">${s} <b>${open.filter(f => f.severity === s).length}</b></button>`).join('');
+  $('sevRow').querySelectorAll('[data-sev]').forEach(b => b.addEventListener('click', () => {
+    filters.severity = filters.severity === b.dataset.sev ? '' : b.dataset.sev;
+    renderList();
+  }));
+
+  // ---- Quick-view tabs (counts are global, like the cards)
+  const tabCount = { '': findings.length, 'Open': count('Open'), '__leaking': groups[0].rows.length, '__repair': groups[1].rows.length, '__needs_eng': groups[2].rows.length, '__overdue': groups[3].rows.length };
+  $('quickTabs').innerHTML = QUICK_VIEWS.map(v =>
+    `<button type="button" class="qt${filters.status === v.filter ? ' active' : ''}" data-filter="${v.filter}" aria-pressed="${filters.status === v.filter}">${esc(v.label)} <span>${tabCount[v.filter]}</span></button>`).join('');
+  $('quickTabs').querySelectorAll('[data-filter]').forEach(b => b.addEventListener('click', () => setStatusFilter(b.dataset.filter)));
+}
+
+// New findings per month over the last 12 months (by inspection date, else record date). One
+// series, one accent colour, rounded bar tops, the peak labelled, a native tooltip per bar. Drawn
+// as HTML (not a scaling SVG) so the labels keep their size on a 320px phone (break-ui #6).
+function renderTrend() {
+  const now = new Date();
+  const months = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ y: d.getFullYear(), m: d.getMonth(), n: 0 });
+  }
+  findings.forEach(f => {
+    const base = f.inspection_date || f.created_at;
+    if (!base) return;
+    const d = new Date(base);
+    const hit = months.find(x => x.y === d.getFullYear() && x.m === d.getMonth());
+    if (hit) hit.n++;
+  });
+  const max = Math.max(1, ...months.map(x => x.n));
+  const peakIdx = months.findIndex(x => x.n === max && x.n > 0);
+  const cols = months.map((x, i) => {
+    const label = `${MONTHS[x.m]} ${x.y}: ${x.n} new finding${x.n === 1 ? '' : 's'}`;
+    const h = x.n ? Math.max(4, Math.round((x.n / max) * 100)) : 0;
+    return `<div class="tr-col" title="${label}">
+      <div class="tr-plot">${i === peakIdx ? `<span class="tr-peak">${x.n}</span>` : ''}<span class="tr-bar" style="height:${h}%;"></span></div>
+      <span class="tr-m">${MONTHS[x.m][0]}</span>
+    </div>`;
+  }).join('');
+  const aria = 'New findings per month, ' + months.map(x => `${MONTHS[x.m]} ${x.y} ${x.n}`).join(', ');
+  $('trendChart').innerHTML = `<div class="trend" role="img" aria-label="${aria}">${cols}</div>`;
+  const first = months[0], last = months[11];
+  $('trendRange').textContent = `${MONTHS[first.m]} ${first.y} – ${MONTHS[last.m]} ${last.y}`;
+  const total12 = months.reduce((s, x) => s + x.n, 0);
+  const resolved = findings.filter(isResolved).length;
+  $('trendNote').textContent = `${total12} new in 12 months · ${resolved} resolved so far`;
 }
 
 // Outstanding repair budget: Σ estimated_cost over findings not yet Repaired/Closed, with a
-// High/Medium/Low split. Computed globally (like the KPI chips), independent of the active filter.
+// High/Medium/Low split. Computed globally, independent of the active filter.
 export function renderBudgetKpi() {
-  const isOut = f => f.status !== 'Repaired' && f.status !== 'Closed';
-  const out = findings.filter(isOut);
+  const out = findings.filter(f => !isResolved(f));
   const sum = arr => arr.reduce((s, f) => s + (Number(f.estimated_cost) || 0), 0);
   const noEst = out.filter(f => f.estimated_cost == null).length;
   $('kbTotal').textContent = paFmtBahtShort(sum(out));
-  $('kbSub').textContent = `${out.length} finding${out.length === 1 ? '' : 's'}${noEst ? ` · ${noEst} not yet estimated` : ''}`;
+  $('kbSub').textContent = noEst ? `${noEst} not yet estimated` : nFindings(out.length);
   const sev = s => paFmtBahtShort(sum(out.filter(f => f.severity === s)));
-  $('kbSev').innerHTML =
-    `<button type="button" class="kb-sev-btn kb-hi ${filters.severity === 'High' ? 'active' : ''}" data-sev="High"><i></i>High <b>${sev('High')}</b></button>` +
-    `<button type="button" class="kb-sev-btn kb-md ${filters.severity === 'Medium' ? 'active' : ''}" data-sev="Medium"><i></i>Med <b>${sev('Medium')}</b></button>` +
-    `<button type="button" class="kb-sev-btn kb-lo ${filters.severity === 'Low' ? 'active' : ''}" data-sev="Low"><i></i>Low <b>${sev('Low')}</b></button>`;
-
-  $('kbSev').querySelectorAll('.kb-sev-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const s = btn.dataset.sev;
-      filters.severity = filters.severity === s ? '' : s;
-      renderList();
-    });
-  });
-  $('kpiBudgetCard').classList.toggle('active', filters.status === '__outstanding' || !!filters.severity);
+  $('kbSev').innerHTML = ['High', 'Medium', 'Low'].map(s =>
+    `<span class="kb-sev-item kb-${s.toLowerCase()}"><i></i>${s === 'Medium' ? 'Med' : s} <b>${sev(s)}</b></span>`).join('');
+  $('kpiBudgetCard').classList.toggle('active', filters.status === '__outstanding');
 }
 
 export function updateFilterUI() {
@@ -482,6 +623,7 @@ export function highlightPin(id, on) {
 
 /* pin -> row: scroll the row into view and flash it */
 export function flashRow(id) {
+  showRowFor(id);
   const tr = document.querySelector(`#listBody tr[data-id="${CSS.escape(id)}"]`);
   if (!tr) return;
   tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -495,7 +637,9 @@ export const NO_PHOTO_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="22" 
 
 export function ageHtml(f) {
   const d = ageDays(f);
-  if (d == null) return '<span class="age">—</span>';
+  if (d == null) return inspectionDateIssue(f.inspection_date)
+    ? `<span class="age" title="Check the inspection date (${esc(f.inspection_date)})">—</span>`
+    : '<span class="age">—</span>';
   const active = f.status !== 'Repaired' && f.status !== 'Closed';
   const cls = active && d >= 180 ? 'age age-old' : active && d >= 90 ? 'age age-warn' : 'age';
   return `<span class="${cls}" title="Days since inspection">${d}d</span>`;
@@ -511,6 +655,24 @@ export function ageHtml(f) {
 // the outline-SVG convention CAMERA_SVG already uses elsewhere in this file).
 const EMPTY_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>';
 
+// Register status pill: the full status, plus a short form the phone layout shows instead (the
+// status column is 64px there and "MONITORING" / "REPAIR PLANNED" spilled out of it).
+const STATUS_SHORT = { 'Open': 'Open', 'Monitoring': 'Monitor', 'Repair Planned': 'Planned', 'Repaired': 'Repaired', 'Closed': 'Closed' };
+function regPill(status) {
+  return pillHtml(status).replace(/>([^<]*)<\/span>$/, (m, t) => `><span class="pl-full">${t}</span><span class="pl-short" aria-hidden="true">${esc(STATUS_SHORT[status] || t)}</span></span>`);
+}
+
+// The register draws REG_PAGE rows at a time with a "Show more" row, instead of every finding at
+// once (1,200 findings added ~0.7 s and keeps growing). The map still shows every filtered pin;
+// renderList() resets the count whenever the filters change.
+const REG_PAGE = 50;
+let regLimit = REG_PAGE;
+export function resetRegisterPage() { regLimit = REG_PAGE; }
+export function showRowFor(id) {
+  const i = lastRenderedRows.findIndex(f => f.id === id);
+  if (i >= regLimit) { regLimit = Math.ceil((i + 1) / REG_PAGE) * REG_PAGE; renderTable(lastRenderedRows); }
+}
+
 export function renderTable(rows) {
   setLastRenderedRows(rows);
   const body = $('listBody');
@@ -525,14 +687,16 @@ export function renderTable(rows) {
         </header>
       </div>
     </td></tr>`;
+    $('regMore').hidden = true;
     updateSelectionUI();
     return;
   }
-  body.innerHTML = rows.map(f => {
+  const shown = rows.slice(0, regLimit);
+  body.innerHTML = shown.map(f => {
     const due = dueDateOf(f);
     const dueHtml = isOverdue(f)
       ? `<span class="ov-badge">${fmtDate(due)}</span>`
-      : `<span class="mono" style="font-size:12px;">${fmtDate(due)}</span>`;
+      : `<span class="mono">${fmtDate(due)}</span>`;
     const np = photoCounts[f.id] || 0;
     const photoChip = np ? `<span class="t-photos">${CAMERA_SVG}${np}</span>` : '';
     const thumb = photoThumbs[f.id];
@@ -541,27 +705,40 @@ export function renderTable(rows) {
       : `<div class="row-thumb row-thumb-empty">${NO_PHOTO_SVG}<span>No Photo</span></div>`;
     const dim = (f.status === 'Repaired' || f.status === 'Closed') ? ' row-dim' : '';
     const checked = selectedIds.has(f.id) ? ' checked' : '';
+    // integrity stripe + badge (leaking / repair / monitor only — OK and pending stay quiet)
+    const ig = isResolved(f) ? '' : integrityOf(f);
+    const IG_WORD = { leaking: 'LEAKING', repair: 'REPAIR', monitor: 'MONITOR' };
+    const igBadge = IG_WORD[ig] ? `<span class="ig-badge ig-${ig}">${IG_WORD[ig]}</span>` : '';
+    const engFlag = needsEngineer(f) ? `<span class="eng-flag" title="Needs engineer">${icon('ruler')}<span class="eng-txt">Needs engineer</span></span>` : '';
     // data-state="selected" is applied by updateSelectionUI() below (also the row's live sync
     // point), not here — one place to keep new-render and post-toggle state in agreement.
-    return `<tr data-id="${esc(f.id)}" class="${dim.trim()}">
+    return `<tr data-id="${esc(f.id)}" class="${(dim + (IG_WORD[ig] ? ' ig-row ig-' + ig : '')).trim()}">
       <td class="c-check"><input type="checkbox" class="row-check" data-sel="${esc(f.id)}"${checked}></td>
-      <td>${pillHtml(f.status)}</td>
+      <td>${regPill(f.status)}</td>
       <td class="c-tag">
         <div class="c-tag-flex">
           ${thumbHtml}
           <div class="c-tag-text">
-            <div class="t-tag-row"><span class="t-tag" title="${esc(f.pipe_tag || f.location_desc || '')}">${esc(f.pipe_tag || f.location_desc || '—')}</span>${photoChip}</div>
+            <div class="t-ident">
+            <div class="t-tag-row"><span class="t-tag" title="${esc(f.pipe_tag || f.location_desc || '')}">${esc(f.pipe_tag || f.location_desc || '—')}</span>${igBadge}${photoChip}${engFlag}</div>
             <div class="t-type" title="${esc(f.finding_type)}">${esc(f.finding_type)}</div>
+            </div>
+            <div class="t-detail">
             ${(f.pipe_tag && f.location_desc) ? `<div class="t-desc" title="${esc(f.location_desc)}"><span class="t-desc-label">Loc:</span> ${esc(f.location_desc)}</div>` : ''}
             ${f.description ? `<div class="t-desc" title="${esc(f.description)}"><span class="t-desc-label">Anomaly:</span> ${esc(f.description)}</div>` : ''}
+            </div>
           </div>
         </div>
       </td>
-      <td style="font-size:12px;">${esc(f.terminal)}</td>
+      <td>${esc(f.terminal)}</td>
       <td>${ageHtml(f)}</td>
       <td><div class="due-row-flex">${dueHtml}<span class="row-arrow" title="View details">&#8594;</span></div></td>
     </tr>`;
   }).join('');
+  const more = $('regMore');
+  more.hidden = rows.length <= shown.length;
+  more.innerHTML = more.hidden ? '' : `<button type="button" class="btn btn-sm" data-variant="outline" id="btnRegMore">Show ${Math.min(REG_PAGE, rows.length - shown.length)} more</button><span class="more-note">Showing ${shown.length} of ${rows.length}</span>`;
+  $('btnRegMore')?.addEventListener('click', () => { regLimit += REG_PAGE; renderTable(rows); });
   body.querySelectorAll('tr[data-id]').forEach(tr => {
     const id = tr.dataset.id;
     tr.addEventListener('click', (e) => { if (e.target.closest('.c-check')) return; location.hash = '#/f/' + id; });
@@ -654,11 +831,22 @@ export function buildTagOptions() {
 }
 
 export function renderList() {
+  resetRegisterPage();
   renderKpis();
   updateFilterUI();
   const rows = sortFindings(applyFilters(findings));
   renderTable(rows);
   renderMap(rows);
+}
+
+// Phones (<=640px): the map is behind a "Show map" button so the register comes first; on wider
+// screens the button is hidden by CSS and the map always shows.
+export function toggleMobileMap(force) {
+  const on = typeof force === 'boolean' ? force : !document.body.classList.contains('show-dash-map');
+  document.body.classList.toggle('show-dash-map', on);
+  const btn = $('btnShowMap');
+  if (btn) { btn.setAttribute('aria-pressed', String(on)); swapText(btn.querySelector('.t-text-swap'), on ? 'Hide map' : 'Show map'); }
+  if (on && dashMap) setTimeout(() => dashMap.invalidateSize(), 60);
 }
 
 export function resetMapView() {
@@ -711,9 +899,9 @@ export function toggleMapPresentation(forceState?: boolean) {
   // Every other view/table/register on the dashboard is still in the DOM underneath the fixed
   // overlay; without this, Tab can leave the presentation surface and land on a background
   // control the user can't see. Restored on exit so normal dashboard keyboard nav resumes.
-  const dashTop = document.querySelector('.dash-top');
-  const dashSplit = document.querySelector('.dash-split');
-  [dashTop, dashSplit].forEach(el => {
+  // (the page head, attention cards and overview sit above .dash-split; the register is the
+  // map's sibling inside it)
+  document.querySelectorAll('.dash-head, .dash-attn, .dash-overview, .dash-list-panel').forEach(el => {
     if (!(el instanceof HTMLElement) || el.contains(panel)) return;
     if (isPres) el.setAttribute('inert', ''); else el.removeAttribute('inert');
   });

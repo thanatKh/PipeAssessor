@@ -239,3 +239,14 @@ export const SAT_TILES = {
   maxZoom: 19
 };
 
+
+// Length limits for the free-text finding fields — ONE table used by the form (maxlength), the Excel
+// import check and db/limits-migration.sql (char_length CHECK constraints). The database had no limit
+// at all (break-ui audit, Oct 2026); these leave ample room (longest real values were 26/41/48/33/13).
+export const FIELD_LIMITS: Record<string, number> = {
+  pipe_tag: 80,
+  location_desc: 200,
+  description: 4000,
+  pid_no: 80,
+  service: 120,
+};

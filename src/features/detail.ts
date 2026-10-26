@@ -7,6 +7,9 @@
    the position map. Extracted from the app monolith.
    ============================================================================ */
 import L from 'leaflet';
+import { PA_LABELS, paPressureUsePct, paLimitGap } from '../workbench/labels';
+import { icon } from '../core/icons';
+import { syncSectionNav } from '../core/section-nav';
 import { $, val, esc, notify, todayISO, isOverdue, fmtDate, fmtDateTime, pillHtml, openDialog, closeDialog, setBusy } from '../core/dom';
 import {
   PHOTO_LIMIT_PER_KIND, SAT_TILES, STATUSES, INSPECTOR_STATUSES, STATUS_COLORS, REPAIR_METHOD_OPTIONS,
@@ -14,7 +17,7 @@ import {
 import { sb } from '../core/supabase';
 import { computeB313, PA_MATERIALS } from '../engine/compute';
 import { paFmtBaht } from '../engine/format';
-import { paCreateAssessView, resolveIntegrityBanner } from '../workbench/assess-view';
+import { paCreateAssessView, resolveIntegrityBanner, snapshotHasReading } from '../workbench/assess-view';
 import { paRenderRepairAdvisor } from '../workbench/repair-advisor';
 import { tempRepairRows, tempRepairHeadline, tempRepairResultColor } from '../workbench/temp-repair';
 import {
@@ -28,8 +31,10 @@ import { uploadPhoto, deletePhotos } from './form';
 
 /* ---------------- detail view ---------------- */
 
-export function dItem(label, valueHtml) {
-  return `<div class="d-item"><div class="d-label">${esc(label)}</div><div class="d-val">${valueHtml}</div></div>`;
+// wide: long text (location, coordinates, e-mail, links) — spans both columns of the phone's 2-column
+// Details grid (.d-wide in app.css; a no-op on desktop, where the grid auto-fits).
+export function dItem(label, valueHtml, wide) {
+  return `<div class="d-item${wide ? ' d-wide' : ''}"><div class="d-label">${esc(label)}</div><div class="d-val">${valueHtml}</div></div>`;
 }
 
 export function renderDetail() {
@@ -40,16 +45,60 @@ export function renderDetail() {
     `<h2>${esc(f.pipe_tag || f.location_desc || '—')}</h2>${pillHtml(f.status)}${isOverdue(f) ? '<span class="ov-badge">OVERDUE</span>' : ''}` +
     `<span class="dh-meta">${esc(f.terminal)} Terminal — ${esc(f.finding_type)}</span>`;
 
+  const mono = (v) => `<span class="mono">${v}</span>`;
+  const link = (href, text) => `<a href="${esc(href)}" target="_blank" rel="noopener" style="color:var(--button-primary);font-weight:600;">${text} ${icon('external')}</a>`;
+
+  // Panels and fields in the SAME order as the finding form and the finding PDF (see the comment on
+  // .detail-flow in index.html): Location -> Anomaly -> Photos -> Temporary Repair ->
+  // Line Identification -> Reference & Planning -> Assessment -> Repair Advisor -> History.
+
+  // Location — Terminal, Inspection Date, Location Description, Coordinates (+ the map below)
+  const loc = [];
+  loc.push(dItem('Terminal', esc(f.terminal)));
+  loc.push(dItem('Inspection Date', mono(fmtDate(f.inspection_date))));
+  loc.push(dItem('Location', esc(f.location_desc || '—'), true));
+  if (f.lat != null && f.lng != null)
+    loc.push(dItem('Coordinates', `<a class="mono" style="color:var(--button-primary);" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${f.lat},${f.lng}">${Number(f.lat).toFixed(6)}, ${Number(f.lng).toFixed(6)}</a>`, true));
+  $('detailLocGrid').innerHTML = loc.join('');
+
+  // Anomaly — Finding Type, Severity, Wall-loss depth, Defect L × W, Actively Leaking, Description (the form's order).
+  // Wall thicknesses are NOT repeated here: the ASME B31.3 Assessment panel shows them, as the form does.
+  const anom = [];
+  anom.push(dItem('Finding Type', esc(f.finding_type || '—')));
+  anom.push(dItem('Severity', esc(f.severity || '—')));
+  // older findings carry their reading only in the assessment snapshot — show it, so the field and
+  // the sketch below never disagree
+  const snapDepth = (() => { const a = currentAssessments.length ? resFromSnapshot(currentAssessments[0]) : null; return a ? a.depth : null; })();
+  anom.push(dItem('Wall-loss depth', f.depth_mm != null ? mono(`${f.depth_mm} mm`)
+    : snapDepth != null ? `${mono(`${(+snapDepth.toFixed(2))} mm`)} <span class="hint" style="margin:0;">(from the assessment)</span>` : '—'));
+  anom.push(dItem('Defect L × W', (f.defect_length_mm != null || f.defect_width_mm != null)
+    ? mono(`${f.defect_length_mm != null ? f.defect_length_mm : '—'} × ${f.defect_width_mm != null ? f.defect_width_mm : '—'} mm`) : '—'));
+  anom.push(dItem('Actively Leaking', f.is_leaking ? '<span class="ov-badge">ACTIVELY LEAKING</span>' : 'No', true));
+  anom.push(dItem('Description', f.description ? `<p class="d-desc">${esc(f.description)}</p>` : '—', true));
+  $('detailAnomGrid').innerHTML = anom.join('');
+
+  // Line Identification — Pipe Tag, P&ID, Service
+  $('detailLineGrid').innerHTML = [
+    dItem('Pipe Tag / Line', esc(f.pipe_tag || '—')),
+    dItem('P&ID', esc(f.pid_no || '—')),
+    dItem('Service', esc(f.service || '—')),
+  ].join('');
+
+  // Reference & Planning — workflow status first, then the form panel's fields in its order
+  // (report link, SAP numbers, target date, cost), then lifecycle dates and the audit stamp.
   const life = [];
   life.push(dItem('Current Status', pillHtml(f.status)));
-  if (f.target_date) life.push(dItem('Target Repair Date', `<span class="mono">${fmtDate(f.target_date)}</span>`));
-  if (f.next_check_date) life.push(dItem('Re-inspect By', `<span class="mono">${fmtDate(f.next_check_date)}</span>`));
-  if (f.sap_notification) life.push(dItem('SAP Notification', `<span class="mono">${esc(f.sap_notification)}</span>`));
-  if (f.sap_order) life.push(dItem('SAP Order', `<span class="mono">${esc(f.sap_order)}</span>`));
-  if (f.estimated_cost != null) life.push(dItem('Estimated Repair Cost', `<span class="mono">${esc(paFmtBaht(f.estimated_cost))}</span>`));
+  life.push(dItem('Source Report', f.report_link ? link(f.report_link, 'Open source report') : '—', true));
+  life.push(dItem('SAP Notification', f.sap_notification ? mono(esc(f.sap_notification)) : '—'));
+  life.push(dItem('SAP Order', f.sap_order ? mono(esc(f.sap_order)) : '—'));
+  if (f.target_date) life.push(dItem('Target Repair Date', mono(fmtDate(f.target_date))));
+  if (f.estimated_cost != null) life.push(dItem('Estimated Repair Cost', mono(esc(paFmtBaht(f.estimated_cost)))));
+  if (f.next_check_date) life.push(dItem('Re-inspect By', mono(fmtDate(f.next_check_date))));
   if (f.repair_method) life.push(dItem('Repair Method', esc(f.repair_method)));
-  if (f.repaired_date) life.push(dItem('Repaired Date', `<span class="mono">${fmtDate(f.repaired_date)}</span>`));
-  if (f.closing_note) life.push(dItem('Closing Note', esc(f.closing_note)));
+  if (f.repaired_date) life.push(dItem('Repaired Date', mono(fmtDate(f.repaired_date))));
+  if (f.closing_note) life.push(dItem('Closing Note', esc(f.closing_note), true));
+  life.push(dItem('Recorded By', esc(f.created_by_email || '—'), true));
+  life.push(dItem('Recorded At', mono(fmtDateTime(f.created_at))));
   $('lifecycleGrid').innerHTML = life.join('');
 
   // Status actions: within a role, every other status is reachable (single-team tool — flexibility
@@ -63,31 +112,6 @@ export function renderDetail() {
     btn.addEventListener('click', () => openStatusDialog(btn.dataset.st));
   });
 
-  const d = [];
-  d.push(dItem('Terminal', esc(f.terminal)));
-  d.push(dItem('Location', esc(f.location_desc || '—')));
-  d.push(dItem('Pipe Tag / Line', esc(f.pipe_tag || '—')));
-  d.push(dItem('P&ID', esc(f.pid_no || '—')));
-  d.push(dItem('Service', esc(f.service || '—')));
-  if (f.report_link) d.push(dItem('Report Link',
-    `<a href="${esc(f.report_link)}" target="_blank" rel="noopener" style="color:var(--button-primary);font-weight:600;">Open source report &#8599;</a>`));
-  d.push(dItem('Inspection Date', `<span class="mono">${fmtDate(f.inspection_date)}</span>`));
-  d.push(dItem('Severity', esc(f.severity || '—')));
-  if (f.is_leaking) d.push(dItem('Leaking', '<span class="ov-badge">ACTIVELY LEAKING</span>'));
-  if (f.t_nominal != null) d.push(dItem('Nominal Thk.', `<span class="mono">${fmtN(f.t_nominal, 2)} mm</span>`));
-  if (f.t_measured != null) d.push(dItem('Measured Min.', `<span class="mono">${fmtN(f.t_measured, 2)} mm</span>`));
-  if (f.defect_length_mm != null || f.defect_width_mm != null)
-    d.push(dItem('Defect L × W', `<span class="mono">${f.defect_length_mm != null ? f.defect_length_mm : '—'} × ${f.defect_width_mm != null ? f.defect_width_mm : '—'} mm</span>`));
-  if (f.lat != null && f.lng != null)
-    d.push(dItem('Coordinates', `<a class="mono" style="color:var(--button-primary);" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${f.lat},${f.lng}">${Number(f.lat).toFixed(6)}, ${Number(f.lng).toFixed(6)}</a>`));
-  d.push(dItem('Recorded By', esc(f.created_by_email || '—')));
-  d.push(dItem('Recorded At', `<span class="mono">${fmtDateTime(f.created_at)}</span>`));
-  $('detailGrid').innerHTML = d.join('');
-
-  $('detailDesc').innerHTML = f.description
-    ? `<div class="d-label">Description</div><p class="d-desc">${esc(f.description)}</p>`
-    : '';
-
   renderHealthBanner();
   renderTempRepair();
   renderRepairAdvisor();
@@ -95,6 +119,7 @@ export function renderDetail() {
   renderDetailMap();
   renderPhotoGroups();
   renderTimeline();
+  syncSectionNav('detailSectionNav'); // after the renders above have shown/hidden their panels
 }
 
 // Integrity health banner at the top of the detail page — same design and (via the shared
@@ -107,8 +132,8 @@ export function renderHealthBanner() {
   const res = latest ? resFromSnapshot(latest) : null;
   const hb = resolveIntegrityBanner(current, res);
   const metricsHtml = hb.metrics
-    ? `<div class="hb-metrics"><div class="hb-erf">ERF ${esc(hb.metrics.erf)}</div>`
-      + `<div class="hb-sub">MAWP ${esc(hb.metrics.mawp)} &middot; ${esc(hb.metrics.pct)}% wall</div></div>`
+    ? `<div class="hb-metrics"><div class="hb-erf">Pressure use ${esc(hb.metrics.usage)}</div>`
+      + `<div class="hb-sub">Max. safe ${esc(hb.metrics.mawp)} &middot; ${esc(hb.metrics.pct)}% wall left</div></div>`
     : '';
   host.innerHTML = `<div class="health-banner hb-${hb.key}">`
     + `<div class="hb-main"><div class="hb-word">${esc(hb.word)}</div><div class="hb-line">${esc(hb.line)}</div></div>`
@@ -169,12 +194,16 @@ export function renderRepairAdvisor() {
 // Satellite map on the detail page, centred on the finding's pin. Hidden when no coordinates.
 export function renderDetailMap() {
   const f = current;
-  const panel = $('detailLocPanel');
-  if (!f || f.lat == null || f.lng == null || typeof L === 'undefined') {
+  const panel = $('detailLocPanel'); // the map wrapper inside the Location panel
+  const noMap = !f || f.lat == null || f.lng == null || typeof L === 'undefined';
+  panel.parentElement.classList.toggle('no-map', noMap); // .loc-split: fields take the full width
+  if (noMap) {
     panel.style.display = 'none';
+    $('detailMapLink').style.display = 'none';
     return;
   }
   panel.style.display = 'block';
+  $('detailMapLink').style.display = '';
   $('detailMapLink').href = `https://www.google.com/maps?q=${f.lat},${f.lng}`;
   const el = $('detailMap');
   if (!detailMap) {
@@ -236,7 +265,7 @@ export function assessSetupLine(inputs) {
 // workbench (status, cross-section, results, advisor, equations), not just summary tiles.
 // Falls back to null (compact tiles) if the inputs can't compute — e.g. a malformed old row.
 export function resFromSnapshot(a) {
-  if (!a || !a.inputs) return null;
+  if (!a || !a.inputs || !snapshotHasReading(a)) return null;
   const inp = a.inputs;
   const res = computeB313({
     nps: inp.nps, sch: inp.schedule, overrideOd: '',
@@ -253,6 +282,12 @@ export function resFromSnapshot(a) {
 
 export function renderAssessments() {
   const body = $('assessBody');
+  // Actively leaking: the wall-loss calculation does not apply — same rule as the form's assessment
+  // lockout and the finding PDF's notice, so the page never shows a B31.3 verdict beside LEAKING.
+  if (current && current.is_leaking) {
+    body.innerHTML = '<div class="leaking-warning-banner"><span>ASME B31.3 wall-loss calculation is disabled for actively leaking piping — the pressure boundary is already breached. Immediate clamping, an engineered enclosure or line isolation is required before any wall-thickness evaluation (ASME PCC-2).</span></div>';
+    return;
+  }
   if (!currentAssessments.length) {
     body.innerHTML = '<div class="photo-empty">No assessment yet — "Run assessment" opens this finding\'s edit form with the ASME B31.3 workbench; saving records the result here.</div>';
     return;
@@ -276,7 +311,7 @@ export function renderAssessments() {
         ${assessPill(or.status)}
         <span class="kv mono"><b>ERF</b> ${fmtN(erfNo(or), 3)}</span>
         <span class="kv mono"><b>t meas</b> ${fmtN(or.t_meas, 2)} mm</span>
-        <span class="kv mono"><b>Margin</b> ${fmtN(or.margin, 3)} mm</span>
+        <span class="kv mono"><b>${PA_LABELS.margin.short}</b> ${paLimitGap(or.margin, 3)}</span>
         ${or.remainingLife != null ? `<span class="kv mono"><b>Life</b> ${fmtN(or.remainingLife, 1)} y</span>` : ''}
         <span class="assess-meta">${setup ? setup + ' — ' : ''}${fmtDateTime(a.created_at)} — ${esc(a.created_by_email || '')}</span>
       </div>`;
@@ -298,10 +333,10 @@ export function renderAssessments() {
     // snapshot whose inputs can't re-compute (malformed/legacy row): show the saved results
     host.innerHTML = `<div class="assess-item">
       ${assessPill(r.status)}
-      <span class="kv mono"><b>ERF (no CA)</b> ${fmtN(erfNo(r), 3)}</span>
-      <span class="kv mono"><b>t meas</b> ${fmtN(r.t_meas, 2)} mm</span>
-      <span class="kv mono"><b>Margin</b> ${fmtN(r.margin, 3)} mm</span>
-      <span class="kv mono"><b>MAWP (no CA)</b> ${fmtN(r.mawp_no, 2)} ${esc(r.pUnit || '')}</span>
+      <span class="kv mono"><b>${PA_LABELS.erfNo.short}</b> ${paPressureUsePct(erfNo(r))}</span>
+      <span class="kv mono"><b>${PA_LABELS.tMeas.short}</b> ${fmtN(r.t_meas, 2)} mm</span>
+      <span class="kv mono"><b>${PA_LABELS.margin.short}</b> ${paLimitGap(r.margin, 3)}</span>
+      <span class="kv mono"><b>${PA_LABELS.mawpNo.short}</b> ${fmtN(r.mawp_no, 2)} ${esc(r.pUnit || '')}</span>
     </div>`;
   }
 }
@@ -319,7 +354,7 @@ export function photoThumb(p) {
   const url = photoUrl(p.storage_path);
   return `<div class="photo-thumb">
     <img src="${esc(url)}" alt="Finding photo" data-url="${esc(url)}">
-    <button type="button" class="photo-remove" data-id="${esc(p.id)}" data-path="${esc(p.storage_path)}" title="Delete photo">&#215;</button>
+    <button type="button" class="photo-remove" data-id="${esc(p.id)}" data-path="${esc(p.storage_path)}" title="Delete photo" aria-label="Delete photo">${icon('x')}</button>
   </div>`;
 }
 
@@ -341,6 +376,24 @@ export const PHOTO_GRID_SETS = [
   { grid: 'gridTempBefore2', empty: 'emptyTempBefore2', addBtn: 'btnAddTempBefore2', kind: 'temp_before', group: 'trPhotoGroupBefore2', scope: 'form' },
   { grid: 'gridTempAfter2', empty: 'emptyTempAfter2', addBtn: 'btnAddTempAfter2', kind: 'temp_after', group: 'trPhotoGroupAfter2', scope: 'form' },
 ];
+
+// A photo group accepts a drop / click only while its own "+ Add" button is usable: hidden for the
+// role or the public view, or disabled at the 4-photo cap, means no drop zone either. One rule for
+// the detail page, the edit form and the new-finding queue (form.ts renderPendingGrid).
+export function photoAddUsable(btn) {
+  return !!btn && !btn.disabled && getComputedStyle(btn).display !== 'none';
+}
+// Last cell of a non-empty grid: another place to click or drop more photos (app.ts wires it).
+export function photoAddTileHtml(addBtnId) {
+  return `<button type="button" class="photo-add-tile" data-add="${addBtnId}">${icon('upload')}<span>Add or drop</span></button>`;
+}
+// Empty state = the group's drop zone (dashed, clickable) when photos can be added; plain text otherwise.
+export function syncPhotoDropZone(emptyEl, addBtnId, usable) {
+  emptyEl.dataset.add = addBtnId;
+  emptyEl.classList.toggle('is-droppable', usable);
+  if (usable) { emptyEl.setAttribute('role', 'button'); emptyEl.tabIndex = 0; }
+  else { emptyEl.removeAttribute('role'); emptyEl.removeAttribute('tabindex'); }
+}
 
 export function renderPhotoGroups() {
   // The temporary-repair groups only make sense once the record they document exists, and the two
@@ -368,6 +421,9 @@ export function renderPhotoGroups() {
       btn.disabled = atLimit;
       btn.textContent = atLimit ? `Max ${PHOTO_LIMIT_PER_KIND} reached` : `+ Add (${rows.length}/${PHOTO_LIMIT_PER_KIND})`;
     }
+    const usable = photoAddUsable(btn);
+    syncPhotoDropZone($(empty), addBtn, usable);
+    if (rows.length && usable) el.insertAdjacentHTML('beforeend', photoAddTileHtml(addBtn));
     // Lightbox nav set comes from THIS grid's own rows (not a flattened cross-page/cross-kind
     // query) so Prev/Next stays scoped to As Found vs After Repair, regardless of whether it was
     // opened from the detail page or the edit form's identical panel — see openLightbox() below.
@@ -489,18 +545,22 @@ export function openStatusDialog(target) {
   $('dlgNote').value = '';
   $('errDlg').style.display = 'none';
 
+  // An emergency stop-leak record already carries a permanent-repair plan (method + target date).
+  // Use it to pre-fill the matching fields here so maintenance doesn't type the same thing twice —
+  // only when the finding has no value of its own; the user can still change it before confirming.
+  const trPlan = currentTempRepair && currentTempRepair.finding_id === current.id ? currentTempRepair : null;
   let extra = '';
   if (target === 'Monitoring') {
     extra = `<label class="f-label req" for="dlgDate">Re-inspect by</label>
              <input id="dlgDate" class="input" type="date" value="${esc(current.next_check_date || '')}">`;
   } else if (target === 'Repair Planned') {
     extra = `<label class="f-label req" for="dlgDate">Target repair date</label>
-             <input id="dlgDate" class="input" type="date" value="${esc(current.target_date || '')}">`;
+             <input id="dlgDate" class="input" type="date" value="${esc(current.target_date || (trPlan && trPlan.perm_target_date) || '')}">`;
   } else if (target === 'Repaired') {
     // Free-text was the old shape; a saved value that doesn't match one of the fixed options is
     // legacy data — select "Other" and prefill the free-text field with it rather than silently
     // dropping it (per-user note: existing rows get fixed up manually over time).
-    const savedMethod = current.repair_method || '';
+    const savedMethod = current.repair_method || (trPlan && trPlan.perm_method) || '';
     const isKnownMethod = REPAIR_METHOD_OPTIONS.includes(savedMethod);
     const selVal = savedMethod && !isKnownMethod ? 'Other' : savedMethod;
     extra = `<label class="f-label req" for="dlgDate">Repaired date</label>

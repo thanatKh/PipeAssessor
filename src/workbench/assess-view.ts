@@ -7,6 +7,7 @@
    scoped to the instance root, so multiple instances coexist in one document.
    ============================================================================ */
 import { paFmt } from '../engine/format';
+import { PA_LABELS, paLabelHtml, paPressureUsePct, paLimitGap } from './labels';
 import { computeB313 } from '../engine/compute';
 import { WALL_LOSS_TYPES } from '../core/constants';
 
@@ -33,7 +34,7 @@ export interface IntegrityBanner {
   line: string;
   fill: string;
   spine: string;
-  metrics: { erf: string; mawp: string; pct: string } | null;
+  metrics: { erf: string; mawp: string; pct: string; usage: string } | null;
 }
 
 const HB_REPAIR  = { fill: '#b91c1c', spine: '#7f1d1d' };
@@ -41,36 +42,52 @@ const HB_MONITOR = { fill: '#b45309', spine: '#92400e' };
 const HB_OK      = { fill: '#047857', spine: '#065f46' };
 const HB_NEUTRAL = { fill: '#475569', spine: '#334155' };
 
+/* A saved assessment snapshot without a UT reading has NO result. computeB313 (parity-locked legacy
+   behaviour) reads a blank wall-loss depth as 0 mm, so re-computing such a row reports "OK, 100% wall
+   left" for a finding nobody measured. Every display load filters these out (detail page, public
+   share, risk ranking, slides) and resFromSnapshot refuses them; the form no longer saves them. */
+export function snapshotHasReading(a: any): boolean {
+  const i = a && a.inputs;
+  if (!i) return true; // legacy row without inputs: the saved-results fallback decides
+  const v = i.mode === 'tmeas' ? i.tmeas : i.depth;
+  return v != null && String(v).trim() !== '';
+}
+
 export function resolveIntegrityBanner(finding: any, res: any): IntegrityBanner {
   const f3 = (n: number) => (n == null || !isFinite(n)) ? '—' : n.toFixed(3);
   const f1 = (n: number) => (n == null || !isFinite(n)) ? '—' : n.toFixed(1);
   const f0 = (n: number) => (n == null || !isFinite(n)) ? '—' : n.toFixed(0);
   const metrics = res ? {
     erf: f3(res.mawp_no > 0 ? (res.P_input / res.mawp_no) : 9.99),
-    mawp: `${f1(res.mawp_no)} ${res.pUnit} (no CA)`,
+    mawp: `${f1(res.mawp_no)} ${res.pUnit}`,
+    usage: paPressureUsePct(res.mawp_no > 0 ? (res.P_input / res.mawp_no) : null),
     pct: f0(res.pctRemainNom),
   } : null;
   const ft = finding && finding.finding_type;
   const isWallLoss = ft && WALL_LOSS_TYPES.includes(ft);
 
   if (finding && finding.is_leaking)
-    return { key: 'leaking', word: 'SEVERITY: CRITICAL', line: 'Pressure boundary breached — emergency containment required (ASME PCC-2)', ...HB_REPAIR, metrics };
+    // no metrics: the B31.3 wall-loss numbers do not apply once the boundary is breached ("pressure
+    // use 11% / 100% wall left" beside LEAKING contradicted the banner)
+    return { key: 'leaking', word: 'INTEGRITY: LEAKING', line: 'Pressure boundary breached — emergency containment required (ASME PCC-2)', ...HB_REPAIR, metrics: null };
   if (res && res.status === 'REPAIR')
-    return { key: 'repair', word: 'SEVERITY: HIGH', line: 'Wall loss below acceptable limit — repair or replacement required', ...HB_REPAIR, metrics };
+    return { key: 'repair', word: 'INTEGRITY: REPAIR', line: 'Wall loss below acceptable limit — repair or replacement required', ...HB_REPAIR, metrics };
   if (res && res.status === 'MONITOR')
-    return { key: 'monitor', word: 'SEVERITY: MEDIUM', line: 'Wall loss approaching design/structural limit — corrosion mitigation action needed now, increase inspection frequency', ...HB_MONITOR, metrics };
+    return { key: 'monitor', word: 'INTEGRITY: MONITOR', line: 'Wall loss approaching design/structural limit — corrosion mitigation action needed now, increase inspection frequency', ...HB_MONITOR, metrics };
   if (res && res.status === 'OK')
-    return { key: 'ok', word: 'SEVERITY: LOW', line: 'Within acceptable design limits — no pressure-boundary repair required, continue corrosion mitigation per the Repair Advisor', ...HB_OK, metrics };
+    return { key: 'ok', word: 'INTEGRITY: OK', line: 'Within acceptable design limits — no pressure-boundary repair required, continue corrosion mitigation per the Repair Advisor', ...HB_OK, metrics };
   if (ft && !isWallLoss) {
     const sev = finding && finding.severity;
     if (sev === 'High')
-      return { key: 'repair', word: 'SEVERITY: HIGH', line: 'Requires remediation — see the Repair Advisor for the recommended action', ...HB_REPAIR, metrics: null };
+      return { key: 'repair', word: 'INTEGRITY: REPAIR', line: 'Requires remediation — see the Repair Advisor for the recommended action', ...HB_REPAIR, metrics: null };
     if (sev === 'Medium')
-      return { key: 'monitor', word: 'SEVERITY: MEDIUM', line: 'Requires ongoing remediation action — see the Repair Advisor', ...HB_MONITOR, metrics: null };
-    return { key: 'ok', word: 'SEVERITY: LOW', line: 'No pressure-boundary repair required — see the Repair Advisor for routine maintenance actions', ...HB_OK, metrics: null };
+      return { key: 'monitor', word: 'INTEGRITY: MONITOR', line: 'Requires ongoing remediation action — see the Repair Advisor', ...HB_MONITOR, metrics: null };
+    return { key: 'ok', word: 'INTEGRITY: OK', line: 'No pressure-boundary repair required — see the Repair Advisor for routine maintenance actions', ...HB_OK, metrics: null };
   }
   if (ft)
-    return { key: 'pending', word: 'PENDING ASSESSMENT', line: 'Awaiting a UT wall-thickness reading for the ASME B31.3 assessment', ...HB_NEUTRAL, metrics: null };
+    return { key: 'pending', word: 'PENDING ASSESSMENT', line: finding && finding.depth_mm != null
+      ? `Wall-loss depth ${finding.depth_mm} mm recorded — awaiting pipe size and design pressure` // one line in the PDF banner
+      : 'Awaiting a wall-loss depth reading for the ASME B31.3 assessment', ...HB_NEUTRAL, metrics: null };
   return { key: 'none', word: 'NOT ASSESSED', line: 'No assessment on record for this finding', ...HB_NEUTRAL, metrics: null };
 }
 
@@ -78,47 +95,80 @@ export function resolveIntegrityBanner(finding: any, res: any): IntegrityBanner 
 export const PA_SCOPE_HTML = '<strong>Scope &amp; Limitations:</strong> This assessment applies ASME B31.3 thickness/MAWP equations to a single uniform wall-loss reading and is intended for general (non-localized) corrosion screening only. It is <strong>not</strong> a Level 1/2 fitness-for-service evaluation (API 579-1/ASME FFS-1) or a B31G/RSTRENG remaining-strength calculation, and is not valid for assessing isolated pits, gouges, or other localized flaws &mdash; a separate FFS assessment is required for those. Results reflect one manually entered reading; they do not represent a full CML survey grid or a multi-survey corrosion-rate trend. Confirm all material- and temperature-dependent inputs (S, E, W, Y) before relying on this output for a repair/replace decision.';
 export const PA_SCOPE_TEXT = PA_SCOPE_HTML.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&mdash;/g, '—');
 
-/* Fixed pixel geometry of the unrolled wall profile (see drawSvg below). */
-const PA_WALL_PLOT = { left: 55, right: 260, yOd: 30, yId: 220, pocketL: 90, pocketR: 230, pocketC: 160, pocketHalfW: 70 };
+/* Fixed pixel geometry of the unrolled wall profile (see drawSvg below). The viewBox stays 500x270
+   because the finding PDF and the slide deck place the rasterized figure at that aspect ratio. */
+const PA_WALL_PLOT = { left: 64, right: 250, yOd: 36, yId: 226, pocketL: 92, pocketR: 222, pocketC: 157, pocketHalfW: 65 };
+// x of the right-hand label column (leaders run from the plot edge to here)
+const PA_LABEL_X = 280;
+// verdict colours for the above/below-limit bracket (the same 700-tier shades as the health banner)
+const PA_VERDICT_HEX: Record<string, string> = { OK: '#047857', MONITOR: '#b45309', REPAIR: '#b91c1c' };
+// each workbench instance gets its own gradient ids: a gradient inside a display:none view
+// (the form and the detail page both exist in the DOM) would otherwise not paint for the other
+let paSvgSeq = 0;
 
 /* ---------------- workbench markup (no ids — data-k lookups, instance-scoped) ---------------- */
 
+/* Design (Oct 2026 redesign): the figure answers ONE question first — how much wall is left above
+   the limit that decides the result — with a verdict-coloured dimension bracket ("0.72 mm above limit").
+   That deciding limit is drawn bold with a full-colour label; the other two limits are thin and
+   muted. The wall is a steel gradient and the lost metal is rust (the user's chosen palette, from a
+   pipe-sketch experiment); green/amber/red stay reserved for the verdict bracket. Labels are two-line
+   (name muted, value bold) and placed beside their true height with collision spacing instead of
+   fixed rows; a mm ruler on the left makes the drawing read as being to scale. No legend: every
+   element is labelled directly. */
 const PA_AW_SVG = `
   <svg class="assess-svg" data-k="pipeSvg" width="100%" height="270" viewBox="0 0 500 270" xmlns="http://www.w3.org/2000/svg" style="background: var(--svg-bg); border-radius: 8px;">
     <!-- Longitudinal wall-thickness profile: the pipe wall is shown unrolled as a straight strip
          (OD at top, nominal ID at bottom) with the localized wall-loss patch drawn as a dip.
          NOTE: no double-hyphen anywhere inside SVG comments, or XML serialization for the PDF
-         export breaks (see the same note in the old calculator markup). -->
+         export breaks. -->
+    <defs>
+      <!-- steel wall: light at the outside surface, darker towards the bore -->
+      <linearGradient id="paXsMetal" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#e2e8f0" /><stop offset="0.35" stop-color="#cbd5e1" />
+        <stop offset="0.7" stop-color="#94a3b8" /><stop offset="1" stop-color="#64748b" />
+      </linearGradient>
+      <!-- rust metal loss: pale at the original surface, darkest at the deepest point (drawSvg flips
+           it for internal loss, where the pit grows up from the bore) -->
+      <linearGradient id="paXsLoss" data-k="svgLossGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#fdba74" /><stop offset="0.4" stop-color="#c2410c" />
+        <stop offset="1" stop-color="#7c2d12" />
+      </linearGradient>
+    </defs>
+    <g data-k="svgRuler"></g>
+    <text data-k="svgOdCap" font-size="10" font-family="Google Sans, Inter, sans-serif" fill="#64748b"></text>
+    <text data-k="svgIdCap" font-size="10" font-family="Google Sans, Inter, sans-serif" fill="#64748b"></text>
     <g data-k="wallGroup">
-      <rect data-k="svgWallRect" x="55" y="30" width="205" height="190" fill="var(--svg-metal)" rx="2" />
-      <path data-k="svgPocketLoss" d="" fill="var(--svg-loss)" stroke="var(--svg-loss-border)" stroke-width="1.5" stroke-linejoin="round" />
-      <path data-k="svgPocketNominalLine" d="" fill="none" stroke="var(--text-light)" stroke-dasharray="2 2" stroke-width="1.2" opacity="0.8" />
-      <line data-k="svgOdLine" x1="55" y1="30" x2="260" y2="30" stroke="var(--text-color)" stroke-width="1.5" opacity="0.55" />
-      <line data-k="svgNomLine" x1="55" y1="220" x2="260" y2="220" stroke="var(--text-color)" stroke-width="1.5" opacity="0.55" />
-      <line data-k="svgReqTotalLine" x1="0" y1="0" x2="0" y2="0" stroke="var(--limit-reqca)" stroke-width="1.5" stroke-dasharray="3 3" />
-      <line data-k="svgReqNoCaLine" x1="0" y1="0" x2="0" y2="0" stroke="var(--limit-req)" stroke-width="1.5" />
-      <line data-k="svgStructLine" x1="0" y1="0" x2="0" y2="0" stroke="var(--limit-struct)" stroke-width="1.5" stroke-dasharray="4 2" />
+      <rect data-k="svgWallRect" x="64" y="36" width="186" height="190" fill="url(#paXsMetal)" stroke="#64748b" stroke-width="1" rx="2" />
+      <path data-k="svgPocketLoss" d="" fill="url(#paXsLoss)" stroke="#7c2d12" stroke-width="1" stroke-linejoin="round" />
+      <path data-k="svgPocketNominalLine" d="" fill="none" stroke="#7c2d12" stroke-dasharray="2 2" stroke-width="1.2" opacity="0.55" />
+      <line data-k="svgOdLine" x1="64" y1="36" x2="250" y2="36" stroke="var(--text-color)" stroke-width="1.2" opacity="0.45" />
+      <line data-k="svgNomLine" x1="64" y1="226" x2="250" y2="226" stroke="var(--text-color)" stroke-width="1.2" opacity="0.45" />
+      <line data-k="svgReqTotalLine" x1="0" y1="0" x2="0" y2="0" stroke="var(--limit-reqca)" stroke-dasharray="5 3" />
+      <line data-k="svgReqNoCaLine" x1="0" y1="0" x2="0" y2="0" stroke="var(--limit-req)" />
+      <line data-k="svgStructLine" x1="0" y1="0" x2="0" y2="0" stroke="var(--limit-struct)" stroke-dasharray="2 2" />
+    </g>
+    <g data-k="svgSpare" style="display:none;">
+      <line data-k="svgSpareLine" stroke-width="1.6" />
+      <line data-k="svgSpareCapA" stroke-width="1.6" />
+      <line data-k="svgSpareCapB" stroke-width="1.6" />
+      <rect data-k="svgSparePill" rx="4" height="18" />
+      <text data-k="svgSpareText" font-size="11" font-family="Google Sans, Inter, sans-serif" font-weight="700" fill="#ffffff"></text>
     </g>
     <!-- Empty-state text is filled by JS (a static CSS-variable fill on a parsed text node was
-         observed not to paint in Chromium; see the old calculator markup note). -->
+         observed not to paint in Chromium). -->
     <text data-k="svgEmptyState" x="157" y="118" text-anchor="middle" font-size="11" font-family="Google Sans, Inter, sans-serif" font-weight="600"></text>
     <text data-k="svgEmptyState2" x="157" y="134" text-anchor="middle" font-size="11" font-family="Google Sans, Inter, sans-serif" font-weight="600"></text>
     <text data-k="svgEmptyState3" x="157" y="150" text-anchor="middle" font-size="11" font-family="Google Sans, Inter, sans-serif" font-weight="600"></text>
-    <circle data-k="svgDragHandle" class="drag-handle" cx="0" cy="0" r="6" style="display:none;" />
-    <path data-k="svgLOdLine" d="" fill="none" stroke="var(--text-light)" stroke-width="1" opacity="0.6" />
-    <text data-k="svgLOdText" font-size="11" font-family="Google Sans, Inter, sans-serif" fill="var(--text-color)" font-weight="600"></text>
-    <path data-k="svgLMeasLine" d="" fill="none" stroke="var(--text-light)" stroke-width="1" opacity="0.6" />
-    <text data-k="svgLMeasText" font-size="11" font-family="Google Sans, Inter, sans-serif" fill="var(--text-color)" font-weight="600"></text>
-    <path data-k="svgLReqTotalLine" d="" fill="none" stroke="var(--limit-reqca)" stroke-width="1" opacity="0.8" />
-    <text data-k="svgLReqTotalText" font-size="11" font-family="Google Sans, Inter, sans-serif" fill="var(--limit-reqca)" font-weight="700"></text>
-    <path data-k="svgLReqNoLine" d="" fill="none" stroke="var(--limit-req)" stroke-width="1" opacity="0.8" />
-    <text data-k="svgLReqNoText" font-size="11" font-family="Google Sans, Inter, sans-serif" fill="var(--limit-req)" font-weight="700"></text>
-    <path data-k="svgLNomLine" d="" fill="none" stroke="var(--text-light)" stroke-width="1" opacity="0.6" />
-    <text data-k="svgLNomText" font-size="11" font-family="Google Sans, Inter, sans-serif" fill="var(--text-color)" font-weight="600"></text>
-    <path data-k="svgLDepthLine" d="" fill="none" stroke="var(--limit-req)" stroke-width="1" opacity="0.8" />
-    <text data-k="svgLDepthText" font-size="11" font-family="Google Sans, Inter, sans-serif" fill="var(--limit-req)" font-weight="700"></text>
-    <path data-k="svgLStructLine" d="" fill="none" stroke="var(--limit-struct)" stroke-width="1" opacity="0.8" />
-    <text data-k="svgLStructText" font-size="11" font-family="Google Sans, Inter, sans-serif" fill="var(--limit-struct)" font-weight="700"></text>
+    <circle data-k="svgDragHandle" class="drag-handle" cx="0" cy="0" r="6" style="display:none;"><title>Drag up or down to change the wall-loss depth</title></circle>
+    <path data-k="svgLMeasLine" d="" fill="none" stroke="#94a3b8" stroke-width="1" />
+    <text data-k="svgLMeasText" font-family="Google Sans, Inter, sans-serif"></text>
+    <path data-k="svgLReqTotalLine" d="" fill="none" stroke="var(--limit-reqca)" stroke-width="1" />
+    <text data-k="svgLReqTotalText" font-family="Google Sans, Inter, sans-serif"></text>
+    <path data-k="svgLReqNoLine" d="" fill="none" stroke="var(--limit-req)" stroke-width="1" />
+    <text data-k="svgLReqNoText" font-family="Google Sans, Inter, sans-serif"></text>
+    <path data-k="svgLStructLine" d="" fill="none" stroke="var(--limit-struct)" stroke-width="1" />
+    <text data-k="svgLStructText" font-family="Google Sans, Inter, sans-serif"></text>
   </svg>`;
 
 const PA_AW_SECTIONS = {
@@ -139,25 +189,18 @@ const PA_AW_SECTIONS = {
     title: 'Pipe Wall Thickness Cross-Section',
     body: `
       <div class="svg-container">${PA_AW_SVG}</div>
-      <div class="aw-svg-legend">
-        <span><span class="aw-swatch" style="background:var(--svg-metal);"></span> Remaining Wall</span>
-        <span><span class="aw-swatch" style="background:var(--svg-loss); border:1px solid var(--svg-loss-border);"></span> Wall Loss Area</span>
-        <span><span class="aw-line" style="border-bottom:2px dashed var(--text-light);"></span> Original Surface (pre-loss)</span>
-        <span><span class="aw-line" style="border-bottom:2px dashed var(--limit-reqca);"></span> limit (t<sub>req</sub> + CA)</span>
-        <span><span class="aw-line" style="border-bottom:2px solid var(--limit-req);"></span> limit (t<sub>req</sub>)</span>
-        <span><span class="aw-line" style="border-bottom:2px dashed var(--limit-struct);"></span> limit (t<sub>struct</sub>)</span>
-      </div>`
+      <div class="aw-svg-note">Rust-coloured area = metal lost · the <b>bold</b> line is the limit that decides the result · the coloured bracket is the distance from the thinnest point to that limit</div>`
   },
   results: {
-    title: 'Calculations Results',
+    title: 'Calculation Results',
     body: `
       <div class="compliance-box">
         <div class="compliance-row">
-          <span class="compliance-name">ASME B31.3 — Pressure design (t<sub>meas</sub> &ge; t<sub>req</sub> + CA)</span>
+          <span class="compliance-name">ASME B31.3 — Wall thick enough for the pressure <span class="lbl-sym">(t<sub>meas</sub> &ge; t<sub>req</sub> + CA)</span></span>
           <span class="compliance-badge" data-k="compB313">—</span>
         </div>
         <div class="compliance-row">
-          <span class="compliance-name">API RP 574 — Structural minimum (t<sub>meas</sub> &ge; t<sub>struct</sub>)</span>
+          <span class="compliance-name">API RP 574 — Wall thick enough to stay strong <span class="lbl-sym">(t<sub>meas</sub> &ge; t<sub>struct</sub>)</span></span>
           <span class="compliance-badge" data-k="comp574">—</span>
         </div>
         <div class="compliance-ffs-note" data-k="ffsNote" style="display:none;">
@@ -169,9 +212,9 @@ const PA_AW_SECTIONS = {
 
       <div class="pressure-gauge-container">
         <div class="pressure-gauge-labels">
-          <span>ERF: 0.0</span>
-          <span style="font-size: 12px; font-weight: 800; color: var(--text-color);">Estimated Repair Factor (ERF, no CA — current): <span data-k="gaugeErfVal">—</span><span data-k="gaugeErfOvershoot" style="display:none; color: var(--danger-color);"> (off scale)</span></span>
-          <span>Limit: 1.0</span>
+          <span>0%</span>
+          <span style="font-size: var(--fs-base); font-weight: 800; color: var(--text-color);">${PA_LABELS.erfNo.plain}: <span data-k="gaugeErfVal">—</span><span data-k="gaugeErfOvershoot" style="display:none; color: var(--danger-color);"> (off scale)</span></span>
+          <span>Limit 100%</span>
         </div>
         <div class="pressure-gauge-bar-wrapper">
           <div class="pressure-gauge-track" data-k="gaugeTrack">
@@ -184,36 +227,36 @@ const PA_AW_SECTIONS = {
           </div>
         </div>
         <div class="pressure-gauge-legend">
-          <span class="legend-item"><span class="legend-color p-safe-color"></span> Safe (&lt; 0.8)</span>
-          <span class="legend-item"><span class="legend-color p-warn-color"></span> Warning (0.8 - 1.0)</span>
-          <span class="legend-item"><span class="legend-color p-crit-color"></span> Action Required (&gt; 1.0)</span>
+          <span class="legend-item"><span class="legend-color p-safe-color"></span> Safe (under 80%)</span>
+          <span class="legend-item"><span class="legend-color p-warn-color"></span> Warning (80–100%)</span>
+          <span class="legend-item"><span class="legend-color p-crit-color"></span> Action required (over 100%)</span>
         </div>
       </div>
 
       <div class="res-section-title">Thickness</div>
       <div class="res-grid">
-        <div class="res-item"><span class="res-name">Nominal Wall Thickness (t<sub>nom</sub>)</span><span class="res-val" data-k="resTnom">-</span></div>
-        <div class="res-item"><span class="res-name">Remaining Wall Percentage</span><span class="res-val" data-k="resPct">-</span></div>
-        <div class="res-item"><span class="res-name">Required Thickness (t<sub>req</sub>)</span><span class="res-val" data-k="resTreq">-</span></div>
-        <div class="res-item"><span class="res-name">Required Incl. CA (t<sub>req</sub> + CA)</span><span class="res-val" data-k="resTreqCa">-</span></div>
-        <div class="res-item"><span class="res-name">API 574 Structural Min. (t<sub>struct</sub>)</span><span class="res-val" data-k="resTstruct">-</span></div>
-        <div class="res-item"><span class="res-name">Remaining Margin</span><span class="res-val" data-k="resMargin">-</span></div>
+        <div class="res-item"><span class="res-name">${paLabelHtml('tNom')}</span><span class="res-val" data-k="resTnom">-</span></div>
+        <div class="res-item"><span class="res-name">${paLabelHtml('pct')}</span><span class="res-val" data-k="resPct">-</span></div>
+        <div class="res-item"><span class="res-name">${paLabelHtml('tReq')}</span><span class="res-val" data-k="resTreq">-</span></div>
+        <div class="res-item"><span class="res-name">${paLabelHtml('tReqCa')}</span><span class="res-val" data-k="resTreqCa">-</span></div>
+        <div class="res-item"><span class="res-name">${paLabelHtml('tStruct')}</span><span class="res-val" data-k="resTstruct">-</span></div>
+        <div class="res-item"><span class="res-name">${paLabelHtml('margin')}</span><span class="res-val" data-k="resMargin">-</span></div>
       </div>
 
-      <div class="res-section-title">Pressure &amp; ERF</div>
+      <div class="res-section-title">Pressure</div>
       <div class="res-grid">
-        <div class="res-item"><span class="res-name">Design Pressure (P)</span><span class="res-val" data-k="resPres">-</span></div>
-        <div class="res-item"><span class="res-name">MAWP (No CA — current)</span><span class="res-val" data-k="resMawpNoCA">-</span></div>
-        <div class="res-item"><span class="res-name">ERF (No CA — current)</span><span class="res-val" data-k="resErfNo">-</span></div>
-        <div class="res-item"><span class="res-name">MAWP (with CA reserved)</span><span class="res-val" data-k="resMawpWith">-</span></div>
-        <div class="res-item"><span class="res-name">ERF (with CA reserved)</span><span class="res-val" data-k="resErfWith">-</span></div>
+        <div class="res-item"><span class="res-name">${paLabelHtml('p')}</span><span class="res-val" data-k="resPres">-</span></div>
+        <div class="res-item"><span class="res-name">${paLabelHtml('mawpNo')}</span><span class="res-val" data-k="resMawpNoCA">-</span></div>
+        <div class="res-item"><span class="res-name">${paLabelHtml('erfNo')}</span><span class="res-val" data-k="resErfNo">-</span></div>
+        <div class="res-item"><span class="res-name">${paLabelHtml('mawpCa')}</span><span class="res-val" data-k="resMawpWith">-</span></div>
+        <div class="res-item"><span class="res-name">${paLabelHtml('erfCa')}</span><span class="res-val" data-k="resErfWith">-</span></div>
       </div>
 
       <div class="res-section-title">Remaining Life</div>
       <div class="res-grid">
-        <div class="res-item"><span class="res-name">Corrosion Allowance (CA)</span><span class="res-val" data-k="resCa">-</span></div>
-        <div class="res-item"><span class="res-name">Corrosion Rate (CR)</span><span class="res-val" data-k="resCr">-</span></div>
-        <div class="res-item"><span class="res-name">Estimated Remaining Life</span><span class="res-val" data-k="resLife">-</span></div>
+        <div class="res-item"><span class="res-name">${paLabelHtml('ca')}</span><span class="res-val" data-k="resCa">-</span></div>
+        <div class="res-item"><span class="res-name">${paLabelHtml('cr')}</span><span class="res-val" data-k="resCr">-</span></div>
+        <div class="res-item"><span class="res-name">${paLabelHtml('life')}</span><span class="res-val" data-k="resLife">-</span></div>
       </div>
       <p class="report-caveat" data-k="erlCaveat" style="margin-top:10px; display:none;">
         Assumes a single, constant, linear corrosion rate for the life of the pipe &mdash; it is not a substitute for trending multiple UT surveys over time. Per API 570 practice, the next inspection interval should not exceed half the estimated remaining life (subject to a code-defined maximum).
@@ -275,7 +318,7 @@ const PA_AW_SECTIONS = {
 
       <div class="eq-section" style="margin-top:16px; border-top:1px dashed var(--card-border); padding-top:16px;">
         <h3 class="eq-title">API RP 574 — Structural Minimum Thickness (t<sub>struct</sub>)</h3>
-        <p style="font-size:11px; color:var(--text-muted); line-height:1.4; margin-top:4px;">
+        <p style="font-size:var(--fs-sm); color:var(--text-muted); line-height:1.4; margin-top:4px;">
           Absolute minimum threshold to prevent mechanical sagging, buckling, or collapse at support points (lookup based on NPS size).
         </p>
         <div class="eq-sub-container" style="margin-top: 10px;">
@@ -320,7 +363,7 @@ export function paSvgToPng(svgEl, scale) {
     if (drag) drag.remove();
 
     const styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
-    styleEl.textContent = ':root{--svg-bg:#f8fafc;--svg-metal:#64748b;--svg-loss:#fee2e2;--svg-loss-border:#ef4444;--text-color:#0f172a;--text-light:#64748b;--text-muted:#475569;--limit-reqca:#92400e;--limit-req:#991b1b;--limit-struct:#5b21b6;}';
+    styleEl.textContent = ':root{--svg-bg:#f8fafc;--text-color:#0f172a;--text-light:#64748b;--text-muted:#475569;--limit-reqca:#92400e;--limit-req:#991b1b;--limit-struct:#5b21b6;}';
     clone.insertBefore(styleEl, clone.firstChild);
     clone.style.background = '#f8fafc';
     clone.querySelectorAll('text').forEach(t => t.setAttribute('font-family', 'Arial, Helvetica, sans-serif'));
@@ -394,7 +437,7 @@ export function paCreateAssessView(root, opts) {
       <summary class="panel-h panel-collapse">${sec.title}</summary>
       <div class="panel-b-track"><div class="panel-b-inner"><div class="panel-b">${sec.body}</div></div></div>
     </details>`;
-  }).join('');
+  }).join('').replace(/paXs(Metal|Loss)/g, ((n) => (m) => m + n)(++paSvgSeq));
 
   const q = (k) => root.querySelector(`[data-k="${k}"]`);
   const qa = (sel) => root.querySelectorAll(sel);
@@ -405,34 +448,49 @@ export function paCreateAssessView(root, opts) {
 
   /* ---- cross-section (unrolled wall profile; see PA_WALL_PLOT geometry) ---- */
 
-  function updateLeaderLine(id, trueY, rowY, label) {
-    const lineEl = q(id + 'Line');
-    const textEl = q(id + 'Text');
-    const xStart = PA_WALL_PLOT.right;
-    const xElbow = 268;
-    const xText = 274;
-    lineEl.setAttribute('d', `M ${xStart} ${trueY} L ${xElbow} ${trueY} L ${xElbow} ${rowY} L ${xText} ${rowY}`);
-    textEl.setAttribute('x', xText + 6);
-    textEl.setAttribute('y', rowY + 4);
-    textEl.textContent = label;
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const svgEl = (tag: string, attrs: Record<string, any>, text?: string) => {
+    const el = document.createElementNS(SVG_NS, tag);
+    for (const k in attrs) el.setAttribute(k, String(attrs[k]));
+    if (text != null) el.textContent = text;
+    return el;
+  };
+
+  // Two-line label in the right column: name (small) over value (bold), joined to the line's true
+  // height by an elbow leader.
+  function setLabel(id, trueY, rowY, name, value, nameFill, valueFill, strong) {
+    q(id + 'Line').setAttribute('d', `M ${PA_WALL_PLOT.right} ${trueY} L 262 ${trueY} L 270 ${rowY} L ${PA_LABEL_X - 4} ${rowY}`);
+    q(id + 'Line').setAttribute('opacity', strong ? '0.9' : '0.45');
+    const t = q(id + 'Text');
+    t.textContent = '';
+    t.appendChild(svgEl('tspan', { x: PA_LABEL_X, y: rowY - 3, 'font-size': 10.5, 'font-weight': strong ? 700 : 500, fill: nameFill }, name));
+    t.appendChild(svgEl('tspan', { x: PA_LABEL_X, y: rowY + 11, 'font-size': 12, 'font-weight': 700, fill: valueFill }, value));
+  }
+
+  function clearSvg() {
+    ['svgLMeas', 'svgLReqNo', 'svgLReqTotal', 'svgLStruct'].forEach(id => {
+      q(id + 'Line').setAttribute('d', '');
+      q(id + 'Text').textContent = '';
+    });
+    q('svgPocketLoss').setAttribute('d', '');
+    q('svgPocketNominalLine').setAttribute('d', '');
+    ['svgReqTotalLine', 'svgReqNoCaLine', 'svgStructLine'].forEach(id => {
+      const el = q(id);
+      el.setAttribute('x1', 0); el.setAttribute('x2', 0); el.setAttribute('y1', 0); el.setAttribute('y2', 0);
+    });
+    q('svgRuler').textContent = '';
+    q('svgOdCap').textContent = '';
+    q('svgIdCap').textContent = '';
+    q('svgSpare').style.display = 'none';
+    q('svgDragHandle').style.display = 'none';
   }
 
   function drawSvg(res) {
     if (!svg) return;
     if (!res || res.hasErrors) {
-      ['svgLOd', 'svgLMeas', 'svgLReqNo', 'svgLReqTotal', 'svgLNom', 'svgLDepth', 'svgLStruct'].forEach(id => {
-        q(id + 'Line').setAttribute('d', '');
-        q(id + 'Text').textContent = '';
-      });
-      q('svgPocketLoss').setAttribute('d', '');
-      q('svgPocketNominalLine').setAttribute('d', '');
-      ['svgReqTotalLine', 'svgReqNoCaLine', 'svgStructLine'].forEach(id => {
-        const el = q(id);
-        el.setAttribute('x1', 0); el.setAttribute('x2', 0); el.setAttribute('y1', 0); el.setAttribute('y2', 0);
-      });
-      q('svgDragHandle').style.display = 'none';
+      clearSvg();
       // Literal hex, not var(--text-light): a CSS custom property used as a static SVG fill was
-      // observed to compute correctly but not paint in Chromium (see the old calculator note).
+      // observed to compute correctly but not paint in Chromium.
       const emptyLines = ['Enter pipe geometry', '& design pressure to', 'see the wall profile'];
       ['svgEmptyState', 'svgEmptyState2', 'svgEmptyState3'].forEach((id, i) => {
         const el = q(id);
@@ -441,16 +499,16 @@ export function paCreateAssessView(root, opts) {
       });
       return;
     }
-
     ['svgEmptyState', 'svgEmptyState2', 'svgEmptyState3'].forEach(id => { q(id).textContent = ''; });
 
     const { left: PLOT_L, right: PLOT_R, yOd: Y_OD, yId: Y_ID, pocketL: POCKET_L, pocketR: POCKET_R, pocketC: POCKET_C, pocketHalfW: POCKET_HW } = PA_WALL_PLOT;
-    const t_nom_px = Y_ID - Y_OD;
-    const scale = t_nom_px / res.t_nom;
+    const scale = (Y_ID - Y_OD) / res.t_nom;
     const tMeasDraw = Math.min(res.t_nom, res.t_meas);
     const clampY = (y) => Math.max(Y_OD - 6, Math.min(Y_ID + 6, y));
-
-    let y_meas, y_reqNoCA, y_reqTotal, y_struct, y_depthMid;
+    // Wall thickness t is measured from the side that is NOT corroding: from the inside surface for
+    // external loss, from the outside surface for internal loss. The ruler uses the same origin, so
+    // every limit line reads straight off it.
+    const yAt = (t) => clampY(res.isInternal ? Y_OD + t * scale : Y_ID - t * scale);
 
     // Flat pocket floor with smooth cosine shoulders — reads like a UT thickness-survey /
     // API 579 flaw profile rather than a sharp notch.
@@ -473,50 +531,93 @@ export function paCreateAssessView(root, opts) {
       return pts;
     };
 
-    if (res.isInternal) {
-      y_meas = clampY(Y_ID - (res.t_nom - tMeasDraw) * scale);
-      y_reqNoCA = clampY(Y_OD + res.t_req_noCA * scale);
-      y_reqTotal = clampY(Y_OD + res.t_req_total * scale);
-      y_struct = clampY(Y_OD + res.t_struct * scale);
-      y_depthMid = (y_meas + Y_ID) / 2;
+    const y_meas = yAt(tMeasDraw);
+    const yFlat = res.isInternal ? Y_ID : Y_OD;
+    const lg = q('svgLossGrad');
+    if (lg) { lg.setAttribute('y1', res.isInternal ? '1' : '0'); lg.setAttribute('y2', res.isInternal ? '0' : '1'); }
+    const points = buildPocketPoints(yFlat, y_meas, !res.isInternal);
+    q('svgPocketLoss').setAttribute('d', `M ${POCKET_L} ${yFlat} L ` + points.join(' L ') + ` L ${POCKET_R} ${yFlat} Z`);
+    q('svgPocketNominalLine').setAttribute('d', `M ${POCKET_L} ${yFlat} L ${POCKET_R} ${yFlat}`);
 
-      const points = buildPocketPoints(Y_ID, y_meas, false);
-      q('svgPocketLoss').setAttribute('d', `M ${POCKET_L} ${Y_ID} L ` + points.join(' L ') + ` L ${POCKET_R} ${Y_ID} Z`);
-      q('svgPocketNominalLine').setAttribute('d', `M ${POCKET_L} ${Y_ID} L ${POCKET_R} ${Y_ID}`);
-    } else {
-      y_meas = clampY(Y_OD + (res.t_nom - tMeasDraw) * scale);
-      y_reqNoCA = clampY(Y_ID - res.t_req_noCA * scale);
-      y_reqTotal = clampY(Y_ID - res.t_req_total * scale);
-      y_struct = clampY(Y_ID - res.t_struct * scale);
-      y_depthMid = (Y_OD + y_meas) / 2;
+    // surface captions (small, muted — they orient, they are not results)
+    const od = q('svgOdCap'), idc = q('svgIdCap');
+    od.setAttribute('x', PLOT_L); od.setAttribute('y', Y_OD - 8); od.textContent = 'Outside surface';
+    idc.setAttribute('x', PLOT_L); idc.setAttribute('y', Y_ID + 17); idc.textContent = 'Original inside surface';
 
-      const points = buildPocketPoints(Y_OD, y_meas, true);
-      q('svgPocketLoss').setAttribute('d', `M ${POCKET_L} ${Y_OD} L ` + points.join(' L ') + ` L ${POCKET_R} ${Y_OD} Z`);
-      q('svgPocketNominalLine').setAttribute('d', `M ${POCKET_L} ${Y_OD} L ${POCKET_R} ${Y_OD}`);
+    // mm ruler on the left: a "nice" step giving at most ~7 intervals
+    const ruler = q('svgRuler');
+    ruler.textContent = '';
+    const step = [0.5, 1, 2, 2.5, 5, 10, 20].find(st => res.t_nom / st <= 7) || 50;
+    const RX = PLOT_L - 8;
+    ruler.appendChild(svgEl('line', { x1: RX, y1: Y_OD, x2: RX, y2: Y_ID, stroke: '#cbd5e1', 'stroke-width': 1 }));
+    for (let v = 0; v <= res.t_nom + 1e-9; v += step) {
+      const y = yAt(v);
+      ruler.appendChild(svgEl('line', { x1: RX - 4, y1: y, x2: RX, y2: y, stroke: '#94a3b8', 'stroke-width': 1 }));
+      ruler.appendChild(svgEl('text', { x: RX - 7, y: y + 3, 'text-anchor': 'end', 'font-size': 9, 'font-family': 'Google Sans, Inter, sans-serif', fill: '#94a3b8' }, String(+v.toFixed(1))));
     }
+    ruler.appendChild(svgEl('text', { x: RX - 7, y: res.isInternal ? Y_ID + 17 : Y_OD - 8, 'text-anchor': 'end', 'font-size': 9, 'font-family': 'Google Sans, Inter, sans-serif', fill: '#94a3b8', 'font-weight': 600 }, 'mm'));
 
-    const setHLine = (id, y) => {
-      const el = q(id);
+    // The deciding limit = the higher of t_req + CA (REPAIR below it) and the API 574 minimum
+    // (MONITOR below it) — the line the verdict is actually measured against (computeB313).
+    const govIsStruct = res.t_struct > res.t_req_total;
+    const govT = govIsStruct ? res.t_struct : res.t_req_total;
+    const limits = [
+      { id: 'svgLReqTotal', line: 'svgReqTotalLine', t: res.t_req_total, name: PA_LABELS.tReqCa.short, color: 'var(--limit-reqca)', gov: !govIsStruct, d: 3 },
+      { id: 'svgLReqNo', line: 'svgReqNoCaLine', t: res.t_req_noCA, name: PA_LABELS.tReq.short, color: 'var(--limit-req)', gov: false, d: 3 },
+      { id: 'svgLStruct', line: 'svgStructLine', t: res.t_struct, name: PA_LABELS.tStruct.short, color: 'var(--limit-struct)', gov: govIsStruct, d: 2 },
+    ];
+    limits.forEach(L => {
+      const el = q(L.line), y = yAt(L.t);
       el.setAttribute('x1', PLOT_L); el.setAttribute('x2', PLOT_R);
       el.setAttribute('y1', y); el.setAttribute('y2', y);
-    };
-    setHLine('svgReqTotalLine', y_reqTotal);
-    setHLine('svgReqNoCaLine', y_reqNoCA);
-    setHLine('svgStructLine', y_struct);
+      el.setAttribute('stroke-width', L.gov ? '2.6' : '1.2');
+      el.setAttribute('opacity', L.gov ? '1' : '0.55');
+    });
 
-    // Leader labels sorted top-to-bottom by true position to prevent lines crossing
-    const labels = [
-      { id: 'svgLOd', y: Y_OD, text: `Outer Surface (OD)` },
-      { id: 'svgLMeas', y: y_meas, text: `Remaining Wall (t_meas): ${paFmt(res.t_meas)} mm` },
-      { id: 'svgLReqTotal', y: y_reqTotal, text: `Req'd incl. CA (t_req+CA): ${paFmt(res.t_req_total, 3)} mm` },
-      { id: 'svgLReqNo', y: y_reqNoCA, text: `Req'd Design (t_req): ${paFmt(res.t_req_noCA, 3)} mm` },
-      { id: 'svgLNom', y: Y_ID, text: `Nominal Inner Surface (ID)` },
-      { id: 'svgLDepth', y: y_depthMid, text: `Metal Loss Depth: ${paFmt(res.depth)} mm` },
-      { id: 'svgLStruct', y: y_struct, text: `Structural Min (t_struct): ${paFmt(res.t_struct)} mm` }
-    ];
-    labels.sort((a, b) => a.y - b.y);
-    const yRows = [20, 58, 96, 134, 172, 210, 248];
-    labels.forEach((item, index) => updateLeaderLine(item.id, item.y, yRows[index], item.text));
+    // Right-column labels at their true heights, pushed apart just enough not to overlap
+    const items = [
+      { id: 'svgLMeas', y: y_meas, name: PA_LABELS.tMeas.short, value: `${paFmt(res.t_meas)} mm  (${paFmt(res.depth)} mm lost)`, nameFill: '#334155', valueFill: '#0f172a', strong: true },
+      ...limits.map(L => ({
+        id: L.id, y: yAt(L.t),
+        name: L.gov ? `${L.name} · decides` : L.name,
+        value: `${paFmt(L.t, L.d)} mm`,
+        nameFill: L.gov ? L.color : '#64748b', valueFill: L.gov ? L.color : '#475569', strong: L.gov,
+      })),
+    ].sort((a, b) => a.y - b.y);
+    const GAP = 31, TOP = 16, BOTTOM = 252;
+    const rows = items.map(it => it.y);
+    for (let i = 0; i < rows.length; i++) rows[i] = Math.max(rows[i], TOP, i ? rows[i - 1] + GAP : TOP);
+    for (let i = rows.length - 1; i >= 0; i--) rows[i] = Math.min(rows[i], i === rows.length - 1 ? BOTTOM : rows[i + 1] - GAP);
+    items.forEach((it, i) => setLabel(it.id, it.y, rows[i], it.name, it.value, it.nameFill, it.valueFill, it.strong));
+
+    // Above/below-limit bracket: from the thinnest point to the deciding limit, in the verdict colour
+    const spare = res.t_meas - govT;
+    const color = PA_VERDICT_HEX[res.status] || '#475569';
+    const yG = yAt(govT);
+    // The bracket rises from the drag handle (the thinnest point, centre of the pocket floor); its
+    // pill sits ON the bracket, inside the pipe, so it never runs into the label column. When the gap
+    // is too small for the pill, it moves just past the bracket's far end (into solid metal).
+    const BX = POCKET_C;
+    q('svgSpare').style.display = '';
+    const setLine = (k, x1, y1, x2, y2) => {
+      const el = q(k);
+      el.setAttribute('x1', x1); el.setAttribute('y1', y1); el.setAttribute('x2', x2); el.setAttribute('y2', y2);
+      el.setAttribute('stroke', color);
+    };
+    setLine('svgSpareLine', BX, y_meas, BX, yG);
+    setLine('svgSpareCapA', BX - 6, y_meas, BX + 6, y_meas);
+    setLine('svgSpareCapB', BX - 6, yG, BX + 6, yG);
+    // measured to whichever limit decides, so it can differ from the results' "Vs. min. + CA" row
+    const label = paLimitGap(spare, 2);
+    const w = label.length * 6.2 + 14; // width estimate: getComputedTextLength is 0 while hidden
+    const lo = Math.max(y_meas, yG), hi = Math.min(y_meas, yG);
+    let cy = (y_meas + yG) / 2;
+    if (lo - hi < 30) cy = lo + 18 <= Y_ID - 10 ? lo + 18 : hi - 18;
+    cy = Math.max(Y_OD + 10, Math.min(Y_ID - 10, cy));
+    const pill = q('svgSparePill');
+    pill.setAttribute('x', BX - w / 2); pill.setAttribute('y', cy - 9); pill.setAttribute('width', w); pill.setAttribute('fill', color);
+    const st = q('svgSpareText');
+    st.setAttribute('x', BX); st.setAttribute('y', cy + 4); st.setAttribute('text-anchor', 'middle'); st.textContent = label;
 
     const dragHandle = q('svgDragHandle');
     dragHandle.setAttribute('cx', POCKET_C);
@@ -524,15 +625,13 @@ export function paCreateAssessView(root, opts) {
     dragHandle.style.display = opts.onDepthDrag ? 'block' : 'none';
   }
 
-  /* ---- hover cross-highlighting between boundary/limit lines and their labels ---- */
+  /* ---- hover cross-highlighting between limit lines and their labels ---- */
 
   const HOVER_MAP = {
-    'svgOdLine': ['svgOdLine', 'svgLOdLine', 'svgLOdText'],
-    'svgNomLine': ['svgNomLine', 'svgLNomLine', 'svgLNomText'],
     'svgReqTotalLine': ['svgReqTotalLine', 'svgLReqTotalLine', 'svgLReqTotalText'],
     'svgReqNoCaLine': ['svgReqNoCaLine', 'svgLReqNoLine', 'svgLReqNoText'],
     'svgStructLine': ['svgStructLine', 'svgLStructLine', 'svgLStructText'],
-    'svgPocketLoss': ['svgPocketLoss', 'svgLDepthLine', 'svgLDepthText', 'svgLMeasLine', 'svgLMeasText']
+    'svgPocketLoss': ['svgPocketLoss', 'svgLMeasLine', 'svgLMeasText']
   };
 
   function initHover() {
@@ -727,18 +826,18 @@ export function paCreateAssessView(root, opts) {
       q('resTreq').textContent = `${paFmt(res.t_req_noCA, 3)} mm`;
       q('resTreqCa').textContent = `${paFmt(res.t_req_total, 3)} mm`;
       q('resTstruct').textContent = `${paFmt(res.t_struct)} mm${res.isCsRef ? ' (CS-only ref, unverified for this material)' : ''}`;
-      q('resMargin').textContent = `${paFmt(res.margin, 3)} mm`;
+      q('resMargin').textContent = paLimitGap(res.margin, 3);
       q('resPres').textContent = `${paFmt(res.P_input, 1)} ${res.pUnit}`;
       q('resMawpWith').textContent = res.mawp_with == null ? 'n/a — wall below CA' : `${paFmt(res.mawp_with, 2)} ${res.pUnit}`;
       q('resMawpNoCA').textContent = `${paFmt(res.mawp_no, 2)} ${res.pUnit}`;
-      q('resErfWith').textContent = erf_with == null ? 'n/a' : paFmt(erf_with, 3);
-      q('resErfNo').textContent = paFmt(erf_no, 3);
+      q('resErfWith').textContent = erf_with == null ? 'n/a' : `${paPressureUsePct(erf_with)} (ERF ${paFmt(erf_with, 3)})`;
+      q('resErfNo').textContent = `${paPressureUsePct(erf_no)} (ERF ${paFmt(erf_no, 3)})`;
       q('resCa').textContent = `${paFmt(res.ca)} mm`;
       q('resCr').textContent = res.CR > 0 ? `${paFmt(res.CR, 2)} mm/year` : '—';
 
       // ERF gauge — headline is the no-CA figure (today's actual capacity from the
       // measured thickness); "with CA" stays a secondary reference in the grid only.
-      q('gaugeErfVal').textContent = paFmt(erf_no, 2);
+      q('gaugeErfVal').textContent = paPressureUsePct(erf_no);
       q('gaugeTrack').classList.remove('is-neutral');
       const ERF_GAUGE_MAX = 1.5;
       const isOffScale = isFinite(erf_no) && erf_no > ERF_GAUGE_MAX;
@@ -748,7 +847,7 @@ export function paCreateAssessView(root, opts) {
       const pointerEl = q('pressurePointer');
       pointerEl.style.left = pointerPct.toFixed(1) + '%';
       pointerEl.classList.toggle('pinned', isOffScale);
-      pointerEl.title = isOffScale ? `ERF ${paFmt(erf_no, 2)} — exceeds gauge scale (${ERF_GAUGE_MAX})` : 'Current ERF (no CA)';
+      pointerEl.title = isOffScale ? `Pressure use ${paPressureUsePct(erf_no)} — beyond the gauge scale` : 'Pressure use today';
       q('gaugeErfOvershoot').style.display = isOffScale ? 'inline' : 'none';
 
       if (res.remainingLife !== null) {

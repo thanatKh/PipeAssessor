@@ -110,6 +110,15 @@ export function esc(s) {
 export const fmtDate = paFmtDate; // shared "dd Mmm yyyy" helper (src/legacy/shared.js)
 export const fmtDateTime = paFmtDateTime; // shared "dd Mmm yyyy HH:mm" (24-hour) helper (src/legacy/shared.js)
 
+// An inspection date that cannot be right: in the future (blocked) or before 2000 (asked about).
+// Used by the form, the Excel import and the register's age column.
+export function inspectionDateIssue(iso) {
+  if (!iso) return null;
+  if (iso > todayISO()) return 'future';
+  if (iso < '2000-01-01') return 'old';
+  return null;
+}
+
 export function todayISO() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

@@ -8,7 +8,9 @@
    (see the block comment below), and normHeader/ensureXLSX are shared by both.
    Extracted from the app monolith.
    ============================================================================ */
-import { $, esc, notify, openDialog, closeDialog, setBusy, todayISO, positionSegPill } from '../core/dom';
+import { $, esc, notify, openDialog, closeDialog, setBusy, todayISO, positionSegPill, inspectionDateIssue } from '../core/dom';
+import { FIELD_LIMITS } from '../core/constants';
+import { icon } from '../core/icons';
 import { FINDING_TYPES, TERMINALS } from '../core/constants';
 import {
   importValidRows, setImportValidRows, lineListValidRows, setLineListValidRows,
@@ -25,7 +27,7 @@ async function ensureXLSX() { if (!XLSX) XLSX = await import('xlsx'); return XLS
 export const CSV_COLS = [
   'terminal', 'pipe_tag', 'pid_no', 'service', 'location_desc', 'finding_type', 'severity', 'is_leaking',
   'status', 'description', 'report_link', 'inspection_date',
-  't_nominal', 't_measured', 'defect_length_mm', 'defect_width_mm', 'lat', 'lng',
+  't_nominal', 't_measured', 'depth_mm', 'defect_length_mm', 'defect_width_mm', 'lat', 'lng',
   'target_date', 'next_check_date', 'sap_notification', 'sap_order', 'estimated_cost',
   'repair_method', 'repaired_date', 'closing_note', 'created_by_email', 'created_at'
 ];
@@ -71,6 +73,7 @@ export const IMPORT_COLS = [
   { header: 'Inspection Date', field: 'inspection_date', type: 'date' },
   { header: 'Nominal Thickness (mm)', field: 't_nominal', type: 'num' },
   { header: 'Measured Thickness (mm)', field: 't_measured', type: 'num' },
+  { header: 'Wall-loss Depth (mm)', field: 'depth_mm', type: 'num' },
   // No 'Target Date' column: the repair due date is maintenance-only (see db/schema.sql section 9
   // — the pa_guard_repair_fields trigger blocks target_date on INSERT as well as UPDATE for
   // inspectors, and bulk import is inspector-allowed). Repair dates are set in-app by maintenance.
@@ -142,6 +145,14 @@ export function validateImportRow(raw, excelRowIndex = '?') {
   const ft = resolveFindingType(p.finding_type);
   if (!ft) reasons.push('Finding Type unrecognized');
   else p.finding_type = ft;
+  // same rules as the form (core/constants FIELD_LIMITS, core/dom inspectionDateIssue)
+  for (const [field, max] of Object.entries(FIELD_LIMITS)) {
+    if (p[field] && String(p[field]).length > max) reasons.push(`${field.replace('_', ' ')} is longer than ${max} characters`);
+  }
+  const dIssue = inspectionDateIssue(p.inspection_date);
+  if (dIssue === 'future') reasons.push('Inspection Date is in the future');
+  if (dIssue === 'old') reasons.push('Inspection Date is before 2000 — check it');
+  if (p.estimated_cost != null && p.estimated_cost < 0) reasons.push('Estimated cost cannot be negative');
   if (p.severity) {
     const sev = { low: 'Low', medium: 'Medium', high: 'High' }[String(p.severity).toLowerCase()];
     if (sev) p.severity = sev; else delete p.severity; // silently drop unknown severity
@@ -164,7 +175,7 @@ export function renderImportPreview(results) {
         <button type="button" class="seg-btn ${!invalid.length ? 'active' : ''}" data-filter="all">All Rows (${results.length})</button>
         <button type="button" class="seg-btn" data-filter="ok">Ready Only (${valid.length})</button>
       </div>
-      <div style="font-size:11.5px; font-weight:600; color:var(--text-muted);">
+      <div style="font-size:var(--fs-sm); font-weight:600; color:var(--text-muted);">
         <span class="ok">${valid.length} ready</span> · <span class="bad">${invalid.length} with errors</span>
       </div>
     </div>
@@ -175,8 +186,8 @@ export function renderImportPreview(results) {
     const p = r.payload || r.raw || {};
     const rowNum = r.excelRowIndex != null ? `Row ${r.excelRowIndex}` : '—';
     return `<tr class="${ok ? '' : 'bad'}" data-status="${ok ? 'ok' : 'bad'}">
-      <td style="font-weight:600; color:var(--text-muted); font-size:11px; white-space:nowrap;">${rowNum}</td>
-      <td class="${ok ? 'rowstat-ok' : 'rowstat-bad'}">${ok ? '✓' : '✕'}</td>
+      <td style="font-weight:600; color:var(--text-muted); font-size:var(--fs-sm); white-space:nowrap;">${rowNum}</td>
+      <td class="${ok ? 'rowstat-ok' : 'rowstat-bad'}">${ok ? icon('check') : icon('x')}</td>
       <td>${esc(p.pipe_tag || '—')}</td>
       <td>${esc(p.terminal || '—')}</td>
       <td>${esc(p.finding_type || '—')}</td>
@@ -273,6 +284,7 @@ const IMPORT_EXAMPLE_BY_FIELD = {
   inspection_date: '2026-06-20',
   t_nominal: 9.27,
   t_measured: 5.4,
+  depth_mm: 3.87,
   sap_notification: '10012345',
   sap_order: '40012345',
   lat: 13.097720,
@@ -430,7 +442,7 @@ export function renderLineListImportPreview(results) {
         <button type="button" class="seg-btn ${!invalid.length ? 'active' : ''}" data-filter="all">All Rows (${results.length})</button>
         <button type="button" class="seg-btn" data-filter="ok">Ready Only (${valid.length})</button>
       </div>
-      <div style="font-size:11.5px; font-weight:600; color:var(--text-muted);">
+      <div style="font-size:var(--fs-sm); font-weight:600; color:var(--text-muted);">
         <span class="ok">${valid.length} ready</span> · <span class="bad">${invalid.length} with errors</span>
       </div>
     </div>
@@ -441,8 +453,8 @@ export function renderLineListImportPreview(results) {
     const p = r.payload || r.raw || {};
     const rowNum = r.excelRowIndex != null ? `Row ${r.excelRowIndex}` : '—';
     return `<tr class="${ok ? '' : 'bad'}" data-status="${ok ? 'ok' : 'bad'}">
-      <td style="font-weight:600; color:var(--text-muted); font-size:11px; white-space:nowrap;">${rowNum}</td>
-      <td class="${ok ? 'rowstat-ok' : 'rowstat-bad'}">${ok ? '✓' : '✕'}</td>
+      <td style="font-weight:600; color:var(--text-muted); font-size:var(--fs-sm); white-space:nowrap;">${rowNum}</td>
+      <td class="${ok ? 'rowstat-ok' : 'rowstat-bad'}">${ok ? icon('check') : icon('x')}</td>
       <td>${esc(p.pipe_tag || '—')}</td>
       <td>${esc(p.terminal || '—')}</td>
       <td>${esc(p.nps || '—')}</td>
@@ -620,7 +632,7 @@ export function renderLineListManageTable() {
       <td>${esc(r.service || '—')}</td>
       <td><button type="button" class="link-btn" data-del="${esc(r.id)}">Delete</button></td>
     </tr>`).join('') +
-    (rows.length > 500 ? `<tr class="empty-row"><td colspan="9" style="font-size:11.5px; color:var(--text-muted); text-align:center; padding:8px;">Showing first 500 of ${rows.length} entries — type in search box above to narrow results.</td></tr>` : '');
+    (rows.length > 500 ? `<tr class="empty-row"><td colspan="9" style="font-size:var(--fs-sm); color:var(--text-muted); text-align:center; padding:8px;">Showing first 500 of ${rows.length} entries — type in search box above to narrow results.</td></tr>` : '');
     body.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => deleteLineListRow(btn.dataset.del)));
   }
   $('lineListCount').textContent = q && rows.length !== lineList.length

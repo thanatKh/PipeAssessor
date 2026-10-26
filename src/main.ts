@@ -16,7 +16,6 @@ import './styles/theme.css';           // design system (after Basecoat, per the
 import './styles/app.css';             // page-specific components (last)
 import 'basecoat-css/basecoat.min';    // Basecoat component behaviors (was the CDN defer <script>)
 import 'basecoat-css/toast';           // Toaster component JS (registers on window.basecoat — must load after basecoat.min)
-import 'basecoat-css/command.min';     // Command palette (nav menu, #cmdMenu in index.html) — filtering, arrow-key nav, click-to-close — must load after basecoat.min
 
 // Noto Sans Thai — Google Sans's embedded TTFs have no Thai glyphs (documented, intentional), so
 // Thai text was silently falling through to whichever generic Thai font the OS happens to pick
@@ -29,8 +28,27 @@ import '@fontsource/noto-sans-thai/500.css';
 import '@fontsource/noto-sans-thai/600.css';
 import '@fontsource/noto-sans-thai/700.css';
 
+import { registerSW } from 'virtual:pwa-register';
 import { registerGoogleSansWebFont } from './engine/fonts';
 import { initApp } from './app';
 
 registerGoogleSansWebFont();
 document.addEventListener('DOMContentLoaded', initApp);
+
+// Service worker (vite-plugin-pwa, registerType 'prompt'). A new deploy never reloads the page by
+// itself — that would discard unsaved form input — it shows a persistent toast (duration -1) and
+// waits for the user to press Reload. Basecoat's toast takes the action's onclick as an attribute
+// string, hence the window hook.
+const updateSW = registerSW({
+  onNeedRefresh() {
+    (window as any).__paUpdateSW = () => updateSW(true);
+    (document.getElementById('toaster') as any)?.toast?.({
+      category: 'info',
+      title: 'New version available',
+      description: 'Save any open work, then reload to update.',
+      duration: -1,
+      action: { label: 'Reload', onclick: 'window.__paUpdateSW && window.__paUpdateSW()' },
+    });
+  },
+  onRegisterError(err) { console.warn('Service worker registration failed', err); },
+});

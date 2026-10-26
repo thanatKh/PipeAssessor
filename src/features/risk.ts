@@ -29,6 +29,7 @@
      — excluding them would hide real problems).
    ============================================================================ */
 import { $, esc, fmtDate } from '../core/dom';
+import { icon } from '../core/icons';
 import { WALL_LOSS_TYPES, TYPE_COLORS, FINDING_TYPE_SHORT, TERMINALS } from '../core/constants';
 import { sb } from '../core/supabase';
 import { paFmt } from '../engine/format';
@@ -36,6 +37,7 @@ import {
   findings, riskAssessments, setRiskAssessments, riskFilters,
 } from '../core/state';
 import { resFromSnapshot } from './detail';
+import { snapshotHasReading } from '../workbench/assess-view';
 
 export type RiskBand = 'high' | 'medium' | 'low' | 'na';
 
@@ -53,7 +55,7 @@ export async function loadRiskData() {
     .order('created_at', { ascending: false });
   if (error) { setRiskAssessments([]); return; }
   const latestByFinding = new Map();
-  (data || []).forEach(a => { if (!latestByFinding.has(a.finding_id)) latestByFinding.set(a.finding_id, a); });
+  (data || []).filter(snapshotHasReading).forEach(a => { if (!latestByFinding.has(a.finding_id)) latestByFinding.set(a.finding_id, a); });
   setRiskAssessments([...latestByFinding.values()]);
 }
 
@@ -177,13 +179,13 @@ function childRowHtml(r) {
     <td></td>
     <td class="num rl-child">${pctWallHtml(r.res)}</td>
     <td class="rl-child">${r.res ? remainingLifeHtml(r.res) : '<span class="rl-none">—</span>'}</td>
-    <td><span class="child-status ${statusCls}">${esc(statusText)}</span> <span class="child-arrow" style="font-size:10px; color:var(--button-primary); opacity:0.6; margin-left:3px;">→</span></td>
+    <td><span class="child-status ${statusCls}">${esc(statusText)}</span> <span class="child-arrow" style="font-size:var(--fs-xs); color:var(--button-primary); opacity:0.6; margin-left:3px;">→</span></td>
   </tr>`;
 }
 
 function lineRowHtml(line) {
   const multi = line.findingRows.length > 1;
-  const caret = `<span class="expand-caret"${multi ? '' : ' style="visibility:hidden"'}>▶</span>`;
+  const caret = `<span class="expand-caret"${multi ? '' : ' style="visibility:hidden"'}>${icon('chevronRight')}</span>`;
   const subParts = [];
   if (multi) subParts.push(`<span class="loc-count">${line.locations.length} location${line.locations.length === 1 ? '' : 's'}</span>`);
   else subParts.push(esc(line.locations[0]));
@@ -202,7 +204,7 @@ function lineRowHtml(line) {
     <td class="num">${line.findingCount}</td>
     <td class="num">${pctWallHtml(line.worstRes)}</td>
     <td>${remainingLifeHtml(line.worstRes)}</td>
-    <td><span class="chip">${esc(line.findingRows[0].finding.status)}</span>${multi ? '' : ' <span style="font-size:10px; color:var(--button-primary); opacity:0.6; margin-left:3px;">→</span>'}</td>
+    <td><span class="chip">${esc(line.findingRows[0].finding.status)}</span>${multi ? '' : ' <span style="font-size:var(--fs-xs); color:var(--button-primary); opacity:0.6; margin-left:3px;">→</span>'}</td>
   </tr>` + (multi ? line.findingRows.map(childRowHtml).join('') : '');
 }
 
