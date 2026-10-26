@@ -2160,28 +2160,75 @@
       border-left: 1px solid rgba(255, 255, 255, 0.35);
     }
 
+    /* Result tiles: label + status pill, big number, one small visual, one plain note. The visual
+       carries the meaning the old coloured edge only hinted at: a meter to the safe limit, design
+       vs headroom chips, the wall against its deciding limit, and steel/rust in the figure's colours. */
     .cp-tiles { grid-template-rows: repeat(4, minmax(0, 1fr)); gap: var(--sp-12); min-height: 0; }
     .cp-tile {
-      --tile-spine: var(--text-light);
       display: flex;
       flex-direction: column;
-      justify-content: center;
+      justify-content: space-between;
+      gap: var(--sp-6);
       min-height: 0;
-      padding: var(--sp-10) var(--sp-16) var(--sp-10) var(--sp-20);
-      border-radius: 14px;
+      padding: var(--sp-14) var(--sp-20);
+      border-radius: 16px;
       background: var(--card-bg);
-      box-shadow: inset 5px 0 0 var(--tile-spine), 0 1px 2px rgba(15, 23, 42, 0.06), 0 2px 8px rgba(15, 23, 42, 0.04);
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 16px rgba(15, 23, 42, 0.05);
+      overflow: hidden;
     }
-    .cp-tile.t-ok   { --tile-spine: #047857; }
-    .cp-tile.t-warn { --tile-spine: #b45309; }
-    .cp-tile.t-bad  { --tile-spine: #b91c1c; }
-    .cp-tile-h { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-8); font-size: var(--fs-lg); color: var(--text-muted); }
-    .cp-tile-v { font-size: var(--fs-display); font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
-    .cp-tile-v small { font-size: var(--fs-2xl); font-weight: 500; color: var(--text-muted); }
-    .cp-tile.t-warn .cp-tile-v { color: var(--warn-text); }
-    .cp-tile.t-bad .cp-tile-v { color: var(--danger-text); }
+    .cp-tile-h { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-8); font-size: var(--fs-lg); font-weight: 600; color: var(--text-color); }
+    .cp-tile-h .lbl-sym { margin-left: var(--sp-4); }
+    .cp-pill {
+      flex: none;
+      padding: var(--sp-2) var(--sp-10);
+      border-radius: 999px;
+      font-size: var(--fs-sm);
+      font-weight: 700;
+      background: var(--button-ghost-hover);
+      color: var(--text-muted);
+    }
+    .cp-pill.p-ok   { background: var(--ok-bg);     color: var(--ok-text); }
+    .cp-pill.p-warn { background: var(--warn-bg);   color: var(--warn-text); }
+    .cp-pill.p-bad  { background: var(--danger-bg); color: var(--danger-text); }
+    .cp-tile-v { font-size: var(--fs-display); font-weight: 700; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+    .cp-tile-v small { font-size: var(--fs-2xl); font-weight: 500; letter-spacing: 0; color: var(--text-muted); }
+    .cp-tile-v.v-warn { color: var(--warn-text); }
+    .cp-tile-v.v-bad  { color: var(--danger-text); }
+    .cp-visual { display: flex; flex-direction: column; gap: var(--sp-4); }
+    .cp-meter { position: relative; display: flex; height: 8px; border-radius: 999px; background: var(--button-ghost-hover); }
+    .cp-fill { height: 100%; border-radius: 999px; transition: width var(--duration-fast) var(--ease-smooth-out); }
+    .cp-fill.f-ok   { background: var(--ok-color); }
+    .cp-fill.f-warn { background: var(--warn-color); }
+    .cp-fill.f-bad  { background: var(--danger-color); }
+    .cp-fill.f-     { background: var(--text-light); }
+    /* same steel/rust as the cross-section (paXsMetal / paXsLoss) */
+    .cp-wall .cp-fill.f-steel { background: linear-gradient(90deg, #cbd5e1, #64748b); border-radius: 999px 0 0 999px; }
+    .cp-wall .cp-fill.f-rust  { flex: 1; background: linear-gradient(90deg, #c2410c, #fdba74); border-radius: 0 999px 999px 0; }
+    .cp-tick { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--text-muted); }
+    .cp-tick.is-limit { background: var(--text-color); }
+    .cp-cap { display: flex; justify-content: space-between; font-size: var(--fs-xs); color: var(--text-light); font-variant-numeric: tabular-nums; }
+    .cp-chips { display: flex; gap: var(--sp-8); }
+    .cp-chips span {
+      flex: 1;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: var(--sp-6);
+      padding: var(--sp-6) var(--sp-10);
+      border-radius: 10px;
+      background: var(--bg-color);
+      font-size: var(--fs-sm);
+      color: var(--text-muted);
+    }
+    .cp-chips b { font-size: var(--fs-xl); color: var(--text-color); font-variant-numeric: tabular-nums; }
     .cp-tile-n { font-size: var(--fs-base); color: var(--text-muted); }
-
+    /* short laptop screens (768px tall): four tiles share ~500px — drop the captions, smaller numbers */
+    @media (max-height: 860px) {
+      .cp-tile { padding: var(--sp-10) var(--sp-16); gap: var(--sp-4); }
+      .cp-tile-v { font-size: var(--fs-hero); }
+      .cp-cap { display: none; }
+      .cp-chips span { padding: var(--sp-2) var(--sp-8); }
+    }
     .cp-foot {
       align-items: center;
       justify-content: space-between;

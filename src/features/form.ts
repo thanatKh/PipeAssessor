@@ -1061,36 +1061,58 @@ export function initQuickCalc() {
       : `<div class="cp-word"><span>Integrity</span><b>—</b></div><div class="cp-line">${esc($('qCalcHint').style.display !== 'none' && $('qCalcHint').textContent ? $('qCalcHint').textContent : 'Enter the wall-loss reading and design pressure to see the result.')}</div>`;
 
     const n2 = (v) => (v == null || !isFinite(v) ? '—' : Number(v).toFixed(2));
+    const pctOf = (v, max) => `${(Math.max(0, Math.min(1, max > 0 ? v / max : 0)) * 100).toFixed(1)}%`;
+    // Each tile: label + status pill, big number, a small visual (meter / chips) and one plain note.
     let tiles;
     if (!res) {
-      tiles = [['erfNo', '—', '', '', ''], ['mawpNo', '—', '', '', ''], ['tMeas', '—', '', '', ''], ['pct', '—', '', '', '']]
-        .map(([k, v]) => ({ k, value: v, unit: '', sym: PA_LABELS[k].sym, note: '', tone: '' }));
+      tiles = ['erfNo', 'mawpNo', 'tMeas', 'pct'].map(k => ({
+        k, value: '—', unit: '', sym: PA_LABELS[k].sym, pill: null, tone: '',
+        visual: '<div class="cp-meter"></div>', note: 'Waiting for a valid calculation',
+      }));
     } else {
       const unit = res.pUnit;
       const erf = res.mawp_no > 0 ? res.P_input / res.mawp_no : null;
       // The limit that decides the verdict (same rule as the cross-section's bracket).
       const structDecides = res.t_struct > res.t_req_total;
       const limit = Math.max(res.t_struct, res.t_req_total);
-      const tone = { OK: 'ok', MONITOR: 'warn', REPAIR: 'bad' }[res.status] || '';
+      const gap = res.t_meas - limit;
+      const wallTone = { OK: 'ok', MONITOR: 'warn', REPAIR: 'bad' }[res.status] || '';
+      const erfTone = erf == null ? '' : erf > 1 ? 'bad' : erf >= 0.8 ? 'warn' : 'ok';
+      const mawpOk = res.mawp_no >= res.P_input;
       let wallNote = `${n2(res.depth)} of ${n2(res.t_nom)} mm lost`;
       if (res.CR > 0 && res.remainingLife != null) wallNote += ` · ~${Math.max(0, res.remainingLife).toFixed(1)} yr left`;
       tiles = [
         { k: 'erfNo', value: paPressureUsePct(erf).replace('%', ''), unit: erf == null ? '' : '%',
-          sym: erf == null ? 'ERF' : `ERF ${erf.toFixed(2)}`, note: `of the safe limit at ${res.P_input} ${unit}`,
-          tone: erf == null ? '' : erf > 1 ? 'bad' : erf >= 0.8 ? 'warn' : 'ok' },
+          sym: erf == null ? 'ERF' : `ERF ${erf.toFixed(2)}`, tone: erfTone,
+          pill: erf == null ? null : { text: erf > 1 ? 'Over limit' : erf >= 0.8 ? 'Watch' : 'OK', tone: erfTone },
+          visual: `<div class="cp-meter"><span class="cp-fill f-${erfTone}" style="width:${pctOf(erf || 0, 1)}"></span><i class="cp-tick" style="left:80%"></i></div>
+                   <div class="cp-cap"><span>0%</span><span>80% watch</span><span>100% limit</span></div>`,
+          note: `of the safe limit at ${res.P_input} ${unit} design` },
         { k: 'mawpNo', value: res.mawp_no == null ? '—' : res.mawp_no.toFixed(1), unit, sym: PA_LABELS.mawpNo.sym,
-          note: `design is ${res.P_input} ${unit}`, tone: res.mawp_no >= res.P_input ? 'ok' : 'bad' },
-        { k: 'tMeas', value: n2(res.t_meas), unit: 'mm', sym: PA_LABELS.tMeas.sym,
-          note: paLimitGap(res.t_meas - limit, 2, structDecides ? 'the API 574 minimum' : 'min. + corrosion allowance'), tone },
+          tone: mawpOk ? 'ok' : 'bad', pill: { text: mawpOk ? 'OK' : 'Below design', tone: mawpOk ? 'ok' : 'bad' },
+          visual: `<div class="cp-chips"><span>Design <b>${esc(String(res.P_input))}</b></span><span>Headroom <b>${res.mawp_no >= res.P_input ? '+' : '−'}${Math.abs(res.mawp_no - res.P_input).toFixed(1)}</b></span></div>`,
+          note: '' }, // the Design / Headroom chips already say it
+        { k: 'tMeas', value: n2(res.t_meas), unit: 'mm', sym: PA_LABELS.tMeas.sym, tone: wallTone,
+          pill: { text: gap >= 0 ? 'Above limit' : 'Below limit', tone: wallTone },
+          visual: `<div class="cp-meter"><span class="cp-fill f-${wallTone}" style="width:${pctOf(res.t_meas, res.t_nom)}"></span><i class="cp-tick is-limit" style="left:${pctOf(limit, res.t_nom)}"></i></div>
+                   <div class="cp-cap"><span>0</span><span>limit ${n2(limit)}</span><span>original ${n2(res.t_nom)}</span></div>`,
+          note: paLimitGap(gap, 2, structDecides ? 'the API 574 minimum' : 'min. + corrosion allowance') },
         { k: 'pct', value: res.pctRemainNom == null ? '—' : res.pctRemainNom.toFixed(0), unit: '%', sym: PA_LABELS.pct.sym,
-          note: wallNote, tone: '' },
+          tone: '', pill: null,
+          visual: `<div class="cp-meter cp-wall"><span class="cp-fill f-steel" style="width:${pctOf(res.t_meas, res.t_nom)}"></span><span class="cp-fill f-rust"></span></div>
+                   <div class="cp-cap"><span>remaining</span><span>lost</span></div>`,
+          note: wallNote },
       ];
     }
     $('cpTiles').innerHTML = tiles.map(t => `
-      <div class="cp-tile${t.tone ? ' t-' + t.tone : ''}">
-        <div class="cp-tile-h"><span>${esc(PA_LABELS[t.k].short)}</span><span class="lbl-sym">${esc(t.sym)}</span></div>
-        <div class="cp-tile-v">${esc(t.value)}${t.unit ? ` <small>${esc(t.unit)}</small>` : ''}</div>
-        <div class="cp-tile-n">${esc(t.note)}</div>
+      <div class="cp-tile">
+        <div class="cp-tile-h">
+          <span>${esc(PA_LABELS[t.k].short)} <span class="lbl-sym">${esc(t.sym)}</span></span>
+          ${t.pill ? `<span class="cp-pill p-${t.pill.tone}">${esc(t.pill.text)}</span>` : ''}
+        </div>
+        <div class="cp-tile-v${t.tone === 'warn' || t.tone === 'bad' ? ' v-' + t.tone : ''}">${esc(t.value)}${t.unit ? ` <small>${esc(t.unit)}</small>` : ''}</div>
+        <div class="cp-visual">${t.visual}</div>
+        ${t.note ? `<div class="cp-tile-n">${esc(t.note)}</div>` : ''}
       </div>`).join('');
 
     const pipe = PA_PIPE_DATABASE[$('qNps').value];
