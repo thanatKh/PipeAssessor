@@ -30,7 +30,7 @@ import {
 } from './core/constants';
 
 import {
-  $, val, positionSegPill, closeDialog, esc, notify, setBusy, setPageLoading,
+  $, val, positionSegPill, closeDialog, esc, notify, setBusy, setPageLoading, friendlyError,
 } from './core/dom';
 import { hydrateIcons } from './core/icons';
 import { initSectionNav } from './core/section-nav';
@@ -153,7 +153,7 @@ async function forgotPassword() {
   // returns success either way for this call, but keep the UI's own messaging enumeration-safe
   // too in case that ever changes upstream.
   if (error) {
-    errBox.textContent = error.message;
+    errBox.textContent = friendlyError(error);
     errBox.style.display = 'block';
     return;
   }
@@ -181,7 +181,7 @@ async function setNewPassword() {
   const { error } = await sb.auth.updateUser({ password: p1 });
   setBusy($('btnSetNewPassword'), false);
   if (error) {
-    errBox.textContent = error.message;
+    errBox.textContent = friendlyError(error);
     errBox.style.display = 'block';
     return;
   }
@@ -297,7 +297,7 @@ async function route() {
     // line_list/profiles is the actual boundary. isMaintenance() is never stale here because
     // loadProfile() is awaited before route() on every auth flip.
     if (h === '#/lines') {
-      if (!isMaintenance()) { notify('Maintenance role required.', true); location.hash = '#/list'; return; }
+      if (!isMaintenance()) { notify('This page is available to the Maintenance role only.', true); location.hash = '#/list'; return; }
       if (!lineList.length) await loadLineList();
       if (!findings.length) await loadFindings(); // the Unlisted Tags tab diffs against findings
       show('viewLineList');
@@ -305,7 +305,7 @@ async function route() {
       return;
     }
     if (h === '#/users') {
-      if (!isMaintenance()) { notify('Maintenance role required.', true); location.hash = '#/list'; return; }
+      if (!isMaintenance()) { notify('This page is available to the Maintenance role only.', true); location.hash = '#/list'; return; }
       show('viewUsers');
       await loadUsersPage();
       return;
@@ -425,7 +425,7 @@ function initApp() {
   if (false) { // Supabase client is bundled (./core/supabase); CDN-load guard can never trigger
     show('viewLogin');
     const errBox = $('loginErr');
-    errBox.textContent = 'Could not load the database library — check your internet connection and reload.';
+    errBox.textContent = 'The app could not start. Check your internet connection and reload the page.';
     errBox.style.display = 'block';
     $('btnSignIn').disabled = true;
     return;
@@ -689,7 +689,7 @@ function initApp() {
       },
       (err) => {
         setBusy(btn, false);
-        notify('Unable to detect GPS location: ' + err.message, true);
+        notify(err && err.code === 1 ? 'Location access was denied. Allow location access for this site in the browser settings.' : 'Could not get your location. Try again, or enter the coordinates manually.', true);
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );

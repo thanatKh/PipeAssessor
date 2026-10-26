@@ -305,7 +305,7 @@ export function renderRiskTable(lines) {
   });
   // children start collapsed
   body.querySelectorAll('tr.child-row').forEach(n => { (n as HTMLElement).style.display = 'none'; });
-  $('riskTableFoot').textContent = `Showing ${lines.length} line${lines.length === 1 ? '' : 's'} · High → Low risk, then remaining life ascending; Not-Assessed last`;
+  $('riskTableFoot').textContent = `Showing ${lines.length} line${lines.length === 1 ? '' : 's'} · highest risk first, then shortest remaining life; lines not yet assessed are listed last`;
 }
 
 export function renderRiskPage() {

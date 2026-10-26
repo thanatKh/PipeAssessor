@@ -10,7 +10,7 @@ import L from 'leaflet';
 import { PA_LABELS, paPressureUsePct, paLimitGap } from '../workbench/labels';
 import { icon } from '../core/icons';
 import { syncSectionNav } from '../core/section-nav';
-import { $, val, esc, notify, todayISO, isOverdue, fmtDate, fmtDateTime, pillHtml, openDialog, closeDialog, setBusy } from '../core/dom';
+import { $, val, esc, notify, todayISO, isOverdue, fmtDate, fmtDateTime, pillHtml, openDialog, closeDialog, setBusy, friendlyError } from '../core/dom';
 import {
   PHOTO_LIMIT_PER_KIND, SAT_TILES, STATUSES, INSPECTOR_STATUSES, STATUS_COLORS, REPAIR_METHOD_OPTIONS,
 } from '../core/constants';
@@ -443,7 +443,7 @@ export function renderPhotoGroups() {
         setCurrentPhotos(currentPhotos.filter(p => p.id !== btn.dataset.id));
         renderPhotoGroups();
         notify('Photo deleted.');
-      } catch (e) { notify('Delete failed: ' + e.message, true); }
+      } catch (e) { notify('Could not delete. ' + friendlyError(e), true); }
     });
   });
 }
@@ -496,7 +496,7 @@ export async function addDetailPhotos(files, kind, findingId) {
   const already = currentPhotos.filter(p => p.kind === kind).length;
   const room = Math.max(0, PHOTO_LIMIT_PER_KIND - already);
   if (room <= 0) {
-    notify(`Limit reached: ${PHOTO_LIMIT_PER_KIND} ${PHOTO_KIND_LABEL[kind] || kind} photos max.`, true);
+    notify(`${PHOTO_KIND_LABEL[kind] || kind} already has the maximum of ${PHOTO_LIMIT_PER_KIND} photos.`, true);
     return;
   }
   const toUpload = files.filter(f => f.type && f.type.startsWith('image/')).slice(0, room);
@@ -620,7 +620,7 @@ export function renderDlgRepairedPhotos() {
         renderDlgRepairedPhotos();
         renderPhotoGroups();
         notify('Photo deleted.');
-      } catch (e) { notify('Delete failed: ' + e.message, true); }
+      } catch (e) { notify('Could not delete. ' + friendlyError(e), true); }
     });
   });
 }
@@ -668,7 +668,7 @@ export async function confirmStatusChange() {
     await loadDetail(current.id);
     renderDetail();
   } catch (e) {
-    err.textContent = 'Failed: ' + e.message;
+    err.textContent = 'Could not change the status. ' + friendlyError(e);
     err.style.display = 'block';
   } finally {
     setBusy(btn, false);

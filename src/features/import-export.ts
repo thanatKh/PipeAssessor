@@ -8,7 +8,7 @@
    (see the block comment below), and normHeader/ensureXLSX are shared by both.
    Extracted from the app monolith.
    ============================================================================ */
-import { $, esc, notify, openDialog, closeDialog, setBusy, todayISO, positionSegPill, inspectionDateIssue } from '../core/dom';
+import { $, esc, notify, openDialog, closeDialog, setBusy, todayISO, positionSegPill, inspectionDateIssue, friendlyError } from '../core/dom';
 import { FIELD_LIMITS } from '../core/constants';
 import { icon } from '../core/icons';
 import { FINDING_TYPES, TERMINALS } from '../core/constants';
@@ -238,7 +238,7 @@ export async function parseImportFile(file) {
     if (!rows.length) { $('errImport').textContent = 'No rows found in the first sheet.'; $('errImport').style.display = 'block'; return; }
     renderImportPreview(rows.map((row, i) => validateImportRow(row, i + 2)));
   } catch (e) {
-    $('errImport').textContent = 'Could not read the file: ' + e.message;
+    $('errImport').textContent = 'Could not read the file. Check that it is an Excel or CSV file. ' + friendlyError(e);
     $('errImport').style.display = 'block';
   }
 }
@@ -258,7 +258,7 @@ export async function doImport() {
     await loadFindings();
     renderList();
   } catch (e) {
-    $('errImport').textContent = 'Import failed: ' + e.message;
+    $('errImport').textContent = 'The import did not complete. ' + friendlyError(e);
     $('errImport').style.display = 'block';
   } finally {
     setBusy(btn, false);
@@ -508,7 +508,7 @@ export async function parseLineListImportFile(file) {
     if (!rows.length) { $('errLineListImport').textContent = 'No rows found in the first sheet.'; $('errLineListImport').style.display = 'block'; return; }
     renderLineListImportPreview(rows.map((row, i) => validateLineListRow(row, i + 2)));
   } catch (e) {
-    $('errLineListImport').textContent = 'Could not read the file: ' + e.message;
+    $('errLineListImport').textContent = 'Could not read the file. Check that it is an Excel or CSV file. ' + friendlyError(e);
     $('errLineListImport').style.display = 'block';
   }
 }
@@ -541,7 +541,7 @@ export async function doLineListImport() {
     badge.textContent = unlistedCount ? String(unlistedCount) : '';
     if ($('lineListUnlistedTab').style.display !== 'none') renderLineListUnlistedTable();
   } catch (e) {
-    $('errLineListImport').textContent = 'Import failed: ' + e.message;
+    $('errLineListImport').textContent = 'The import did not complete. ' + friendlyError(e);
     $('errLineListImport').style.display = 'block';
   } finally {
     setBusy(btn, false);
@@ -604,7 +604,7 @@ export async function loadLineList() {
   let all = [], from = 0;
   for (;;) {
     const { data, error } = await sb.from('line_list').select('*').order('pipe_tag').range(from, from + PAGE - 1);
-    if (error) { notify('Failed to load line list: ' + error.message, true); return; }
+    if (error) { notify('Could not load the line list. ' + friendlyError(error), true); return; }
     all = all.concat(data || []);
     if (!data || data.length < PAGE) break;
     from += PAGE;
@@ -702,7 +702,7 @@ export async function deleteLineListRow(id) {
     setLineList(lineList.filter(r => r.id !== id));
     renderLineListManageTable();
     notify('Line list entry deleted.');
-  } catch (e) { notify('Delete failed: ' + e.message, true); }
+  } catch (e) { notify('Could not delete. ' + friendlyError(e), true); }
 }
 
 // Renders the Line List PAGE (#/lines, #viewLineList). This was openLineListManageDialog() until
@@ -745,7 +745,7 @@ export async function loadUsersPage() {
     renderUsersTable(data || []);
   } catch (e) {
     $('usersTableBody').innerHTML = '';
-    $('errUsers').textContent = 'Could not load users: ' + e.message;
+    $('errUsers').textContent = 'Could not load the users. ' + friendlyError(e);
     $('errUsers').style.display = 'block';
   }
 }
@@ -781,7 +781,7 @@ async function setUserRoleFor(uid, role, selEl) {
     notify(`Role updated to ${role === 'maintenance' ? 'Maintenance' : 'Inspector'}.`);
   } catch (e) {
     selEl.value = previous; // roll the dropdown back so it never shows a role that did not save
-    $('errUsers').textContent = 'Could not update role: ' + e.message;
+    $('errUsers').textContent = 'Could not update the role. ' + friendlyError(e);
     $('errUsers').style.display = 'block';
   } finally {
     selEl.disabled = false;

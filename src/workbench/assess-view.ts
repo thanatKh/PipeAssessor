@@ -7,7 +7,7 @@
    scoped to the instance root, so multiple instances coexist in one document.
    ============================================================================ */
 import { paFmt } from '../engine/format';
-import { PA_LABELS, paLabelHtml, paPressureUsePct, paLimitGap } from './labels';
+import { PA_LABELS, paLabelHtml, paPressureUsePct, paLimitGap, paStatusText } from './labels';
 import { computeB313 } from '../engine/compute';
 import { WALL_LOSS_TYPES } from '../core/constants';
 
@@ -73,7 +73,7 @@ export function resolveIntegrityBanner(finding: any, res: any): IntegrityBanner 
   if (res && res.status === 'REPAIR')
     return { key: 'repair', word: 'INTEGRITY: REPAIR', line: 'Wall loss below acceptable limit — repair or replacement required', ...HB_REPAIR, metrics };
   if (res && res.status === 'MONITOR')
-    return { key: 'monitor', word: 'INTEGRITY: MONITOR', line: 'Wall loss approaching design/structural limit — corrosion mitigation action needed now, increase inspection frequency', ...HB_MONITOR, metrics };
+    return { key: 'monitor', word: 'INTEGRITY: MONITOR', line: 'Wall loss is approaching the design or structural limit — mitigate the corrosion now and increase the inspection frequency', ...HB_MONITOR, metrics };
   if (res && res.status === 'OK')
     return { key: 'ok', word: 'INTEGRITY: OK', line: 'Within acceptable design limits — no pressure-boundary repair required, continue corrosion mitigation per the Repair Advisor', ...HB_OK, metrics };
   if (ft && !isWallLoss) {
@@ -817,7 +817,7 @@ export function paCreateAssessView(root, opts) {
       else if (res.status === 'MONITOR') banner.classList.add('s-mon');
       else if (res.status === 'REPAIR') banner.classList.add('s-rep');
       q('statusVal').textContent = res.status;
-      q('statusNotes').textContent = res.desc;
+      q('statusNotes').textContent = paStatusText(res);
     }
 
     if (has('resTnom')) {
@@ -825,7 +825,7 @@ export function paCreateAssessView(root, opts) {
       q('resPct').textContent = `${paFmt(res.pctRemainNom, 1)} %`;
       q('resTreq').textContent = `${paFmt(res.t_req_noCA, 3)} mm`;
       q('resTreqCa').textContent = `${paFmt(res.t_req_total, 3)} mm`;
-      q('resTstruct').textContent = `${paFmt(res.t_struct)} mm${res.isCsRef ? ' (CS-only ref, unverified for this material)' : ''}`;
+      q('resTstruct').textContent = `${paFmt(res.t_struct)} mm${res.isCsRef ? ' (carbon-steel reference; not verified for this material)' : ''}`;
       q('resMargin').textContent = paLimitGap(res.margin, 3);
       q('resPres').textContent = `${paFmt(res.P_input, 1)} ${res.pUnit}`;
       q('resMawpWith').textContent = res.mawp_with == null ? 'n/a — wall below CA' : `${paFmt(res.mawp_with, 2)} ${res.pUnit}`;

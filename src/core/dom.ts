@@ -150,6 +150,25 @@ export function notify(msg, isError) {
   $('toaster').toast({ category: isError ? 'error' : 'success', description: msg });
 }
 
+// Turns a caught error into a sentence the user can act on. Database / network internals (policy
+// names, PostgREST codes, "Failed to fetch", script errors) are replaced; an already human-readable
+// message (e.g. a Supabase sign-in message or an import validation message) passes through. The
+// raw error always goes to the console, so nothing is lost for debugging.
+export function friendlyError(e) {
+  const msg = String((e && (e.message || e.error_description)) || e || '');
+  const code = e && e.code;
+  if (e) console.error(e);
+  if (/failed to fetch|networkerror|network request failed|^load failed$/i.test(msg)) return 'No connection to the server. Check your internet connection and try again.';
+  if (code === '42501' || /row-level security|permission denied|not authori[sz]ed/i.test(msg)) return 'You do not have permission to do this.';
+  if (/jwt|refresh token|session (has )?expired/i.test(msg)) return 'Your session has expired. Please sign in again.';
+  if (code === '23514' || /violates check constraint/i.test(msg)) return 'A value is outside the allowed range. Please check the entries.';
+  if (code === '23505' || /duplicate key/i.test(msg)) return 'This record already exists.';
+  if (!msg || /relation|column|PGRST|syntax|null value|violates|constraint|TypeError|ReferenceError|undefined|is not a function|unexpected token/i.test(msg)) {
+    return 'An unexpected error occurred. Please try again.';
+  }
+  return msg;
+}
+
 // Global top-of-header loading bar (see .page-loading-bar in theme.css). Reference-counted so
 // overlapping loads (e.g. route()'s loadFindings() + loadLineList() both in flight) don't have
 // one finishing early hide the bar while the other is still pending — only the last matching

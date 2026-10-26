@@ -8,10 +8,10 @@
    the form CRUD (open/collect/save/delete). Extracted from the app monolith.
    ============================================================================ */
 import L from 'leaflet';
-import { paPressureUsePct, paLimitGap, PA_LABELS } from '../workbench/labels';
+import { paPressureUsePct, paLimitGap, PA_LABELS, paStatusText } from '../workbench/labels';
 import { icon } from '../core/icons';
 import { syncSectionNav } from '../core/section-nav';
-import { $, val, esc, notify, setBusy, positionSegPill, pillHtml, isOverdue, todayISO, inspectionDateIssue } from '../core/dom';
+import { $, val, esc, notify, setBusy, positionSegPill, pillHtml, isOverdue, todayISO, inspectionDateIssue, friendlyError } from '../core/dom';
 import {
   R2_UPLOAD_ENDPOINT, PUBLIC_BASE_URL, PHOTO_LIMIT_PER_KIND, DEFAULT_MAP_VIEW, SAT_TILES, WALL_LOSS_TYPES, NON_LEAKABLE_TYPES,
   REPAIR_METHOD_OPTIONS, TEMP_REPAIR_METHODS, TEMP_REPAIR_METHOD_KIND, TEMP_REPAIR_VERIFY_RESULTS,
@@ -108,7 +108,7 @@ export function renderPendingGrid() {
 export async function addPendingFiles(files) {
   const room = Math.max(0, PHOTO_LIMIT_PER_KIND - pendingPhotos.length);
   if (room <= 0) {
-    notify(`Limit reached: ${PHOTO_LIMIT_PER_KIND} As Found photos max.`, true);
+    notify(`As Found already has the maximum of ${PHOTO_LIMIT_PER_KIND} photos.`, true);
     return 0;
   }
   const toQueue = files.filter(f => f.type && f.type.startsWith('image/')).slice(0, room);
@@ -123,7 +123,7 @@ export async function addPendingFiles(files) {
   renderPendingGrid();
   await applyPhotoExif(toQueue);
   if (files.length > toQueue.length) {
-    notify(`${n} photo(s) queued (${files.length - toQueue.length} skipped — ${PHOTO_LIMIT_PER_KIND} max reached).`, true);
+    notify(`${n} photo(s) added. ${files.length - toQueue.length} not added — a group holds up to ${PHOTO_LIMIT_PER_KIND} photos.`, true);
   }
   return n;
 }
@@ -161,7 +161,7 @@ async function applyPhotoExif(files) {
     $('fInspDate').value = `${taken.getFullYear()}-${pad(taken.getMonth() + 1)}-${pad(taken.getDate())}`;
     filled.push('inspection date');
   }
-  if (filled.length) notify(`Filled ${filled.join(' & ')} from photo — check before saving.`);
+  if (filled.length) notify(`Filled ${filled.join(' and ')} from the photo. Please check before saving.`);
 }
 
 // Which detail-page photo group a Ctrl+V paste targets (set when a group's "+ Add" is used).
@@ -681,7 +681,7 @@ export async function resetAssessmentToLineList() {
   }
   loadAssessmentInto(setupParams, true); // skipReading: keep the measured wall-loss, reset only the setup
   recalcAssessment();
-  notify('Reset pipe setup to the master line list' + (setupParams.P ? ' (incl. design pressure).' : '.'));
+  notify('Pipe setup reset from the master line list' + (setupParams.P ? ', including design pressure.' : '.'));
 }
 
 /* ---------------- standalone repair advisor (form panel, always available) ---------------- */
@@ -814,7 +814,7 @@ export async function applyTagMemory() {
         if (!$('assessPanel').classList.contains('on')) setAssessOn(true);
         loadAssessmentInto(data[0].inputs, true); // reuse pipe setup, not the old reading
         recalcAssessment();
-        notify('Pre-filled pipe data from a previous finding on this tag.');
+        notify('Pipe data filled in from a previous finding on this tag.');
         return;
       }
     } catch (e) { /* memory is best-effort */ }
@@ -832,7 +832,7 @@ export async function applyTagMemory() {
     }
     loadAssessmentInto(setupParams, true);
     recalcAssessment();
-    notify('Pre-filled pipe data & design pressure from the master line list.');
+    notify('Pipe data and design pressure filled in from the master line list.');
   }
 }
 
@@ -1057,7 +1057,7 @@ export function initQuickCalc() {
     const banner = $('cpBanner');
     banner.className = 'cp-only cp-banner ' + (res ? (PRES_HB[res.status] || 'hb-pending') : 'hb-pending');
     banner.innerHTML = res
-      ? `<div class="cp-word"><span>Integrity</span><b>${esc(res.status)}</b></div><div class="cp-line">${esc(res.desc || '')}</div>`
+      ? `<div class="cp-word"><span>Integrity</span><b>${esc(res.status)}</b></div><div class="cp-line">${esc(paStatusText(res))}</div>`
       : `<div class="cp-word"><span>Integrity</span><b>—</b></div><div class="cp-line">${esc($('qCalcHint').style.display !== 'none' && $('qCalcHint').textContent ? $('qCalcHint').textContent : 'Enter the wall-loss reading and design pressure to see the result.')}</div>`;
 
     const n2 = (v) => (v == null || !isFinite(v) ? '—' : Number(v).toFixed(2));
@@ -1230,16 +1230,16 @@ export function initQuickCalc() {
   };
 
   const copyQuickSummary = () => {
-    if (!lastQuickRes) { notify('Enter a valid calculation to copy summary.', true); return; }
+    if (!lastQuickRes) { notify('Complete the calculation first.', true); return; }
     navigator.clipboard.writeText(quickShareText(lastQuickRes)).then(() => {
       notify('Summary copied — paste it into the chat.');
     }).catch(() => {
-      notify('Failed to copy to clipboard.', true);
+      notify('Could not copy to the clipboard.', true);
     });
   };
 
   const exportQuickPdf = () => {
-    if (!lastQuickRes) { notify('Enter a valid calculation to export.', true); return; }
+    if (!lastQuickRes) { notify('Complete the calculation first.', true); return; }
     exportQuickCalcPdf(quickInputs(), lastQuickRes);
   };
 
@@ -1249,7 +1249,7 @@ export function initQuickCalc() {
   // shares instantly.
   let sharedPdf = null; // { key, file }
   const shareQuick = async () => {
-    if (!lastQuickRes) { notify('Enter a valid calculation to share.', true); return; }
+    if (!lastQuickRes) { notify('Complete the calculation first.', true); return; }
     const text = quickShareText(lastQuickRes);
     let copied = false;
     try { await navigator.clipboard.writeText(text); copied = true; } catch (_) { /* share still works */ }
@@ -1261,7 +1261,7 @@ export function initQuickCalc() {
         const blob = await buildQuickCalcPdf(quickInputs(), lastQuickRes);
         sharedPdf = { key, file: new File([blob], quickFileName(), { type: 'application/pdf' }) };
       } catch (e) {
-        notify('PDF failed: ' + e.message, true);
+        notify('Could not create the PDF. ' + friendlyError(e), true);
         return;
       } finally {
         setBusy(btn, false);
@@ -1273,7 +1273,7 @@ export function initQuickCalc() {
     } catch (e) {
       if (e && e.name === 'AbortError') return; // user closed the share sheet
       if (e && e.name === 'NotAllowedError') { notify('PDF ready — tap Share again to send it.'); return; }
-      notify('Share failed: ' + (e && e.message ? e.message : e), true);
+      notify('Could not share. ' + friendlyError(e), true);
     }
   };
   const canShareFiles = (() => {
@@ -1691,7 +1691,7 @@ export async function deletePhotos(paths) {
 
 export async function saveForm(addAnother) {
   const payload = collectForm();
-  if (!payload) { notify('Please fill the required fields.', true); return; }
+  if (!payload) { notify('Please complete the required fields.', true); return; }
   const assessment = collectAssessment();
   const assessWanted = $('assessPanel').classList.contains('on');
   // Dropping the temporary-repair record also orphans its before/after photos, so confirm before
@@ -1727,7 +1727,7 @@ export async function saveForm(addAnother) {
     const unchanged = editingId && assessment && lastLoadedAssessInputs === JSON.stringify(assessment.inputs);
     if (assessment && !unchanged) {
       const { error: aErr } = await sb.from('assessments').insert({ finding_id: id, inputs: assessment.inputs, results: assessment.results });
-      if (aErr) notify('Finding saved, but the assessment could not be recorded: ' + aErr.message, true);
+      if (aErr) notify('The finding was saved, but the assessment was not. ' + friendlyError(aErr), true);
     }
     // An operator saving location + damage (+ depth) with no pipe data is the intended flow, not an
     // error: say what happens next in the ONE save message (two stacked toasts covered the toolbar).
@@ -1742,11 +1742,11 @@ export async function saveForm(addAnother) {
     const tempRepair = collectTempRepair(id);
     if (tempRepair) {
       const { error: tErr } = await sb.from('temp_repair').upsert(tempRepair, { onConflict: 'finding_id' });
-      if (tErr) notify('Finding saved, but the temporary repair could not be recorded: ' + tErr.message, true);
+      if (tErr) notify('The finding was saved, but the temporary repair record was not. ' + friendlyError(tErr), true);
       else setLoadedTempRepairExists(true);
     } else if (loadedTempRepairExists) {
       const { error: tErr } = await sb.from('temp_repair').delete().eq('finding_id', id);
-      if (tErr) notify('Finding saved, but the temporary repair could not be removed: ' + tErr.message, true);
+      if (tErr) notify('The finding was saved, but the temporary repair record could not be removed. ' + friendlyError(tErr), true);
       else setLoadedTempRepairExists(false);
     }
 
@@ -1764,7 +1764,7 @@ export async function saveForm(addAnother) {
       location.hash = '#/f/' + id;
     }
   } catch (e) {
-    notify('Save failed: ' + e.message, true);
+    notify('Could not save. ' + friendlyError(e), true);
   } finally {
     setBusy(btn, false);
   }
@@ -1790,7 +1790,7 @@ export async function deleteFinding() {
     notify('Finding deleted.');
     location.hash = '#/list';
   } catch (e) {
-    notify('Delete failed: ' + e.message, true);
+    notify('Could not delete. ' + friendlyError(e), true);
   } finally {
     setBusy(btn, false);
   }

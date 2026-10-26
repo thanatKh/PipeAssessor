@@ -58,6 +58,24 @@ export function paLimitGap(mm: number | null | undefined, decimals = 2, limit = 
 }
 
 // ERF as "pressure use": ERF = P / MAWP, i.e. the share of the safe limit the design pressure uses.
+// The verdict sentence shown under the status (web workbench, Quick Calc presentation, both PDFs).
+// computeB313's own res.desc ("CRITICAL: ... / WARNING: ...") is parity-locked against the legacy
+// engine, so the plain, formal wording is derived here with the SAME branch order instead.
+export function paStatusText(res: { status: string; margin: number; t_meas: number; t_struct: number; isCsRef?: boolean }): string {
+  if (res.status === 'REPAIR') {
+    return 'The remaining wall is below the minimum required thickness plus corrosion allowance (ASME B31.3). Plan a repair or spool replacement.';
+  }
+  if (res.status === 'MONITOR') {
+    if (res.t_meas < res.t_struct) {
+      let s = `The remaining wall (${res.t_meas.toFixed(2)} mm) is below the API 574 structural minimum (${res.t_struct.toFixed(2)} mm). The pipe may sag or buckle under structural loads; plan the repair and increase the inspection frequency.`;
+      if (res.isCsRef) s += ' Note: the API 574 structural minimum is a carbon-steel reference and has not been verified for the selected material.';
+      return s;
+    }
+    return 'The remaining wall is close to the design limit (margin under 10% of the required thickness, or more than half of the original wall lost). Increase the inspection frequency.';
+  }
+  return 'The remaining wall meets the ASME B31.3 pressure requirement with adequate margin.';
+}
+
 export function paPressureUsePct(erf: number | null | undefined): string {
   return erf == null || !isFinite(erf) ? '—' : `${Math.round(erf * 100)}%`;
 }

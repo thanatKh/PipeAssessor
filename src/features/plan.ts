@@ -35,7 +35,7 @@
    track width instead of 100%. One source of truth, so the printed timeline can
    never disagree with the screen.
    ============================================================================ */
-import { $, esc, val, notify, openDialog, closeDialog, setBusy, todayISO, isOverdue, dueDateOf } from '../core/dom';
+import { $, esc, val, notify, openDialog, closeDialog, setBusy, todayISO, isOverdue, dueDateOf, friendlyError } from '../core/dom';
 import { icon } from '../core/icons';
 import { sb } from '../core/supabase';
 import {
@@ -604,7 +604,7 @@ async function exportPlanPdf() {
       filters: { terminal: planFilters.terminal, category: planFilters.category },
     });
   } catch (e) {
-    notify('Could not build the PDF: ' + (e && e.message ? e.message : e), true);
+    notify('Could not create the PDF. ' + friendlyError(e), true);
   } finally {
     setBusy(btn, false);
   }

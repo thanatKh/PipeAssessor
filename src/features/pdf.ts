@@ -8,7 +8,7 @@
    are dynamic-imported at their call sites — never in the eager entry chunk.
    Extracted from the app monolith.
    ============================================================================ */
-import { $, val, esc, notify, todayISO, isOverdue, dueDateOf, openDialog, closeDialog, setBusy, fmtDate, fmtDateTime } from '../core/dom';
+import { $, val, esc, notify, todayISO, isOverdue, dueDateOf, openDialog, closeDialog, setBusy, fmtDate, fmtDateTime, friendlyError } from '../core/dom';
 import { STATUS_COLORS, R2_UPLOAD_ENDPOINT, PUBLIC_BASE_URL, PLAN_TASK_COLORS } from '../core/constants';
 import { computeB313, PA_PIPE_DATABASE } from '../engine/compute';
 import { paFmtDate, paFmtDateTime } from '../engine/format';
@@ -16,7 +16,7 @@ import { OR_LOGO_DATAURL } from '../engine/branding';
 import { registerGoogleSansFonts } from '../engine/fonts';
 import { PA_SCOPE_TEXT, paCrossSectionPng, resolveIntegrityBanner } from '../workbench/assess-view';
 import { resolveAdvisor, advisorBanner } from '../workbench/repair-advisor';
-import { PA_LABELS, paLabelText, paPressureUsePct, paLimitGap } from '../workbench/labels';
+import { PA_LABELS, paLabelText, paPressureUsePct, paLimitGap, paStatusText } from '../workbench/labels';
 import { tempRepairRows, tempRepairHeadline, tempRepairResultColor } from '../workbench/temp-repair';
 import {
   findings, filters, selectedIds, current, currentPhotos, currentHistory, currentAssessments,
@@ -923,7 +923,7 @@ export async function buildFindingPdf() {
     section(ASSESS_TITLE, 30);
     y += drawIntegrityBand(doc, r, M, y, CW, PW);
     doc.setTextColor(PDF_INK_SOFT); doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY);
-    const descLines = doc.splitTextToSize(r.desc, CW);
+    const descLines = doc.splitTextToSize(paStatusText(r), CW);
     ensure(descLines.length * 3.6 + 4);
     doc.text(descLines, M, y);
     y += descLines.length * 3.6 + 2;
@@ -1163,7 +1163,7 @@ export async function exportFindingPdf() {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   } catch (e) {
-    notify('PDF failed: ' + e.message, true);
+    notify('Could not create the PDF. ' + friendlyError(e), true);
   } finally {
     setBusy(btn, false);
   }
@@ -1241,7 +1241,7 @@ export async function buildQuickCalcPdf(inputs, res) {
   section('Calculation Result', 24);
   y += drawIntegrityBand(doc, r, M, y, CW, PW);
   doc.setTextColor(PDF_INK_SOFT); doc.setFont('GoogleSans', 'normal'); doc.setFontSize(FS_BODY);
-  const descLines = doc.splitTextToSize(r.desc, CW);
+  const descLines = doc.splitTextToSize(paStatusText(r), CW);
   ensure(descLines.length * 3.6 + 4);
   doc.text(descLines, M, y);
   y += descLines.length * 3.6 + 2;
@@ -1401,7 +1401,7 @@ export async function exportQuickCalcPdf(inputs, res) {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   } catch (e) {
-    notify('PDF failed: ' + e.message, true);
+    notify('Could not create the PDF. ' + friendlyError(e), true);
   } finally {
     setBusy(btn, false);
   }
@@ -1423,7 +1423,7 @@ export async function exportSummaryPdf(rows, includeBudget) {
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   } catch (e) {
-    notify('Summary PDF failed: ' + e.message, true);
+    notify('Could not create the summary PDF. ' + friendlyError(e), true);
   } finally {
     setBusy(btn, false);
   }
@@ -1923,7 +1923,7 @@ export async function exportSlidesPdf(rows, includeBudget) {
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   } catch (e) {
-    notify('Presentation PDF failed: ' + e.message, true);
+    notify('Could not create the presentation slides. ' + friendlyError(e), true);
   } finally {
     setBusy(btn, false);
   }
